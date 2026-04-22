@@ -1,0 +1,40 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
+export default function FinalCTA() {
+  return (
+    <section className="bg-silk py-6 sm:py-8 md:py-12 px-6 md:px-12 relative overflow-hidden">
+      {/* Decorative large silk glow/flare */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-rosegold/5 rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="max-w-[1600px] mx-auto text-center relative z-10">
+        <div className="animate-fadeInUp">
+          <span className="section-eyebrow justify-center after:content-[''] after:w-8 after:h-px after:bg-rosegold-light">The Final Touch</span>
+          <h2 className="text-3xl sm:text-5xl md:text-8xl font-serif text-heading mb-4 sm:mb-6 md:mb-8 tracking-tight leading-[1.3] md:leading-[1.2]">
+            Your Journey to <em>Brilliance</em> <br className="hidden sm:block" /> Begins Now
+          </h2>
+          <p className="text-sm sm:text-lg md:text-xl text-body font-light mb-4 sm:mb-6 md:mb-8 max-w-2xl mx-auto leading-relaxed px-4">
+            Join our exclusive membership for a bespoke bridal experience, priority bookings, and treasures that define a lifetime.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 md:gap-8 animate-fadeInUp" style={{ animationDelay: '0.2s' }}>
+          <Link href="/membership">
+            <Button className="shimmer-btn w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 md:px-10 md:py-5 lg:px-12 lg:py-7 rounded-full text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold border-none shadow-2xl">
+              Become a Member
+            </Button>
+          </Link>
+          <Link href="/collections">
+            <Button variant="outline" className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 md:px-10 md:py-5 lg:px-12 lg:py-7 rounded-full text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold border-rosegold text-rosegold hover:bg-rosegold hover:text-white transition-all duration-700 shadow-xl">
+              Explore Collections
+            </Button>
+          </Link>
+        </div>
+        
+        {/* Decorative side accents */}
+        <div className="hidden lg:block absolute top-10 left-0 w-32 h-px bg-gradient-to-r from-rosegold/30 to-transparent" />
+        <div className="hidden lg:block absolute bottom-10 right-0 w-32 h-px bg-gradient-to-l from-rosegold/30 to-transparent" />
+      </div>
+    </section>
+  );
+}

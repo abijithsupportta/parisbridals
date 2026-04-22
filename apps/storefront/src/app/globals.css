@@ -1,0 +1,421 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Rose Gold Silk Design System ─────────────────────────── */
+:root {
+  /* Rose Gold Palette */
+  --rosegold: #B76E79;
+  --rosegold-light: #D4A0A7;
+  --rosegold-lighter: #E8C4C9;
+  --rosegold-dark: #8B4A52;
+  --rosegold-glow: rgba(183, 110, 121, 0.15);
+
+  /* Silk / Warm Neutrals */
+  --silk: #FAF7F5;
+  --silk-dark: #F0EBE6;
+  --champagne: #F5E6D8;
+  --ivory: #FFFBF7;
+
+  /* Design Tokens (Premium Refresh) */
+  --primary: oklch(0.65 0.12 15);
+  --primary-deep: oklch(0.55 0.15 15);
+  --clay-silk: oklch(0.96 0.02 15);
+  --clay-silk-deep: oklch(0.88 0.05 15);
+  --border-premium: oklch(0.92 0.01 15);
+
+  /* Silk / Warm Neutrals */
+
+  /* Borders */
+  --border-silk: #E8DDD5;
+  --border-rose: rgba(183, 110, 121, 0.2);
+
+  /* Fonts */
+  --font-serif: var(--font-cormorant), 'Cormorant Garamond', serif;
+  --font-sans: var(--font-dm-sans), 'DM Sans', sans-serif;
+
+  /* Shadcn tokens – Rose Gold themed */
+  --background: oklch(0.985 0.005 60);
+  --foreground: oklch(0.18 0.02 20);
+  --card: oklch(0.99 0.003 60);
+  --card-foreground: oklch(0.18 0.02 20);
+  --popover: oklch(0.99 0.003 60);
+  --popover-foreground: oklch(0.18 0.02 20);
+  --primary: oklch(0.55 0.1 15);
+  --primary-foreground: oklch(0.98 0.005 60);
+  --secondary: oklch(0.95 0.01 40);
+  --secondary-foreground: oklch(0.25 0.02 20);
+  --muted: oklch(0.95 0.01 40);
+  --muted-foreground: oklch(0.55 0.02 20);
+  --accent: oklch(0.92 0.02 40);
+  --accent-foreground: oklch(0.25 0.02 20);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.9 0.01 40);
+  --input: oklch(0.9 0.01 40);
+  --ring: oklch(0.55 0.1 15);
+  --radius: 0.625rem;
+
+  /* Charts */
+  --chart-1: oklch(0.55 0.1 15);
+  --chart-2: oklch(0.65 0.08 30);
+  --chart-3: oklch(0.75 0.06 45);
+  --chart-4: oklch(0.45 0.12 10);
+  --chart-5: oklch(0.85 0.04 50);
+
+  /* Sidebar */
+  --sidebar: oklch(0.98 0.005 60);
+  --sidebar-foreground: oklch(0.18 0.02 20);
+  --sidebar-primary: oklch(0.55 0.1 15);
+  --sidebar-primary-foreground: oklch(0.98 0.005 60);
+  --sidebar-accent: oklch(0.92 0.02 40);
+  --sidebar-accent-foreground: oklch(0.25 0.02 20);
+  --sidebar-border: oklch(0.9 0.01 40);
+  --sidebar-ring: oklch(0.55 0.1 15);
+}
+
+@theme inline {
+  --font-heading: var(--font-serif);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Custom colors for Tailwind */
+  --color-rosegold: #B76E79;
+  --color-rosegold-light: #D4A0A7;
+  --color-rosegold-lighter: #E8C4C9;
+  --color-rosegold-dark: #8B4A52;
+  --color-silk: #FFFFFF;
+  --color-silk-dark: #F8F8F8;
+  --color-champagne: #F5E6D8;
+  --color-ivory: #FFFBF7;
+  --color-heading: #0a0507;
+  --color-body: #2a1e21;
+  --color-caption: #5a4e51;
+}
+
+/* ─── Dark mode (not primary but included for shadcn compat) ─── */
+.dark {
+  --background: oklch(0.145 0.01 20);
+  --foreground: oklch(0.985 0.005 60);
+  --card: oklch(0.205 0.01 20);
+  --card-foreground: oklch(0.985 0.005 60);
+  --popover: oklch(0.205 0.01 20);
+  --popover-foreground: oklch(0.985 0.005 60);
+  --primary: oklch(0.7 0.08 15);
+  --primary-foreground: oklch(0.205 0.01 20);
+  --secondary: oklch(0.269 0.01 20);
+  --secondary-foreground: oklch(0.985 0.005 60);
+  --muted: oklch(0.269 0.01 20);
+  --muted-foreground: oklch(0.708 0.02 20);
+  --accent: oklch(0.269 0.01 20);
+  --accent-foreground: oklch(0.985 0.005 60);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.7 0.08 15);
+}
+
+/* ─── Base Styles ──────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    background: var(--silk);
+    color: var(--text-body);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-serif);
+    color: var(--text-heading);
+    font-weight: 500;
+    background: linear-gradient(135deg, #6B2A32 0%, #9B5A62 20%, #D78E99 40%, #F4C0C7 60%, #FFE4E9 80%, #F4C0C7 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 1px 2px rgba(139, 74, 82, 0.15);
+  }
+}
+
+/* ─── Keyframe Animations ──────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes silkWave {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ─── Utility Classes ──────────────────────────────────────── */
+
+/* Section eyebrow label (rose gold small caps) */
+.section-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  color: var(--rosegold);
+  margin-bottom: 0.75rem;
+}
+.section-eyebrow::before {
+  content: '';
+  width: 1.5rem;
+  height: 1px;
+  background: var(--rosegold-light);
+}
+
+@media (min-width: 640px) {
+  .section-eyebrow {
+    gap: 0.75rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.3em;
+    margin-bottom: 1rem;
+  }
+  .section-eyebrow::before {
+    width: 2rem;
+  }
+}
+
+/* Section title (elegant serif) */
+.section-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 5vw, 3rem);
+  font-weight: 400;
+  color: var(--text-heading);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin-bottom: 0.5rem;
+}
+.section-title em {
+  font-style: italic;
+  color: var(--rosegold);
+}
+
+/* Warm silk background */
+.bg-warm {
+  background: var(--silk);
+}
+
+/* Subtle border */
+.border-subtle {
+  border: 1px solid var(--border-silk);
+  border-radius: 1rem;
+}
+
+/* Glass morphism */
+.glass {
+  background: rgba(250, 247, 245, 0.85);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+}
+
+/* Soft shadow (Rose tinted glow) */
+.shadow-silk {
+  box-shadow: 0 4px 30px -4px rgba(183, 110, 121, 0.12),
+              0 2px 10px -2px rgba(183, 110, 121, 0.08);
+}
+
+/* Rose gold shimmer button */
+.shimmer-btn {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--rosegold) 0%, var(--rosegold-light) 50%, var(--rosegold) 100%);
+  background-size: 200% 100%;
+  color: white;
+  border: none;
+  transition: all 0.4s ease;
+}
+.shimmer-btn:hover {
+  background-position: 100% 0;
+  box-shadow: 0 8px 30px -4px rgba(183, 110, 121, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Rose gold text gradient */
+.text-rosegold-gradient {
+  background: linear-gradient(135deg, var(--rosegold-dark), var(--rosegold), var(--rosegold-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Metallic rosegold gradient text with silky feel */
+.text-metallic-rosegold {
+  background: linear-gradient(135deg, #8B4A52 0%, #B76E79 25%, #D4A0A7 50%, #E8C4C9 75%, #D4A0A7 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 1px 2px rgba(139, 74, 82, 0.15);
+  transition: all 0.3s ease;
+}
+
+.text-metallic-rosegold:hover {
+  background-position: right center;
+  text-shadow: 0 2px 4px rgba(139, 74, 82, 0.25);
+}
+
+/* Subtle shimmer animation for metallic text */
+.text-metallic-shimmer {
+  background: linear-gradient(135deg, #8B4A52 0%, #B76E79 25%, #D4A0A7 50%, #E8C4C9 75%, #D4A0A7 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 1px 2px rgba(139, 74, 82, 0.15);
+  animation: metallicShimmer 3s ease-in-out infinite;
+}
+
+/* Silk gradient background */
+.bg-silk-gradient {
+  background: linear-gradient(180deg, var(--ivory) 0%, var(--silk) 40%, var(--silk-dark) 100%);
+}
+
+/* Grid pattern utility (Ref: Toy Shop) */
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, oklch(0.92 0.01 15 / 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.92 0.01 15 / 0.1) 1px, transparent 1px);
+}
+
+.bg-grid-pattern-light {
+  background-size: 20px 20px;
+  background-image: 
+    linear-gradient(to right, oklch(0.92 0.01 15 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.92 0.01 15 / 0.05) 1px, transparent 1px);
+}
+
+/* Animated shimmer overlay */
+.shimmer-overlay {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.3) 37%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0.3) 63%,
+    transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.shimmer-overlay:hover::after {
+  opacity: 1;
+}
+
+/* Serif font utility */
+.serif {
+  font-family: var(--font-serif);
+}
+
+/* Fade-in animation utility */
+.animate-fadeInUp {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+/* Staggered children animation */
+.stagger-children > * {
+  opacity: 0;
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
+.stagger-children > *:nth-child(2) { animation-delay: 0.2s; }
+.stagger-children > *:nth-child(3) { animation-delay: 0.3s; }
+.stagger-children > *:nth-child(4) { animation-delay: 0.4s; }
+.stagger-children > *:nth-child(5) { animation-delay: 0.5s; }
+.stagger-children > *:nth-child(6) { animation-delay: 0.6s; }
+
+/* Scrollbar hide */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Custom scrollbar (rose gold themed) */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--silk); }
+::-webkit-scrollbar-thumb {
+  background: var(--rosegold-light);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--rosegold); }
