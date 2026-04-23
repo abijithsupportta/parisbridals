@@ -1,0 +1,83 @@
+/**
+ * Server-side Auth Utilities
+ *
+ * Reads the authenticated user session from request cookies
+ * and resolves their role from the staff table.
+ *
+ * Used in API routes for backend RBAC enforcement.
+ *
+ * @module lib/auth
+ */
+
+import { createServerClient } from '@supabase/ssr';
+import { createAdminClient } from '@/lib/supabase/server';
+import type { NextRequest } from 'next/server';
+import type { StaffRole } from '@/domain/types/branch';
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: StaffRole;
+  branch_id: string | null;
+  staff_id: string | null;
+}
+
+/**
+ * Get the authenticated user + their role from request cookies.
+ * Returns null if not authenticated.
+ */
+export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
+  try {
+    // Create a request-scoped Supabase client with cookies
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll() {
+            // No-op for API routes (can't set cookies in API handlers this way)
+          },
+        },
+      }
+    );
+
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+
+    // Look up the staff record to get role + branch
+    const adminClient = createAdminClient();
+    const { data: staff } = await adminClient
+      .from('staff')
+      .select('id, role, branch_id')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    // If staff record found, use that role
+    if (staff) {
+      return {
+        id: user.id,
+        email: user.email || '',
+        role: staff.role as StaffRole,
+        branch_id: staff.branch_id,
+        staff_id: staff.id,
+      };
+    }
+
+    // If no staff record, check user_metadata for role (admin users)
+    const metaRole = user.user_metadata?.role as StaffRole | undefined;
+    return {
+      id: user.id,
+      email: user.email || '',
+      role: metaRole || 'admin', // Default to admin if no staff record (shop owner)
+      branch_id: null,
+      staff_id: null,
+    };
+  } catch (err) {
+    console.error('[auth] getAuthUser error:', err);
+    return null;
+  }
+}

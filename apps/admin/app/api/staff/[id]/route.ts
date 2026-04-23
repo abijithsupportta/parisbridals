@@ -1,18 +1,22 @@
 /**
  * Staff Detail API Route
- * GET    /api/staff/[id] — get single staff member
- * PATCH  /api/staff/[id] — update staff
- * DELETE /api/staff/[id] — delete staff (+ auth user cleanup)
+ * GET    /api/staff/[id] — get single staff member (admin only)
+ * PATCH  /api/staff/[id] — update staff (admin only)
+ * DELETE /api/staff/[id] — delete staff + auth user (admin only)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { branchService } from '@/services/branchService';
+import { adminOnly } from '@/lib/apiGuard';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await adminOnly(request);
+    if (guard.error) return guard.error;
+
     const { id } = await params;
     const result = await branchService.getStaffById(id);
     if (!result.success || !result.data) {
@@ -33,6 +37,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await adminOnly(request);
+    if (guard.error) return guard.error;
+
     const { id } = await params;
     const body = await request.json();
     const result = await branchService.updateStaff(id, body);
@@ -50,10 +57,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await adminOnly(request);
+    if (guard.error) return guard.error;
+
     const { id } = await params;
     const result = await branchService.deleteStaff(id);
     if (!result.success) {

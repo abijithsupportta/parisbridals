@@ -1,18 +1,22 @@
 /**
  * Branch Detail API Route
- * GET    /api/branches/[id] — get single branch
- * PATCH  /api/branches/[id] — update branch
- * DELETE /api/branches/[id] — delete branch (with safety check)
+ * GET    /api/branches/[id] — get single branch (all authenticated)
+ * PATCH  /api/branches/[id] — update branch (admin only)
+ * DELETE /api/branches/[id] — delete branch (admin only)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { branchService } from '@/services/branchService';
+import { apiGuard, adminOnly } from '@/lib/apiGuard';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await apiGuard(request, 'dashboard');
+    if (guard.error) return guard.error;
+
     const { id } = await params;
     const result = await branchService.getBranchById(id);
     if (!result.success || !result.data) {
@@ -33,6 +37,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await adminOnly(request);
+    if (guard.error) return guard.error;
+
     const { id } = await params;
     const body = await request.json();
     const result = await branchService.updateBranch(id, body);
@@ -50,10 +57,13 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const guard = await adminOnly(request);
+    if (guard.error) return guard.error;
+
     const { id } = await params;
     const result = await branchService.deleteBranch(id);
     if (!result.success) {

@@ -162,6 +162,14 @@ UI (page component) → hooks (TanStack Query + fetch) → API route (server-sid
 - Sidebar filters nav items via `routePermissionMap`
 - BranchSwitcher shows locked indicator for staff
 
+### RBAC Enforcement (3 Layers)
+
+1. **Frontend** (`lib/permissions.ts`) — hides UI elements (sidebar nav, branch switcher)
+2. **API Routes** (`lib/apiGuard.ts`) — checks session + role before processing requests (401/403)
+3. **Database** (`supabase/migrations/20260423_rbac_rls_policies.sql`) — RLS policies enforce even if API is bypassed
+
+> ⚠️ **Run the migration SQL** in Supabase SQL Editor to activate database-level protection.
+
 ### Staff Auth Integration
 - Staff created via `supabase.auth.admin.createUser()` (email + password, auto-confirmed)
 - `user_id` stored in staff table, links to `auth.users`

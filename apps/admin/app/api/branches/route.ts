@@ -1,14 +1,19 @@
 /**
  * Branches API Route
- * GET  /api/branches — list all branches with staff count
- * POST /api/branches — create a new branch
+ * GET  /api/branches — list all branches (all authenticated users can read)
+ * POST /api/branches — create a new branch (admin only)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { branchService } from '@/services/branchService';
+import { apiGuard, adminOnly } from '@/lib/apiGuard';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // All roles can read branches (needed for branch switcher)
+    const guard = await apiGuard(request, 'dashboard');
+    if (guard.error) return guard.error;
+
     const result = await branchService.getBranches();
     if (!result.success) {
       return NextResponse.json(
@@ -28,6 +33,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Admin only — managers and staff cannot create branches
+    const guard = await adminOnly(request);
+    if (guard.error) return guard.error;
+
     const body = await request.json();
     const result = await branchService.createBranch(body);
     if (!result.success) {
