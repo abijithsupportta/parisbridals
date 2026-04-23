@@ -83,7 +83,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     Responsive.init(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF434343), // Charcoal
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,
@@ -96,7 +96,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                   'assets/images/logo_paris.svg',
                   width: Responsive.w(100),
                   height: Responsive.w(100),
-                  colorFilter: const ColorFilter.mode(Colors.black, BlendMode.srcIn),
+                  colorFilter: const ColorFilter.mode(Color(0xFFF7C873), BlendMode.srcIn), // Golden Accent
                 ),
                 SizedBox(height: Responsive.h(24)),
                 Text(
@@ -105,7 +105,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                     fontSize: Responsive.sp(26),
                     fontWeight: FontWeight.w800,
                     letterSpacing: Responsive.w(4),
-                    color: Colors.black,
+                    color: const Color(0xFFF8F8F8), // Off-white
                   ),
                 ),
                 SizedBox(height: Responsive.h(8)),
@@ -115,7 +115,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                     fontSize: Responsive.sp(11),
                     fontWeight: FontWeight.w400,
                     letterSpacing: Responsive.w(5),
-                    color: Colors.grey,
+                    color: const Color(0xFFFAEBCD).withValues(alpha: 0.8), // Almond, semi-transparent
                   ),
                 ),
               ],
