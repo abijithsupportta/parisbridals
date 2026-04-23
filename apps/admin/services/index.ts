@@ -10,3 +10,4 @@
 export { ProductService, productService } from './productService';
 export { CategoryService, categoryService } from './categoryService';
 export { UploadService, uploadService } from './uploadService';
+export { branchService } from './branchService';
