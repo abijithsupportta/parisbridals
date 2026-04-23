@@ -200,6 +200,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         'sku': _skuController.text.trim(),
         'barcode': _barcodeController.text.trim(),
         'price_per_day': double.tryParse(_priceController.text) ?? 0,
+        'security_deposit': 0,
         'quantity': qty,
         // On CREATE: available = total quantity
         // On EDIT: adjust available by the delta (new_qty - old_qty)

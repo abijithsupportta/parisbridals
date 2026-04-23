@@ -51,7 +51,7 @@ export const CreateProductSchema = z.object({
   store_id: z.string(),
   description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
   price_per_day: positiveNumber.max(999999, 'Price must be less than 999,999'),
-  security_deposit: z.number().max(999999, 'Security deposit must be less than 999,999').optional(),
+  security_deposit: z.number().max(999999, 'Security deposit must be less than 999,999').optional().default(0),
   quantity: z.number().int().min(0, 'Quantity must be a non-negative integer'),
   available_quantity: z.number().int().min(0, 'Available quantity must be a non-negative integer').optional(),
   images: z.array(CreateProductImageSchema).optional(),
