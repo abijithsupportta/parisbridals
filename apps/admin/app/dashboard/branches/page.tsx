@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddButton from "@/components/admin/AddButton";
+import Modal from "@/components/admin/Modal";
 import { useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/hooks";
 import { useAppStore } from "@/stores";
 import type { Branch, BranchWithStaffCount } from "@/domain/types/branch";
@@ -172,43 +173,33 @@ export default function BranchesPage() {
         </CardContent>
       </Card>
 
-      {/* Create/Edit Modal — same structure as products */}
-      {showModal && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowModal(false); setEditBranch(null); }} />
-          <div className="relative z-50 flex items-start justify-center min-h-full p-4 pt-8">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
-              <div className="p-5 border-b border-slate-100">
-                <h2 className="text-lg font-semibold text-slate-800">{editBranch ? "Edit Branch" : "Create Branch"}</h2>
-              </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Branch Name *</label>
-                  <Input name="name" defaultValue={editBranch?.name || ""} placeholder="e.g. Main Store" required className="mt-1 h-10" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Address *</label>
-                  <Input name="address" defaultValue={editBranch?.address || ""} placeholder="Full address" required className="mt-1 h-10" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Phone</label>
-                  <Input name="phone" defaultValue={editBranch?.phone || ""} placeholder="+91 9876543210" className="mt-1 h-10" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" name="is_main" id="is_main" defaultChecked={editBranch?.is_main || false} className="rounded border-slate-300" />
-                  <label htmlFor="is_main" className="text-sm text-slate-700">Main Branch</label>
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button type="button" variant="ghost" onClick={() => { setShowModal(false); setEditBranch(null); }}>Cancel</Button>
-                  <Button type="submit" disabled={createBranch.isPending || updateBranch.isPending} className="bg-violet-600 hover:bg-violet-700 text-white px-6">
-                    {editBranch ? "Update" : "Create Branch"}
-                  </Button>
-                </div>
-              </form>
-            </div>
+      {/* Create/Edit Modal */}
+      <Modal open={showModal} onClose={() => { setShowModal(false); setEditBranch(null); }} title={editBranch ? "Edit Branch" : "Create Branch"}>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Branch Name *</label>
+            <Input name="name" defaultValue={editBranch?.name || ""} placeholder="e.g. Main Store" required className="mt-1 h-10" />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Address *</label>
+            <Input name="address" defaultValue={editBranch?.address || ""} placeholder="Full address" required className="mt-1 h-10" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Phone</label>
+            <Input name="phone" defaultValue={editBranch?.phone || ""} placeholder="+91 9876543210" className="mt-1 h-10" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" name="is_main" id="is_main" defaultChecked={editBranch?.is_main || false} className="rounded border-slate-300" />
+            <label htmlFor="is_main" className="text-sm text-slate-700">Main Branch</label>
+          </div>
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <Button type="button" variant="ghost" onClick={() => { setShowModal(false); setEditBranch(null); }}>Cancel</Button>
+            <Button type="submit" disabled={createBranch.isPending || updateBranch.isPending} className="bg-violet-600 hover:bg-violet-700 text-white px-6">
+              {(createBranch.isPending || updateBranch.isPending) ? "Saving..." : editBranch ? "Update" : "Create Branch"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

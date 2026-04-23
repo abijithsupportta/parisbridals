@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AddButton from "@/components/admin/AddButton";
+import Modal from "@/components/admin/Modal";
 import { useBranch, useStaffByBranch, useCreateStaff, useUpdateStaff, useDeleteStaff, useBranches } from "@/hooks";
 import type { Staff, StaffRole } from "@/domain/types/branch";
 
@@ -185,66 +186,56 @@ export default function BranchDetailPage() {
       </Card>
 
       {/* Create/Edit Staff Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowModal(false); setEditStaff(null); }} />
-          <div className="relative z-50 flex items-start justify-center min-h-full p-4 pt-8">
-            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
-              <div className="p-5 border-b border-slate-100">
-                <h2 className="text-lg font-semibold text-slate-800">{editStaff ? "Edit Staff" : "Add Staff Member"}</h2>
-              </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Full Name *</label>
-                  <Input name="name" defaultValue={editStaff?.name || ""} placeholder="John Doe" required className="mt-1 h-10" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email *</label>
-                  <Input name="email" type="email" defaultValue={editStaff?.email || ""} placeholder="staff@parisbridals.com" required className="mt-1 h-10" />
-                </div>
-                {!editStaff && (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Password *</label>
-                    <Input name="password" type="password" placeholder="Min 6 characters" required minLength={6} className="mt-1 h-10" />
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Phone</label>
-                  <Input name="phone" defaultValue={editStaff?.phone || ""} placeholder="+91 9876543210" className="mt-1 h-10" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Role *</label>
-                  <Select value={role} onValueChange={(v) => setRole(v as StaffRole)}>
-                    <SelectTrigger className="mt-1 h-10 bg-white border-slate-200"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-white border border-slate-200 shadow-lg">
-                      <SelectItem value="admin" className="hover:bg-slate-100 focus:bg-slate-100">Admin</SelectItem>
-                      <SelectItem value="manager" className="hover:bg-slate-100 focus:bg-slate-100">Manager</SelectItem>
-                      <SelectItem value="staff" className="hover:bg-slate-100 focus:bg-slate-100">Staff</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Branch *</label>
-                  <Select value={staffBranch} onValueChange={setStaffBranch}>
-                    <SelectTrigger className="mt-1 h-10 bg-white border-slate-200"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-white border border-slate-200 shadow-lg">
-                      {branches.map((b: any) => (
-                        <SelectItem key={b.id} value={b.id} className="hover:bg-slate-100 focus:bg-slate-100">{b.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <Button type="button" variant="ghost" onClick={() => { setShowModal(false); setEditStaff(null); }}>Cancel</Button>
-                  <Button type="submit" disabled={createStaff.isPending || updateStaff.isPending} className="bg-violet-600 hover:bg-violet-700 text-white px-6">
-                    {editStaff ? "Update" : "Add Staff"}
-                  </Button>
-                </div>
-              </form>
-            </div>
+      <Modal open={showModal} onClose={() => { setShowModal(false); setEditStaff(null); }} title={editStaff ? "Edit Staff" : "Add Staff Member"}>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Full Name *</label>
+            <Input name="name" defaultValue={editStaff?.name || ""} placeholder="John Doe" required className="mt-1 h-10" />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Email *</label>
+            <Input name="email" type="email" defaultValue={editStaff?.email || ""} placeholder="staff@parisbridals.com" required className="mt-1 h-10" />
+          </div>
+          {!editStaff && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Password *</label>
+              <Input name="password" type="password" placeholder="Min 6 characters" required minLength={6} className="mt-1 h-10" />
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Phone</label>
+            <Input name="phone" defaultValue={editStaff?.phone || ""} placeholder="+91 9876543210" className="mt-1 h-10" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Role *</label>
+            <Select value={role} onValueChange={(v) => setRole(v as StaffRole)}>
+              <SelectTrigger className="mt-1 h-10 bg-white border-slate-200"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-white border border-slate-200 shadow-lg">
+                <SelectItem value="admin" className="hover:bg-slate-100 focus:bg-slate-100">Admin</SelectItem>
+                <SelectItem value="manager" className="hover:bg-slate-100 focus:bg-slate-100">Manager</SelectItem>
+                <SelectItem value="staff" className="hover:bg-slate-100 focus:bg-slate-100">Staff</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Branch *</label>
+            <Select value={staffBranch} onValueChange={setStaffBranch}>
+              <SelectTrigger className="mt-1 h-10 bg-white border-slate-200"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-white border border-slate-200 shadow-lg">
+                {branches.map((b: any) => (
+                  <SelectItem key={b.id} value={b.id} className="hover:bg-slate-100 focus:bg-slate-100">{b.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+            <Button type="button" variant="ghost" onClick={() => { setShowModal(false); setEditStaff(null); }}>Cancel</Button>
+            <Button type="submit" disabled={createStaff.isPending || updateStaff.isPending} className="bg-violet-600 hover:bg-violet-700 text-white px-6">
+              {(createStaff.isPending || updateStaff.isPending) ? "Saving..." : editStaff ? "Update" : "Add Staff"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
