@@ -61,10 +61,11 @@ lib/
 
 ---
 
-## 6. 🌐 Backend Integration (Supabase)
+## 6. 🌐 Backend Integration (Next.js API via Dio)
 
-- **Rule:** The app interacts with Supabase exclusively via the `data` (Repository) layer.
-- **Rule:** Environment variables (e.g., `SUPABASE_URL`, `SUPABASE_ANON_KEY`) must be loaded securely via `flutter_dotenv` from the `.env` file. Do not hardcode API keys in the Dart source code.
+- **CRITICAL RULE:** The mobile app MUST NOT communicate directly with Supabase. It must exclusively communicate with the Next.js backend API (`parisbridals-admin.vercel.app/api`).
+- **Rule:** Use `dio` for all network requests. Do not use the `supabase_flutter` package.
+- **Rule:** The `API_BASE_URL` must be loaded securely via `flutter_dotenv` from the `.env` file. Do not hardcode the API URL in the Dart source code.
 
 ---
 
