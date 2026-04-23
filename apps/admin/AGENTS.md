@@ -112,13 +112,20 @@ Run: `powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy
 6. **Design consistency** — reuse existing UI components (`Card`, `Badge`, `Button`, `Input`, `Select`, same table/modal patterns). No new design system
 7. **Do NOT touch order module files** — colleague working on it, avoid merge conflicts
 8. **Maximum speed** — optimize performance, minimize unnecessary re-renders
+9. **Architecture rule** — Every module MUST follow: `UI → hooks → API route → service → repository → supabase`. Hooks call API routes via `fetch()`, NEVER call services/repositories directly (service role key is server-only)
 
 ---
 
-## 🏗️ Repository Architecture (Data Flow)
+## 🏗️ Mandatory Architecture (Data Flow)
 
 ```
-UI (pages) → hooks (TanStack Query) → services (validation) → repositories (Supabase) → Database
+UI (page component) → hooks (TanStack Query + fetch) → API route (server-side)
+                                                             ↓
+                                                      service (validation)
+                                                             ↓
+                                                      repository (data access)
+                                                             ↓
+                                                      Supabase (via service_role key)
 ```
 
 - `BaseRepository` uses `createAdminClient()` (service_role key) → bypasses RLS

@@ -43,12 +43,16 @@ export default function BranchesPage() {
       is_active: true,
     };
 
-    if (editBranch) {
-      const result = await updateBranch.mutateAsync({ id: editBranch.id, data });
-      if (result.success) { setShowModal(false); setEditBranch(null); }
-    } else {
-      const result = await createBranch.mutateAsync(data);
-      if (result.success) { setShowModal(false); }
+    try {
+      if (editBranch) {
+        await updateBranch.mutateAsync({ id: editBranch.id, data });
+      } else {
+        await createBranch.mutateAsync(data);
+      }
+      setShowModal(false);
+      setEditBranch(null);
+    } catch {
+      // Error is handled by the mutation's onError callback (shows toast)
     }
   };
 

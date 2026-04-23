@@ -55,27 +55,32 @@ export default function BranchDetailPage() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
 
-    if (editStaff) {
-      const data = {
-        name: fd.get("name") as string,
-        email: fd.get("email") as string,
-        phone: (fd.get("phone") as string) || undefined,
-        role,
-        branch_id: staffBranch,
-      };
-      const result = await updateStaff.mutateAsync({ id: editStaff.id, data });
-      if (result.success) { setShowModal(false); setEditStaff(null); }
-    } else {
-      const data = {
-        name: fd.get("name") as string,
-        email: fd.get("email") as string,
-        password: fd.get("password") as string,
-        phone: (fd.get("phone") as string) || undefined,
-        role,
-        branch_id: staffBranch,
-      };
-      const result = await createStaff.mutateAsync(data);
-      if (result.success) { setShowModal(false); }
+    try {
+      if (editStaff) {
+        await updateStaff.mutateAsync({
+          id: editStaff.id,
+          data: {
+            name: fd.get("name") as string,
+            email: fd.get("email") as string,
+            phone: (fd.get("phone") as string) || undefined,
+            role,
+            branch_id: staffBranch,
+          },
+        });
+      } else {
+        await createStaff.mutateAsync({
+          name: fd.get("name") as string,
+          email: fd.get("email") as string,
+          password: fd.get("password") as string,
+          phone: (fd.get("phone") as string) || undefined,
+          role,
+          branch_id: staffBranch,
+        });
+      }
+      setShowModal(false);
+      setEditStaff(null);
+    } catch {
+      // Error handled by mutation's onError (shows toast)
     }
   };
 
