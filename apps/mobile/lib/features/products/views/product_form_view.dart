@@ -201,8 +201,13 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         'barcode': _barcodeController.text.trim(),
         'price_per_day': double.tryParse(_priceController.text) ?? 0,
         'quantity': qty,
-        // Only set available_quantity on CREATE, not on edit
-        if (widget.product == null) 'available_quantity': qty,
+        // On CREATE: available = total quantity
+        // On EDIT: adjust available by the delta (new_qty - old_qty)
+        // e.g., had 5 total / 3 available (2 rented), change total to 15
+        //        delta = +10, new available = 3 + 10 = 13
+        'available_quantity': widget.product == null
+            ? qty
+            : (widget.product!.availableQuantity + (qty - widget.product!.quantity)).clamp(0, qty),
         'low_stock_threshold': int.tryParse(_lowStockController.text) ?? 10,
         'track_inventory': _trackInventory,
         'is_active': _isActive,
