@@ -53,7 +53,7 @@ export const CreateProductSchema = z.object({
   price_per_day: positiveNumber.max(999999, 'Price must be less than 999,999'),
   security_deposit: z.number().max(999999, 'Security deposit must be less than 999,999').optional(),
   quantity: z.number().int().min(0, 'Quantity must be a non-negative integer'),
-  available_quantity: z.number().int().min(0, 'Available quantity must be a non-negative integer'),
+  available_quantity: z.number().int().min(0, 'Available quantity must be a non-negative integer').optional(),
   images: z.array(CreateProductImageSchema).optional(),
   sizes: z.array(CreateProductVariantSchema).optional(),
   colors: z.array(CreateProductVariantSchema).optional(),
@@ -61,9 +61,6 @@ export const CreateProductSchema = z.object({
   is_featured: z.boolean().default(false),
   track_inventory: z.boolean().default(true),
   low_stock_threshold: z.number().int().min(0).default(5),
-}).refine((data) => data.available_quantity <= data.quantity, {
-  message: 'Available quantity cannot be greater than total quantity',
-  path: ['available_quantity'],
 });
 
 // Product Update Schema

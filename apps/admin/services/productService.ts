@@ -165,7 +165,7 @@ export class ProductService {
     // Check slug availability if changed
     if (data.slug && data.slug !== existingProduct.data.slug) {
       const slugCheck = await this.checkSlugAvailability(data.slug, id);
-      if (!slugCheck.success || slugCheck.data) {
+      if (!slugCheck.success || !slugCheck.data) {
         return {
           data: null,
           error: {
@@ -453,36 +453,24 @@ export class ProductService {
   }
 
   /**
-   * Check if slug is available
+   * Check if slug is available (returns true if available)
    */
   private async checkSlugAvailability(slug: string, excludeId?: string): Promise<RepositoryResult<boolean>> {
     try {
-      const filters: Record<string, any> = { slug };
-      if (excludeId) {
-        filters.id = { ne: excludeId };
+      // Use direct repository search instead of complex filter objects
+      const result = await productRepository.findAll({ query: slug, limit: 5, page: 1 });
+      if (!result.success || !result.data) {
+        return { success: false, data: null, error: result.error };
       }
       
-      const result = await productRepository.getProductCount(filters);
-      if (!result.success) {
-        return {
-          success: false,
-          data: null,
-          error: result.error,
-        };
-      }
+      // Check if any product (other than the excluded one) has this exact slug
+      const conflicting = result.data.products.filter(
+        (p: any) => p.slug === slug && (!excludeId || p.id !== excludeId)
+      );
       
-      const isAvailable = (result.data || 0) === 0;
-      return {
-        success: true,
-        data: isAvailable,
-        error: null,
-      };
+      return { success: true, data: conflicting.length === 0, error: null };
     } catch (error) {
-      return {
-        success: false,
-        data: null,
-        error: this.handleError(error),
-      };
+      return { success: false, data: null, error: this.handleError(error) };
     }
   }
 }

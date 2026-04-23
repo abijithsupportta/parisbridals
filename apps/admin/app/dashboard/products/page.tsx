@@ -10,7 +10,8 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Search, Filter, MoreHorizontal, Trash2, Edit, Eye, Download } from "lucide-react";
+import Link from "next/link";
+import { Plus, Search, Filter, MoreHorizontal, Trash2, Edit, Eye, Download, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -59,9 +60,11 @@ export default function ProductsPage() {
   const { 
     openCreateModal, 
     closeCreateModal,
+    closeEditModal,
     openDeleteModal, 
     isDeleteModalOpen, 
     isCreateModalOpen,
+    isEditModalOpen,
     currentProduct: deleteTarget 
   } = useProductStore();
   const { showSuccess, showError } = useAppStore();
@@ -304,7 +307,7 @@ export default function ProductsPage() {
                   </th>
                   <th className="text-left p-4 font-semibold text-slate-700">Product</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Category</th>
-                  <th className="text-left p-4 font-semibold text-slate-700">Price/Day</th>
+                  <th className="text-left p-4 font-semibold text-slate-700">Rent</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Stock</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Status</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Actions</th>
@@ -327,32 +330,35 @@ export default function ProductsPage() {
                       />
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-3">
+                      <Link href={`/dashboard/products/${product.id}`} className="flex items-center gap-3 group">
                         {product.images && product.images.length > 0 ? (
                           <img 
-                            src={product.images[0]} 
+                            src={typeof product.images[0] === 'string' ? product.images[0] : product.images[0]?.url || ''} 
                             alt={product.name}
-                            className="w-12 h-12 rounded-xl object-cover"
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-100"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300" />
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
+                            <Package className="w-5 h-5 text-violet-400" />
+                          </div>
                         )}
                         <div>
-                          <p className="font-semibold text-slate-900">{product.name}</p>
-                          <p className="text-sm text-slate-500">SKU: {product.sku || 'N/A'}</p>
+                          <p className="font-semibold text-slate-900 group-hover:text-violet-600 transition-colors">{product.name}</p>
+                          <p className="text-xs text-slate-400">{product.slug}</p>
                         </div>
-                      </div>
+                      </Link>
                     </td>
-                    <td className="p-4 text-slate-700">
-                      {product.category?.name || 'Uncategorized'}
+                    <td className="p-4">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+                        {product.category?.name || 'Uncategorized'}
+                      </span>
                     </td>
-                    <td className="p-4 text-slate-700 font-medium">
+                    <td className="p-4 text-slate-800 font-semibold">
                       {formatCurrency(product.price_per_day)}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-700">{product.available_quantity}</span>
-                        <span className="text-slate-400 text-sm">/ {product.quantity}</span>
+                        <span className="text-slate-700 font-medium">{product.quantity}</span>
                         {product.available_quantity <= product.low_stock_threshold && (
                           <Badge variant="destructive" className="text-xs">
                             Low Stock
@@ -377,26 +383,19 @@ export default function ProductsPage() {
                     </td>
                     <td className="p-4">
                       <div className="flex gap-1">
-                        <button 
+                        <Link
+                          href={`/dashboard/products/${product.id}`}
                           className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                           title="View Details"
                         >
                           <Eye className="w-4 h-4 text-slate-400" />
-                        </button>
+                        </Link>
                         <button 
                           className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
                           onClick={() => handleEdit(product)}
                           title="Edit"
                         >
                           <Edit className="w-4 h-4 text-slate-400" />
-                        </button>
-                        <button 
-                          className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
-                          onClick={() => handleDownloadBarcode(product)}
-                          title="Download Barcode"
-                          disabled={!product.barcode}
-                        >
-                          <Download className={`w-4 h-4 ${product.barcode ? 'text-blue-400' : 'text-slate-300'}`} />
                         </button>
                         <button 
                           className="p-2 hover:bg-red-50 rounded-lg transition-colors"
@@ -444,26 +443,23 @@ export default function ProductsPage() {
       )}
 
       {/* Product Form Modal */}
-      {(isCreateModalOpen || isEditing || currentProduct) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-semibold">
-                {isEditing ? 'Edit Product' : 'Create Product'}
-              </h2>
-            </div>
-            <div className="p-6">
-              <ProductForm 
-                product={currentProduct || undefined}
-                onSuccess={() => {
-                  // Close modal and refresh
-                  closeCreateModal();
-                }}
-                onCancel={() => {
-                  // Close modal
-                  closeCreateModal();
-                }}
-              />
+      {(isCreateModalOpen || isEditModalOpen || isEditing || currentProduct) && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { closeCreateModal(); closeEditModal(); }} />
+          <div className="relative z-50 flex items-start justify-center min-h-full p-4 pt-8">
+            <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col">
+              <div className="p-5 border-b border-slate-100 shrink-0">
+                <h2 className="text-lg font-semibold text-slate-800">
+                  {isEditing ? 'Edit Product' : 'Create Product'}
+                </h2>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1">
+                <ProductForm 
+                  product={currentProduct || undefined}
+                  onSuccess={() => { closeCreateModal(); closeEditModal(); }}
+                  onCancel={() => { closeCreateModal(); closeEditModal(); }}
+                />
+              </div>
             </div>
           </div>
         </div>
