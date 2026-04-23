@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Plus, Edit, Trash2, Mail, Shield, Building2, User as UserIcon } from "lucide-react";
+import { Search, Edit, Trash2, Mail, Shield, Building2, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AddButton from "@/components/admin/AddButton";
 import { useStaff, useBranches, useCreateStaff, useUpdateStaff, useDeleteStaff } from "@/hooks";
 import type { StaffWithBranch, StaffRole } from "@/domain/types/branch";
 
@@ -97,9 +98,7 @@ export default function StaffPage() {
           <h1 className="text-3xl font-bold text-slate-900">Staff</h1>
           <p className="text-slate-500 mt-1">Manage staff across all branches ({staff.length} total)</p>
         </div>
-        <Button onClick={openCreate} className="shadow-lg shadow-primary/25" disabled={branches.length === 0}>
-          <Plus className="w-4 h-4 mr-2" />Add Staff
-        </Button>
+        <AddButton label="Add Staff" onClick={openCreate} disabled={branches.length === 0} />
       </div>
 
       {/* Filters */}

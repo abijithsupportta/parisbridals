@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, MapPin, Phone, Plus, Edit, Trash2, Mail, Shield, User as UserIcon } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Phone, Edit, Trash2, Mail, Shield, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AddButton from "@/components/admin/AddButton";
 import { useBranch, useStaffByBranch, useCreateStaff, useUpdateStaff, useDeleteStaff, useBranches } from "@/hooks";
 import type { Staff, StaffRole } from "@/domain/types/branch";
 
@@ -110,9 +111,7 @@ export default function BranchDetailPage() {
             </div>
           </div>
         </div>
-        <Button onClick={openCreate} className="shadow-lg shadow-primary/25">
-          <Plus className="w-4 h-4 mr-2" />Add Staff
-        </Button>
+        <AddButton label="Add Staff" onClick={openCreate} />
       </div>
 
       {/* Staff Table */}

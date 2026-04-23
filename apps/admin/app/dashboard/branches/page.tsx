@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, MapPin, Phone, Edit, Trash2, Users, Building2 } from "lucide-react";
+import { Search, MapPin, Phone, Edit, Trash2, Users, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import AddButton from "@/components/admin/AddButton";
 import { useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch } from "@/hooks";
 import { useAppStore } from "@/stores";
 import type { Branch, BranchWithStaffCount } from "@/domain/types/branch";
@@ -67,9 +68,7 @@ export default function BranchesPage() {
           <h1 className="text-3xl font-bold text-slate-900">Branches</h1>
           <p className="text-slate-500 mt-1">Manage your store branches ({branches.length} total)</p>
         </div>
-        <Button onClick={openCreate} className="shadow-lg shadow-primary/25">
-          <Plus className="w-4 h-4 mr-2" />Add Branch
-        </Button>
+        <AddButton label="Add Branch" onClick={openCreate} />
       </div>
 
       {/* Search */}
