@@ -113,6 +113,7 @@ Run: `powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy
 7. **Do NOT touch order module files** — colleague working on it, avoid merge conflicts
 8. **Maximum speed** — optimize performance, minimize unnecessary re-renders
 9. **Architecture rule** — Every module MUST follow: `UI → hooks → API route → service → repository → supabase`. Hooks call API routes via `fetch()`, NEVER call services/repositories directly (service role key is server-only)
+10. **Proper error handling** — Every layer must handle errors: API routes return proper status codes + messages, hooks show toast notifications via `showError()`, services return `validationError()`, UI shows errors clearly to user. No silent failures.
 
 ---
 

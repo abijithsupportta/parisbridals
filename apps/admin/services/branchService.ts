@@ -53,6 +53,13 @@ class BranchService {
   }
 
   async deleteBranch(id: string): Promise<RepositoryResult<boolean>> {
+    // Check if this is the main branch — cannot delete main branch
+    const branch = await branchRepository.findById(id);
+    if (branch.success && branch.data?.is_main) {
+      return validationError('Main branch cannot be deleted', 'DELETE_BLOCKED');
+    }
+
+    // Check for staff assigned to this branch
     const check = await branchRepository.canDelete(id);
     if (check.success && check.data && !check.data.canDelete) {
       return validationError(check.data.reason || 'Cannot delete branch', 'DELETE_BLOCKED');
