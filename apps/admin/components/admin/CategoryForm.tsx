@@ -31,10 +31,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FileUpload } from "@/components/ui/file-upload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type Category } from "@/lib/supabase/categories";
 import { useRouter } from "next/navigation";
-import { Upload, ImageIcon, X, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 interface CategoryFormProps {
   /** Existing category for edit mode; when omitted, form operates in create mode */
@@ -57,9 +58,6 @@ export default function CategoryForm({
 
   // Tracks the form submission state
   const [loading, setLoading] = useState(false);
-
-  // Tracks the async image upload state
-  const [uploading, setUploading] = useState(false);
 
   // Stores the last submission error to display in a banner
   const [error, setError] = useState("");
@@ -125,43 +123,7 @@ export default function CategoryForm({
     return "variant";
   };
 
-  /**
-   * Handles image file selection and upload to R2 via the /api/upload endpoint.
-   * Updates formData.image_url with the returned public URL on success.
-   *
-   * @param e - Change event from the hidden file input
-   */
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    setUploading(true);
-    try {
-      const uploadForm = new FormData();
-      uploadForm.append("file", file);
-      uploadForm.append("folder", "categories");
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: uploadForm,
-      });
-
-      if (!res.ok) throw new Error("Upload failed");
-
-      const data = await res.json();
-      setFormData((prev) => ({ ...prev, image_url: data.url }));
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Failed to upload image");
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  /** Clears the uploaded image URL from the form state. */
-  const handleRemoveImage = () => {
-    setFormData((prev) => ({ ...prev, image_url: "" }));
-  };
 
   /**
    * UX helper: clears the default "0" value in sort order input
@@ -237,14 +199,14 @@ export default function CategoryForm({
   const levelColor = level === "main" ? "bg-purple-100 text-purple-700" : level === "sub" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700";
 
   return (
-    <Card className="border-0 shadow-xl w-full max-w-4xl">
-      <CardHeader className="rounded-t-xl bg-slate-900 text-white">
+    <Card className="border-0 shadow-2xl w-full max-w-6xl">
+      <CardHeader className="rounded-t-xl bg-gradient-to-r from-purple-600 to-primary text-white">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-xl text-white">
+            <CardTitle className="text-2xl text-white">
               {isEdit ? "Edit Category" : "Create New Category"}
             </CardTitle>
-            <p className="text-slate-400 text-sm mt-1">
+            <p className="text-slate-100 text-sm mt-1">
               {isEdit ? "Update category details" : "Organize your products into categories"}
             </p>
           </div>
@@ -264,43 +226,18 @@ export default function CategoryForm({
           )}
 
           {/* Image Upload */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700 block">Category Image</label>
-            <div className="flex items-center gap-4">
-              {formData.image_url ? (
-                <div className="relative">
-                  <img
-                    src={formData.image_url}
-                    alt="Preview"
-                    className="w-24 h-24 rounded-xl object-cover border border-slate-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-24 h-24 rounded-xl bg-slate-100 border-2 border-dashed border-slate-300 flex flex-col items-center justify-center">
-                  <ImageIcon className="w-6 h-6 text-slate-400 mb-1" />
-                  <span className="text-xs text-slate-400">No image</span>
-                </div>
-              )}
-              <label className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors">
-                <Upload className="w-4 h-4 text-slate-600" />
-                <span className="text-sm text-slate-600">{uploading ? "Uploading..." : "Upload Image"}</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  disabled={uploading}
-                />
-              </label>
-            </div>
-          </div>
+          <FileUpload
+            label="Category Image"
+            accept="image/*"
+            multiple={false}
+            maxSize={2 * 1024 * 1024}
+            folder="categories"
+            value={formData.image_url ? [formData.image_url] : []}
+            onChange={(urls) =>
+              setFormData((prev) => ({ ...prev, image_url: urls[0] || "" }))
+            }
+            helperText="Upload a category image (max 2MB)"
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
@@ -310,7 +247,7 @@ export default function CategoryForm({
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
                 placeholder="e.g., Earrings"
-                className="h-11 border-slate-300 focus:border-primary"
+                className="h-12 border-slate-300 focus:border-primary"
               />
             </div>
             <div className="space-y-2">
@@ -326,7 +263,7 @@ export default function CategoryForm({
                 }}
                 required
                 placeholder="auto-generated-from-name"
-                className="h-11 border-slate-300 focus:border-primary"
+                className="h-12 border-slate-300 focus:border-primary"
               />
               <p className="text-xs text-slate-500">
                 Auto-generated from name. Type to customize, clear to reset.
@@ -340,7 +277,7 @@ export default function CategoryForm({
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Brief description of this category"
-              className="h-11 border-slate-300 focus:border-primary"
+              className="h-12 border-slate-300 focus:border-primary"
             />
           </div>
 
@@ -350,7 +287,7 @@ export default function CategoryForm({
             <select
               value={formData.parent_id || ""}
               onChange={(e) => setFormData({ ...formData, parent_id: e.target.value || null })}
-              className="w-full h-11 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
+              className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
             >
               <option value="">None (Main Category)</option>
               <optgroup label="Main Categories">
@@ -384,7 +321,7 @@ export default function CategoryForm({
                 onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
                 onFocus={clearZeroOnFocus}
                 placeholder="0"
-                className="h-11 border-slate-300 focus:border-primary"
+                className="h-12 border-slate-300 focus:border-primary"
               />
               <p className="text-xs text-slate-500">Lower numbers appear first</p>
             </div>
@@ -418,14 +355,14 @@ export default function CategoryForm({
           </div>
 
           <div className="flex gap-4 pt-6 border-t border-slate-200">
-            <Button type="submit" disabled={loading} className="flex-1 h-11 text-base shadow-lg shadow-primary/25">
+            <Button type="submit" disabled={loading} className="flex-1 h-12 text-base shadow-lg shadow-primary/25">
               {loading ? "Saving..." : isEdit ? "Update Category" : "Create Category"}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => router.push("/dashboard/categories")}
-              className="flex-1 h-11 text-base border-slate-300 hover:bg-slate-50"
+              className="flex-1 h-12 text-base border-slate-300 hover:bg-slate-50"
             >
               Cancel
             </Button>

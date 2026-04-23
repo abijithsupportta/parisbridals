@@ -175,6 +175,7 @@ export default function CategoryTreeActions({ category }: { category: Category }
                   variant="destructive"
                   onClick={confirmDelete}
                   disabled={isDeleting}
+                  className="bg-red-600 hover:bg-red-700 text-white"
                 >
                   {isDeleting ? "Deleting..." : "Delete"}
                 </Button>

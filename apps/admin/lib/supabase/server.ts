@@ -1,15 +1,18 @@
 /**
  * Supabase Server Clients
  *
- * Provides two clients for server-side Supabase operations:
- * - createClient: Uses anon key for public/unauthenticated read operations (subject to RLS)
- * - createAdminClient: Uses service role key for admin write operations (bypasses RLS)
+ * Provides two singleton clients for server-side Supabase operations:
+ * - createClient: Uses anon key for read operations (subject to RLS)
+ * - createAdminClient: Uses service role key for admin mutations (bypasses RLS)
  *
- * The service role key must be kept secret and only used server-side.
- * Never expose SUPABASE_SERVICE_ROLE_KEY to the browser.
+ * Clients are cached as singletons to prevent the
+ * "Multiple GoTrueClient instances" warning.
  */
 
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
+
+let anonClient: SupabaseClient | null = null;
+let adminClient: SupabaseClient | null = null;
 
 /**
  * Standard anon client for read operations and auth flows.
@@ -18,6 +21,8 @@ import { createClient as createSupabaseClient, type SupabaseClient } from '@supa
  * @throws Error if NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing
  */
 export function createClient(): SupabaseClient {
+  if (anonClient) return anonClient;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -28,7 +33,8 @@ export function createClient(): SupabaseClient {
     );
   }
 
-  return createSupabaseClient(url, anonKey);
+  anonClient = createSupabaseClient(url, anonKey);
+  return anonClient;
 }
 
 /**
@@ -39,6 +45,8 @@ export function createClient(): SupabaseClient {
  * @throws Error if NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing
  */
 export function createAdminClient(): SupabaseClient {
+  if (adminClient) return adminClient;
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -53,7 +61,8 @@ export function createAdminClient(): SupabaseClient {
     );
   }
 
-  return createSupabaseClient(url, serviceRoleKey, {
+  adminClient = createSupabaseClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  return adminClient;
 }

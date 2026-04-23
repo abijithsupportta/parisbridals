@@ -62,7 +62,7 @@ export class ProductRepository extends BaseRepository {
       select: `
         *,
         category:category_id(id, name, slug),
-        store:store_id(id, name)
+        branch:branch_id(id, name)
       `,
       filters,
       orderBy: { column: sort_by, ascending: sort_order === 'asc' },
@@ -139,7 +139,7 @@ export class ProductRepository extends BaseRepository {
       .select(`
         *,
         category:category_id(id, name, slug),
-        store:store_id(id, name)
+        branch:branch_id(id, name)
       `)
       .eq('id', id)
       .single();

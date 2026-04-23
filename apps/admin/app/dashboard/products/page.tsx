@@ -25,7 +25,6 @@ import {
   useBulkProductOperation
 } from "@/hooks";
 import { useProductStore, useAppStore } from "@/stores";
-import ProductForm from "@/components/admin/products/ProductForm";
 import { formatCurrency } from '@/lib/shared-utils';
 import { downloadBarcode, downloadMultipleBarcodes } from '@/lib/barcode';
 
@@ -196,10 +195,12 @@ export default function ProductsPage() {
             Manage your jewellery inventory ({total} products)
           </p>
         </div>
-        <Button onClick={openCreate} className="shadow-lg shadow-primary/25">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Product
-        </Button>
+        <Link href="/dashboard/products/create">
+          <Button className="shadow-lg shadow-primary/25">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Product
+          </Button>
+        </Link>
       </div>
 
       {/* Filters */}
@@ -307,6 +308,7 @@ export default function ProductsPage() {
                   </th>
                   <th className="text-left p-4 font-semibold text-slate-700">Product</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Category</th>
+                  <th className="text-left p-4 font-semibold text-slate-700">Branch</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Rent</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Stock</th>
                   <th className="text-left p-4 font-semibold text-slate-700">Status</th>
@@ -353,6 +355,11 @@ export default function ProductsPage() {
                         {product.category?.name || 'Uncategorized'}
                       </span>
                     </td>
+                    <td className="p-4">
+                      <span className="text-sm text-slate-600">
+                        {product.branch?.name || '—'}
+                      </span>
+                    </td>
                     <td className="p-4 text-slate-800 font-semibold">
                       {formatCurrency(product.price_per_day)}
                     </td>
@@ -390,13 +397,13 @@ export default function ProductsPage() {
                         >
                           <Eye className="w-4 h-4 text-slate-400" />
                         </Link>
-                        <button 
+                        <Link
+                          href={`/dashboard/products/${product.id}/edit`}
                           className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                          onClick={() => handleEdit(product)}
                           title="Edit"
                         >
                           <Edit className="w-4 h-4 text-slate-400" />
-                        </button>
+                        </Link>
                         <button 
                           className="p-2 hover:bg-red-50 rounded-lg transition-colors"
                           onClick={() => handleDelete(product)}
@@ -442,28 +449,6 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Product Form Modal */}
-      {(isCreateModalOpen || isEditModalOpen || isEditing || currentProduct) && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/50" onClick={() => { closeCreateModal(); closeEditModal(); }} />
-          <div className="relative z-50 flex items-start justify-center min-h-full p-4 pt-8">
-            <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col">
-              <div className="p-5 border-b border-slate-100 shrink-0">
-                <h2 className="text-lg font-semibold text-slate-800">
-                  {isEditing ? 'Edit Product' : 'Create Product'}
-                </h2>
-              </div>
-              <div className="p-6 overflow-y-auto flex-1">
-                <ProductForm 
-                  product={currentProduct || undefined}
-                  onSuccess={() => { closeCreateModal(); closeEditModal(); }}
-                  onCancel={() => { closeCreateModal(); closeEditModal(); }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
