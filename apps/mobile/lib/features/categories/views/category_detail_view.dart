@@ -21,7 +21,6 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
 
   static const _primary = Color(0xFF434343); // Charcoal
   static const _accent  = Color(0xFFF7C873); // Golden
-  static const _surface = Color(0xFFFAEBCD); // Almond
   static const _bg      = Color(0xFFF8F8F8); // Off-white
 
   @override
@@ -75,22 +74,18 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
   Widget _buildDetail(BuildContext context, bool canManage) {
     // Determine level label
     String levelLabel = 'Main Category';
-    Color levelColor = _primary;
     if (_category.parentId != null) {
       final allAsync = ref.watch(categoriesProvider);
       allAsync.whenData((all) {
         final parent = all.where((c) => c.id == _category.parentId).firstOrNull;
         if (parent != null && parent.parentId != null) {
           levelLabel = 'Variant';
-          levelColor = _primary;
         } else {
           levelLabel = 'Sub Category';
-          levelColor = _primary;
         }
       });
       if (levelLabel == 'Main Category') {
         levelLabel = 'Sub Category';
-        levelColor = _primary;
       }
     }
 
@@ -284,12 +279,12 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete: $e'), backgroundColor: _rose),
+                    const SnackBar(content: Text('Failed to delete.'), backgroundColor: Color(0xFFFF6B8A)),
                   );
                 }
               }
             },
-            child: Text('Delete', style: TextStyle(fontSize: Responsive.sp(13), color: _rose, fontWeight: FontWeight.bold)),
+            child: Text('Delete', style: TextStyle(fontSize: Responsive.sp(13), color: const Color(0xFFFF6B8A), fontWeight: FontWeight.bold)),
           ),
         ],
       ),

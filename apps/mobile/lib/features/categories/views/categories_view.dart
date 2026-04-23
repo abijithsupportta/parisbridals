@@ -433,7 +433,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline, size: Responsive.icon(48), color: _rose),
+          Icon(Icons.error_outline, size: Responsive.icon(48), color: const Color(0xFFFF6B8A)),
           SizedBox(height: Responsive.h(16)),
           Padding(
             padding: Responsive.symmetric(horizontal: 32),

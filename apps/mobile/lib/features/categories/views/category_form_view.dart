@@ -37,8 +37,6 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
   bool get isEditing => widget.category != null;
 
   static const _primary = Color(0xFF434343); // Charcoal
-  static const _accent  = Color(0xFFF7C873); // Golden
-  static const _surface = Color(0xFFFAEBCD); // Almond
   static const _bg      = Color(0xFFF8F8F8); // Off-white
 
   final _imagePicker = ImagePicker();

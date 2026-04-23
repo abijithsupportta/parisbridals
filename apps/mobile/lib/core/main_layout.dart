@@ -53,6 +53,7 @@ class _MainLayoutState extends State<MainLayout> {
   PreferredSizeWidget _buildAppBar() {
     if (_selectedIndex == 0) {
       return AppBar(
+        backgroundColor: _primary,
         titleSpacing: 0,
         toolbarHeight: Responsive.h(60),
         leading: GestureDetector(
@@ -64,19 +65,19 @@ class _MainLayoutState extends State<MainLayout> {
                 'assets/images/logo_paris.svg',
                 width: Responsive.icon(28),
                 height: Responsive.icon(28),
-                colorFilter: const ColorFilter.mode(Colors.black, BlendMode.srcIn),
+                colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
               ),
             ),
           ),
         ),
         title: Text(
           'PARIS BRIDALS',
-          style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, letterSpacing: 1.5),
+          style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, letterSpacing: 1.5, color: Colors.white),
         ),
         actions: [
           _buildBranchSwitcher(),
           IconButton(
-            icon: Icon(Icons.notifications_none_rounded, size: Responsive.icon(24)),
+            icon: Icon(Icons.notifications_none_rounded, size: Responsive.icon(24), color: Colors.white),
             onPressed: () {},
           ),
           SizedBox(width: Responsive.w(4)),
@@ -86,6 +87,8 @@ class _MainLayoutState extends State<MainLayout> {
 
     final titles = ['', 'Orders', 'Calendar', 'Products', 'Categories'];
     return AppBar(
+      backgroundColor: _primary,
+      iconTheme: const IconThemeData(color: Colors.white),
       toolbarHeight: Responsive.h(60),
       leading: GestureDetector(
         onTap: () => _scaffoldKey.currentState?.openDrawer(),
@@ -96,12 +99,12 @@ class _MainLayoutState extends State<MainLayout> {
               'assets/images/logo_paris.svg',
               width: Responsive.icon(28),
               height: Responsive.icon(28),
-              colorFilter: const ColorFilter.mode(Colors.black, BlendMode.srcIn),
+              colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
             ),
           ),
         ),
       ),
-      title: Text(titles[_selectedIndex], style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700)),
+      title: Text(titles[_selectedIndex], style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700, color: Colors.white)),
       actions: [
         _buildBranchSwitcher(),
         SizedBox(width: Responsive.w(8)),
@@ -405,23 +408,23 @@ class _MainLayoutState extends State<MainLayout> {
       child: Container(
         padding: Responsive.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFFAEBCD),
+          color: Colors.white.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(Responsive.r(20)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.storefront_rounded, size: Responsive.icon(14), color: _primary),
+            Icon(Icons.storefront_rounded, size: Responsive.icon(14), color: Colors.white),
             SizedBox(width: Responsive.w(6)),
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: Responsive.w(80)),
               child: Text(
                 _selectedBranch,
-                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: _primary),
+                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: Colors.white),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            Icon(Icons.arrow_drop_down_rounded, size: Responsive.icon(18), color: _primary),
+            Icon(Icons.arrow_drop_down_rounded, size: Responsive.icon(18), color: Colors.white),
           ],
         ),
       ),
@@ -432,10 +435,10 @@ class _MainLayoutState extends State<MainLayout> {
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _primary,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, -4),
           ),
@@ -445,9 +448,9 @@ class _MainLayoutState extends State<MainLayout> {
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: _primary,
-        unselectedItemColor: const Color(0xFFB0B0B0),
+        backgroundColor: _primary,
+        selectedItemColor: const Color(0xFFF7C873), // Golden Accent
+        unselectedItemColor: Colors.white54,
         selectedFontSize: Responsive.sp(11),
         unselectedFontSize: Responsive.sp(11),
         iconSize: Responsive.icon(24),
