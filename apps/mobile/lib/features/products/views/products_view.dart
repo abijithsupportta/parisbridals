@@ -103,10 +103,10 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                 );
               },
               backgroundColor: const Color(0xFFF7C873), // Golden Accent
-              icon: Icon(Icons.add_rounded, size: Responsive.icon(20), color: const Color(0xFF434343)),
+              icon: Icon(Icons.add_rounded, size: Responsive.icon(24), color: const Color(0xFF434343)),
               label: Text(
                 'New Product',
-                style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: const Color(0xFF434343)),
+                style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: const Color(0xFF434343)),
               ),
               elevation: 4,
             )
@@ -117,25 +117,25 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   Widget _buildSearchBar() {
     return Container(
       color: Colors.white,
-      padding: Responsive.only(left: 16, right: 16, top: 12, bottom: 16),
+      padding: Responsive.only(left: 16, right: 16, top: 16, bottom: 16),
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFFFAEBCD),
-          borderRadius: BorderRadius.circular(Responsive.r(14)),
+          borderRadius: BorderRadius.circular(Responsive.r(16)),
           border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
         ),
         child: TextField(
           controller: _searchController,
           onSubmitted: _onSearchChanged,
           textInputAction: TextInputAction.search,
-          style: TextStyle(fontSize: Responsive.sp(14)),
+          style: TextStyle(fontSize: Responsive.sp(16)),
           decoration: InputDecoration(
             hintText: 'Search products or SKU... (Press Enter)',
-            hintStyle: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey[500]),
-            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(20), color: Colors.grey[500]),
+            hintStyle: TextStyle(fontSize: Responsive.sp(16), color: Colors.grey[500]),
+            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(24), color: _primary),
             suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.close_rounded, size: Responsive.icon(18), color: Colors.grey[500]),
+                    icon: Icon(Icons.close_rounded, size: Responsive.icon(22), color: Colors.grey[500]),
                     onPressed: () {
                       _searchController.clear();
                       _onSearchChanged('');
@@ -143,7 +143,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   )
                 : null,
             border: InputBorder.none,
-            contentPadding: Responsive.symmetric(vertical: 14),
+            contentPadding: Responsive.symmetric(vertical: 16),
           ),
         ),
       ),
@@ -202,15 +202,15 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
               children: [
                 // Thumbnail
                 Container(
-                  width: Responsive.w(80),
-                  height: Responsive.w(80),
+                  width: Responsive.w(100),
+                  height: Responsive.w(100),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFAEBCD),
-                    borderRadius: BorderRadius.circular(Responsive.r(12)),
+                    borderRadius: BorderRadius.circular(Responsive.r(16)),
                   ),
                   child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(Responsive.r(12)),
+                          borderRadius: BorderRadius.circular(Responsive.r(16)),
                           child: Image.network(
                             imageUrl,
                             fit: BoxFit.cover,
@@ -221,8 +221,8 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                                 highlightColor: Colors.grey[100]!,
                                 child: Container(
                                   color: Colors.white,
-                                  width: Responsive.w(80),
-                                  height: Responsive.w(80),
+                                  width: Responsive.w(100),
+                                  height: Responsive.w(100),
                                 ),
                               );
                             },
@@ -231,7 +231,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                         )
                       : _buildFallbackImage(),
                 ),
-                SizedBox(width: Responsive.w(16)),
+                SizedBox(width: Responsive.w(18)),
                 
                 // Details
                 Expanded(
@@ -246,9 +246,9 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                             child: Text(
                               product.name,
                               style: TextStyle(
-                                fontSize: Responsive.sp(14),
+                                fontSize: Responsive.sp(16),
                                 fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                                color: _primary,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -256,25 +256,25 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                           ),
                           if (!product.isActive)
                             Container(
-                              padding: Responsive.symmetric(horizontal: 6, vertical: 2),
+                              padding: Responsive.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(Responsive.r(4)),
+                                borderRadius: BorderRadius.circular(Responsive.r(6)),
                               ),
                               child: Text(
                                 'Inactive',
-                                style: TextStyle(fontSize: Responsive.sp(9), fontWeight: FontWeight.bold, color: Colors.grey[600]),
+                                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.bold, color: Colors.grey[600]),
                               ),
                             ),
                         ],
                       ),
-                      SizedBox(height: Responsive.h(4)),
+                      SizedBox(height: Responsive.h(6)),
                       if (product.sku != null && product.sku!.isNotEmpty) ...[
                         Text(
                           'SKU: ${product.sku}',
-                          style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[500], fontFamily: 'monospace'),
+                          style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600], fontFamily: 'monospace', fontWeight: FontWeight.w600),
                         ),
-                        SizedBox(height: Responsive.h(8)),
+                        SizedBox(height: Responsive.h(12)),
                       ] else ...[
                         SizedBox(height: Responsive.h(12)),
                       ],
@@ -286,13 +286,13 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                           Text(
                             '₹${product.pricePerDay.toStringAsFixed(0)} / day',
                             style: TextStyle(
-                              fontSize: Responsive.sp(14),
+                              fontSize: Responsive.sp(16),
                               fontWeight: FontWeight.w800,
                               color: const Color(0xFFF7C873), // Golden
                             ),
                           ),
                           Container(
-                            padding: Responsive.symmetric(horizontal: 8, vertical: 4),
+                            padding: Responsive.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
                               color: stockColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(Responsive.r(20)),
@@ -302,16 +302,16 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Container(
-                                  width: Responsive.w(6),
-                                  height: Responsive.w(6),
+                                  width: Responsive.w(8),
+                                  height: Responsive.w(8),
                                   decoration: BoxDecoration(shape: BoxShape.circle, color: stockColor),
                                 ),
-                                SizedBox(width: Responsive.w(4)),
+                                SizedBox(width: Responsive.w(6)),
                                 Text(
                                   stockText,
                                   style: TextStyle(
-                                    fontSize: Responsive.sp(10),
-                                    fontWeight: FontWeight.w700,
+                                    fontSize: Responsive.sp(12),
+                                    fontWeight: FontWeight.w800,
                                     color: stockColor,
                                   ),
                                 ),

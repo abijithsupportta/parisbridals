@@ -18,8 +18,10 @@ class ProductDetailView extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       appBar: AppBar(
+        backgroundColor: _primary,
+        iconTheme: const IconThemeData(color: Colors.white),
         titleSpacing: 0,
-        title: Text('Product Details', style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold)),
+        title: Text('Product Details', style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold, color: Colors.white)),
       ),
       body: SingleChildScrollView(
         padding: Responsive.all(16),
@@ -58,27 +60,27 @@ class ProductDetailView extends StatelessWidget {
             // Basic Info
             Text(
               product.name,
-              style: TextStyle(fontSize: Responsive.sp(22), fontWeight: FontWeight.w800, color: Colors.black87),
+              style: TextStyle(fontSize: Responsive.sp(26), fontWeight: FontWeight.w800, color: _primary),
             ),
             SizedBox(height: Responsive.h(8)),
             Row(
               children: [
                 if (product.sku != null && product.sku!.isNotEmpty)
                   Container(
-                    padding: Responsive.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(Responsive.r(6))),
-                    child: Text('SKU: ${product.sku}', style: TextStyle(fontSize: Responsive.sp(11), fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                    padding: Responsive.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(Responsive.r(8))),
+                    child: Text('SKU: ${product.sku}', style: TextStyle(fontSize: Responsive.sp(13), fontFamily: 'monospace', fontWeight: FontWeight.bold)),
                   ),
                 const Spacer(),
                 Text(
                   '₹${product.pricePerDay.toStringAsFixed(0)} / day',
-                  style: TextStyle(fontSize: Responsive.sp(20), fontWeight: FontWeight.w800, color: _primary),
+                  style: TextStyle(fontSize: Responsive.sp(22), fontWeight: FontWeight.w800, color: const Color(0xFFF7C873)), // Golden Accent
                 ),
               ],
             ),
             if (product.description != null && product.description!.isNotEmpty) ...[
               SizedBox(height: Responsive.h(16)),
-              Text(product.description!, style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey[600], height: 1.5)),
+              Text(product.description!, style: TextStyle(fontSize: Responsive.sp(16), color: Colors.grey[700], height: 1.5)),
             ],
             SizedBox(height: Responsive.h(24)),
 
@@ -120,7 +122,7 @@ class ProductDetailView extends StatelessWidget {
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: Responsive.only(bottom: 12, left: 4),
-      child: Text(title, style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold, color: Colors.black87)),
+      child: Text(title, style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold, color: _primary)),
     );
   }
 
@@ -161,9 +163,9 @@ class ProductDetailView extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(stockText, style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold, color: stockColor)),
-              SizedBox(height: Responsive.h(4)),
-              Text('${product.availableQuantity} items currently available', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.black87)),
+              Text(stockText, style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold, color: stockColor)),
+              SizedBox(height: Responsive.h(6)),
+              Text('${product.availableQuantity} items currently available', style: TextStyle(fontSize: Responsive.sp(14), color: Colors.black87)),
             ],
           ),
         ],
@@ -175,8 +177,8 @@ class ProductDetailView extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey[600])),
-        Text(value, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.black87)),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(15), color: Colors.grey[600])),
+        Text(value, style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold, color: _primary)),
       ],
     );
   }

@@ -219,14 +219,17 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       appBar: AppBar(
+        backgroundColor: _primary,
+        iconTheme: const IconThemeData(color: Colors.white),
         titleSpacing: 0,
-        title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold)),
+        title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold, color: Colors.white)),
         actions: [
           TextButton.icon(
             onPressed: _handleSave,
-            icon: Icon(Icons.check_rounded, size: Responsive.icon(18), color: _primary),
-            label: Text('Save', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: _primary)),
+            icon: Icon(Icons.check_rounded, size: Responsive.icon(22), color: const Color(0xFFF7C873)), // Golden
+            label: Text('Save', style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold, color: const Color(0xFFF7C873))),
           ),
+          SizedBox(width: Responsive.w(8)),
         ],
       ),
       body: Form(
@@ -276,12 +279,12 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       child: Row(
         children: [
           Container(
-            padding: Responsive.all(6),
+            padding: Responsive.all(8),
             decoration: BoxDecoration(color: color.shade50, shape: BoxShape.circle),
-            child: Text(number, style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: color.shade600)),
+            child: Text(number, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: color.shade600)),
           ),
-          SizedBox(width: Responsive.w(8)),
-          Text(title, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.black87)),
+          SizedBox(width: Responsive.w(10)),
+          Text(title, style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold, color: Colors.black87)),
         ],
       ),
     );
@@ -517,8 +520,8 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Total Quantity *', style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: Colors.grey[700])),
-        SizedBox(height: Responsive.h(8)),
+        Text('Total Quantity *', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.grey[700])),
+        SizedBox(height: Responsive.h(10)),
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF9FAFB),
@@ -541,11 +544,11 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
                   controller: controller,
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
+                  style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                    contentPadding: EdgeInsets.symmetric(vertical: Responsive.h(16)),
                   ),
                 ),
               ),
@@ -569,23 +572,23 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: Colors.grey[700])),
-        SizedBox(height: Responsive.h(8)),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.grey[700])),
+        SizedBox(height: Responsive.h(10)),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
-          style: TextStyle(fontSize: Responsive.sp(14)),
+          style: TextStyle(fontSize: Responsive.sp(16)),
           validator: required ? (v) => v == null || v.isEmpty ? 'Required' : null : null,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(14)),
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(16)),
             filled: true,
-            fillColor: const Color(0xFFF9FAFB),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: BorderSide(color: Colors.grey[300]!)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: BorderSide(color: Colors.grey[300]!)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: const BorderSide(color: _primary, width: 2)),
-            contentPadding: Responsive.symmetric(horizontal: 16, vertical: 12),
+            fillColor: const Color(0xFFFAEBCD), // Almond
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(16)), borderSide: BorderSide(color: Colors.grey[300]!)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(16)), borderSide: BorderSide(color: Colors.grey[300]!)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(16)), borderSide: const BorderSide(color: _primary, width: 2)),
+            contentPadding: Responsive.symmetric(horizontal: 18, vertical: 16),
           ),
         ),
       ],
@@ -596,17 +599,17 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: Colors.grey[700])),
-        SizedBox(height: Responsive.h(8)),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.grey[700])),
+        SizedBox(height: Responsive.h(10)),
         Container(
-          padding: Responsive.symmetric(horizontal: 16),
-          decoration: BoxDecoration(color: disabled ? Colors.grey[100] : const Color(0xFFF9FAFB), borderRadius: BorderRadius.circular(Responsive.r(12)), border: Border.all(color: Colors.grey[300]!)),
+          padding: Responsive.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(color: disabled ? Colors.grey[100] : const Color(0xFFFAEBCD), borderRadius: BorderRadius.circular(Responsive.r(16)), border: Border.all(color: Colors.grey[300]!)),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
               value: value,
-              hint: Text(disabled ? 'None available' : 'Select $label', style: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(14))),
-              items: items.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: TextStyle(fontSize: Responsive.sp(14))))).toList(),
+              hint: Text(disabled ? 'None available' : 'Select $label', style: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(16))),
+              items: items.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: TextStyle(fontSize: Responsive.sp(16))))).toList(),
               onChanged: disabled ? null : onChanged,
             ),
           ),
@@ -619,8 +622,8 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: Colors.black87)),
-        Switch(value: value, onChanged: onChanged, activeTrackColor: _primary, activeColor: Colors.white),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w600, color: Colors.black87)),
+        Switch(value: value, onChanged: onChanged, activeTrackColor: _primary, activeThumbColor: Colors.white),
       ],
     );
   }
