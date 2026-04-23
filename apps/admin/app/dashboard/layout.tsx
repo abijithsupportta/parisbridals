@@ -1,5 +1,6 @@
 import Sidebar from "@/components/admin/Sidebar";
 import TopBar from "@/components/admin/TopBar";
+import Toasts from "@/components/admin/Toasts";
 import QueryProvider from "@/components/providers/QueryProvider";
 
 export default function DashboardLayout({
@@ -18,6 +19,7 @@ export default function DashboardLayout({
           </main>
         </div>
       </div>
+      <Toasts />
     </QueryProvider>
   );
 }
