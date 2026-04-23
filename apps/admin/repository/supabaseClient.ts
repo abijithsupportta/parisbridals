@@ -7,7 +7,7 @@
  * @module repository/supabaseClient
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createClient as createClientComponent } from '@/lib/supabase/client';
 import { PostgrestError } from '@supabase/supabase-js';
 

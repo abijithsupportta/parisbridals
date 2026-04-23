@@ -80,7 +80,7 @@ export interface CreateProductDTO {
   price_per_day: number;
   security_deposit?: number;
   quantity: number;
-  available_quantity: number;
+  available_quantity?: number;
   images?: Omit<ProductImage, 'id'>[];
   sizes?: Omit<ProductVariant, 'id'>[];
   colors?: Omit<ProductVariant, 'id'>[];
