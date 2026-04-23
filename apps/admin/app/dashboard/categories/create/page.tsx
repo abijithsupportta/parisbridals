@@ -11,7 +11,7 @@
  * @module app/dashboard/categories/create/page
  */
 
-import { getCategories, getCategoryLevel } from "@/lib/supabase/categories";
+import { categoryService } from "@/services";
 import CategoryForm from "@/components/admin/CategoryForm";
 
 interface PageProps {
@@ -20,7 +20,8 @@ interface PageProps {
 
 export default async function CreateCategoryPage({ searchParams }: PageProps) {
   const { parent } = await searchParams;
-  const allCategories = await getCategories();
+  const allCategoriesResult = await categoryService.getAllCategories();
+  const allCategories = allCategoriesResult.success ? allCategoriesResult.data || [] : [];
 
   // Validate and resolve the parent hint. If the parent id is a Variant we
   // silently drop it because variants cannot have children.
@@ -29,13 +30,17 @@ export default async function CreateCategoryPage({ searchParams }: PageProps) {
   if (parent) {
     const parentCat = allCategories.find((c) => c.id === parent);
     if (parentCat) {
-      const parentLevel = getCategoryLevel(parentCat, allCategories);
-      if (parentLevel !== "variant") {
-        defaultParentId = parentCat.id;
-        parentContextLabel =
-          parentLevel === "main"
-            ? `Adding Subcategory under "${parentCat.name}"`
-            : `Adding Variant under "${parentCat.name}"`;
+      // Get parent with relations to check level
+      const parentResult = await categoryService.getCategoryById(parent);
+      if (parentResult.success && parentResult.data) {
+        const parentLevel = parentResult.data.level;
+        if (parentLevel !== "variant") {
+          defaultParentId = parentCat.id;
+          parentContextLabel =
+            parentLevel === "main"
+              ? `Adding Subcategory under "${parentCat.name}"`
+              : `Adding Variant under "${parentCat.name}"`;
+        }
       }
     }
   }

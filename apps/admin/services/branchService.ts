@@ -24,6 +24,19 @@ function validationError(message: string, code = 'VALIDATION'): RepositoryResult
 }
 
 class BranchService {
+  // Current user context for audit fields
+  private currentUserId: string | null = null;
+  private currentBranchId: string | null = null;
+
+  /**
+   * Set current user context for audit fields
+   */
+  setUserContext(userId: string | null, branchId: string | null) {
+    this.currentUserId = userId;
+    this.currentBranchId = branchId;
+    branchRepository.setUserContext(userId, branchId);
+    staffRepository.setUserContext(userId, branchId);
+  }
 
   // ─── Branch Operations ───────────────────────────────────────────────
 

@@ -4,25 +4,30 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createOrder, createCustomer, getCustomerByPhone, getProducts, type Customer, type Product } from "@/lib/supabase/queries";
+import { useCreateCustomer, useCustomerByPhone, useCreateOrder, useProducts, useGSTPercentage, useCreatePayment, useBranches } from "@/hooks";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CreateOrderDTO, DeliveryMethod } from "@/domain/types/order";
+import { PaymentType, PaymentMode } from "@/domain/types/payment";
+import { useAppStore } from "@/stores";
 
 interface CartItem {
-  product: Product;
+  product_id: string;
   quantity: number;
+  price_per_day: number;
+  security_deposit: number;
 }
 
 export default function OrderForm() {
   const router = useRouter();
+  const { showError } = useAppStore();
+  const user = useAppStore((state) => state.user);
   const [loading, setLoading] = useState(false);
   const [searchingCustomer, setSearchingCustomer] = useState(false);
-  const [loadingProducts, setLoadingProducts] = useState(true);
   const [isNewCustomer, setIsNewCustomer] = useState(false);
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [customer, setCustomer] = useState<any>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedQuantity, setSelectedQuantity] = useState(1);
@@ -37,8 +42,35 @@ export default function OrderForm() {
   const [orderData, setOrderData] = useState({
     rental_start_date: "",
     rental_end_date: "",
+    pickup_time: "",
+    return_time: "",
+    pickup_branch_id: "",
+    event_date: "",
+    delivery_method: DeliveryMethod.PICKUP,
+    delivery_address: "",
+    pickup_address: "",
     notes: "",
   });
+
+  const [paymentData, setPaymentData] = useState({
+    payment_type: PaymentType.DEPOSIT,
+    payment_mode: PaymentMode.CASH,
+    amount: 0,
+    transaction_id: "",
+    notes: "",
+  });
+
+  const { data: gstResult } = useGSTPercentage();
+  const gstPercentage = (gstResult?.success && gstResult.data !== null) ? gstResult.data : 18;
+
+  const { products, isLoading: loadingProducts } = useProducts();
+  const { data: existingCustomerResult, refetch: searchCustomer } = useCustomerByPhone(phone, false);
+  const { createCustomer, isLoading: creatingCustomer } = useCreateCustomer();
+  const { createOrder, isLoading: creatingOrder } = useCreateOrder();
+  const { createPayment } = useCreatePayment();
+  const { branches } = useBranches();
+
+  const existingCustomer = existingCustomerResult;
 
   const clearZeroOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === "0") {
@@ -57,84 +89,69 @@ export default function OrderForm() {
     return () => document.removeEventListener("wheel", handleWheel);
   }, []);
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async () => {
-    setLoadingProducts(true);
-    try {
-      const productsData = await getProducts();
-      setProducts(productsData.filter(p => p.is_active && p.available_quantity > 0));
-    } catch (error) {
-      console.error("Error loading products:", error);
-    } finally {
-      setLoadingProducts(false);
-    }
-  };
-
   const handlePhoneSearch = async () => {
     if (phone.length < 10) {
-      alert("Please enter a valid phone number");
+      showError("Please enter a valid phone number");
       return;
     }
 
     setSearchingCustomer(true);
-    try {
-      const existingCustomer = await getCustomerByPhone(phone);
-      if (existingCustomer) {
-        setCustomer(existingCustomer);
-        setCustomerData({
-          name: existingCustomer.name,
-          email: existingCustomer.email || "",
-          address: existingCustomer.address || "",
-        });
-        setIsNewCustomer(false);
-      } else {
-        setCustomer(null);
-        setCustomerData({ name: "", email: "", address: "" });
-        setIsNewCustomer(true);
-      }
-    } catch (error) {
-      console.error("Error searching customer:", error);
-    } finally {
-      setSearchingCustomer(false);
+    await searchCustomer();
+    setSearchingCustomer(false);
+    
+    if (existingCustomer) {
+      setCustomer(existingCustomer);
+      setCustomerData({
+        name: existingCustomer.name,
+        email: existingCustomer.email || "",
+        address: typeof existingCustomer.address === 'string' ? existingCustomer.address : "",
+      });
+      setIsNewCustomer(false);
+    } else {
+      setCustomer(null);
+      setCustomerData({ name: "", email: "", address: "" });
+      setIsNewCustomer(true);
     }
   };
 
   const addToCart = () => {
     if (!selectedProductId) {
-      alert("Please select a product");
+      showError("Please select a product");
       return;
     }
 
-    const product = products.find(p => p.id === selectedProductId);
+    const product = products.find((p: any) => p.id === selectedProductId);
     if (!product) return;
 
     if (selectedQuantity <= 0) {
-      alert("Please enter a valid quantity");
+      showError("Please enter a valid quantity");
       return;
     }
 
     if (selectedQuantity > product.available_quantity) {
-      alert(`Only ${product.available_quantity} items available`);
+      showError(`Only ${product.available_quantity} items available`);
       return;
     }
 
-    const existingItem = cart.find(item => item.product.id === selectedProductId);
+    const existingItem = cart.find(item => item.product_id === selectedProductId);
     if (existingItem) {
       const newQuantity = existingItem.quantity + selectedQuantity;
       if (newQuantity > product.available_quantity) {
-        alert(`Only ${product.available_quantity} items available`);
+        showError(`Only ${product.available_quantity} items available`);
         return;
       }
       setCart(cart.map(item => 
-        item.product.id === selectedProductId 
+        item.product_id === selectedProductId 
           ? { ...item, quantity: newQuantity }
           : item
       ));
     } else {
-      setCart([...cart, { product, quantity: selectedQuantity }]);
+      setCart([...cart, { 
+        product_id: selectedProductId, 
+        quantity: selectedQuantity,
+        price_per_day: product.price_per_day,
+        security_deposit: product.security_deposit || 0
+      }]);
     }
 
     setSelectedProductId("");
@@ -142,11 +159,11 @@ export default function OrderForm() {
   };
 
   const removeFromCart = (productId: string) => {
-    setCart(cart.filter(item => item.product.id !== productId));
+    setCart(cart.filter(item => item.product_id !== productId));
   };
 
   const updateCartQuantity = (productId: string, newQuantity: number) => {
-    const product = products.find(p => p.id === productId);
+    const product = products.find((p: any) => p.id === productId);
     if (!product) return;
 
     if (newQuantity <= 0) {
@@ -155,12 +172,12 @@ export default function OrderForm() {
     }
 
     if (newQuantity > product.available_quantity) {
-      alert(`Only ${product.available_quantity} items available`);
+      showError(`Only ${product.available_quantity} items available`);
       return;
     }
 
     setCart(cart.map(item => 
-      item.product.id === productId 
+      item.product_id === productId 
         ? { ...item, quantity: newQuantity }
         : item
     ));
@@ -171,36 +188,45 @@ export default function OrderForm() {
     const endDate = new Date(orderData.rental_end_date);
     const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (days <= 0 || isNaN(days)) return 0;
+    if (days <= 0 || isNaN(days)) return { subtotal: 0, gst: 0, total: 0, totalSecurityDeposit: 0 };
     
-    return cart.reduce((total, item) => {
-      return total + (item.product.price_per_day * item.quantity * days);
+    const subtotal = cart.reduce((total, item) => {
+      return total + (item.price_per_day * item.quantity * days);
     }, 0);
+    
+    const totalSecurityDeposit = cart.reduce((total, item) => {
+      return total + (item.security_deposit * item.quantity);
+    }, 0);
+    
+    const gst = subtotal * (gstPercentage / 100);
+    const total = subtotal + gst + totalSecurityDeposit;
+    
+    return { subtotal, gst, total, totalSecurityDeposit };
   };
 
   const validateForm = () => {
     if (!phone) {
-      alert("Please enter customer phone number");
+      showError("Please enter customer phone number");
       return false;
     }
 
     if (!customerData.name) {
-      alert("Please enter customer name");
+      showError("Please enter customer name");
       return false;
     }
 
     if (cart.length === 0) {
-      alert("Please add at least one product to the order");
+      showError("Please add at least one product to the order");
       return false;
     }
 
     if (!orderData.rental_start_date) {
-      alert("Please select rental start date");
+      showError("Please select rental start date");
       return false;
     }
 
     if (!orderData.rental_end_date) {
-      alert("Please select rental end date");
+      showError("Please select rental end date");
       return false;
     }
 
@@ -208,7 +234,7 @@ export default function OrderForm() {
     const endDate = new Date(orderData.rental_end_date);
     
     if (endDate <= startDate) {
-      alert("End date must be after start date");
+      showError("End date must be after start date");
       return false;
     }
 
@@ -228,63 +254,115 @@ export default function OrderForm() {
       let customerId: string;
 
       if (isNewCustomer || !customer) {
-        const newCustomer = await createCustomer({
-          name: customerData.name,
-          email: customerData.email || null,
-          phone: phone,
-          address: customerData.address || null,
+        const result: any = await new Promise((resolve, reject) => {
+          createCustomer({
+            name: customerData.name,
+            email: customerData.email || undefined,
+            phone: phone,
+            address: typeof customerData.address === 'string' ? customerData.address : undefined,
+          }, {
+            onSuccess: resolve,
+            onError: reject,
+          });
         });
         
-        if (!newCustomer) {
-          throw new Error("Failed to create customer");
+        if (!result.customer) {
+          showError('Failed to create customer', 'Unknown error');
+          setLoading(false);
+          return;
         }
-        customerId = newCustomer.id;
+        
+        customerId = result.customer.id;
       } else {
         customerId = customer.id;
       }
 
-      const startDate = new Date(orderData.rental_start_date);
-      const endDate = new Date(orderData.rental_end_date);
-      const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      const orderItems = cart.map(item => ({
-        product_id: item.product.id,
-        quantity: item.quantity,
-        price_per_day: item.product.price_per_day,
-      }));
-
-      const totalAmount = calculateTotal();
-
-      const order = await createOrder({
+      const orderPayload: CreateOrderDTO = {
         customer_id: customerId,
-        customer: customer || { id: customerId, name: customerData.name, email: customerData.email || null, phone, address: customerData.address || null, created_at: new Date().toISOString() },
-        items: orderItems as any,
-        total_amount: totalAmount,
-        status: 'pending',
+        branch_id: "default-branch", // TODO: Get from context
+        items: cart,
         rental_start_date: orderData.rental_start_date,
         rental_end_date: orderData.rental_end_date,
-        notes: orderData.notes || null,
-      });
+        pickup_time: orderData.pickup_time || undefined,
+        return_time: orderData.return_time || undefined,
+        pickup_branch_id: orderData.pickup_branch_id || undefined,
+        event_date: orderData.event_date || undefined,
+        delivery_method: orderData.delivery_method,
+        delivery_address: orderData.delivery_address || undefined,
+        pickup_address: orderData.pickup_address || undefined,
+        notes: orderData.notes || undefined,
+      };
 
-      if (order) {
-        router.push("/dashboard/orders");
-        router.refresh();
+      const orderResult: any = await new Promise((resolve, reject) => {
+        createOrder(orderPayload, {
+          onSuccess: resolve,
+          onError: reject,
+        });
+      });
+      
+      if (orderResult.order) {
+        // Create payment after order is created
+        if (paymentData.amount > 0) {
+          const paymentPayload = {
+            order_id: orderResult.order.id,
+            payment_type: paymentData.payment_type,
+            amount: paymentData.amount,
+            payment_mode: paymentData.payment_mode,
+            transaction_id: paymentData.transaction_id || undefined,
+            notes: paymentData.notes || undefined,
+            created_by: user?.id,
+          };
+
+          const paymentResult: any = await new Promise((resolve, reject) => {
+            createPayment(paymentPayload, {
+              onSuccess: resolve,
+              onError: reject,
+            });
+          });
+
+          if (!paymentResult) {
+            showError('Order created but payment failed', 'Unknown error');
+            // Still redirect to orders page since order was created
+          }
+        }
+        
+        router.push('/dashboard/orders');
       } else {
-        throw new Error("Failed to create order");
+        showError('Failed to create order', 'Unknown error');
       }
     } catch (error) {
       console.error("Error creating order:", error);
-      alert("Failed to create order");
+      showError("Failed to create order");
     } finally {
       setLoading(false);
     }
   };
 
-  const selectedProduct = products.find(p => p.id === selectedProductId);
-  const totalAmount = calculateTotal();
+  const handleCreateCustomer = async () => {
+    createCustomer({ ...customerData, phone });
+  };
+
+  const selectedProduct = products.find((p: any) => p.id === selectedProductId);
+  const { subtotal, gst, total, totalSecurityDeposit } = calculateTotal();
   const rentalDays = orderData.rental_start_date && orderData.rental_end_date 
     ? Math.max(1, Math.ceil((new Date(orderData.rental_end_date).getTime() - new Date(orderData.rental_start_date).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;
+
+  // Auto-fill payment amount with security deposit
+  useEffect(() => {
+    if (totalSecurityDeposit > 0 && paymentData.amount === 0) {
+      setPaymentData(prev => ({ ...prev, amount: totalSecurityDeposit }));
+    }
+  }, [totalSecurityDeposit]);
+
+  // Auto-select user's branch if Staff or Manager
+  useEffect(() => {
+    if (user && (user.role === 'staff' || user.role === 'manager')) {
+      // For now, we'll need to get the user's branch from somewhere
+      // This would typically come from the user object or a separate hook
+      // For now, we'll leave it empty and let the user select
+    }
+  }, [user]);
 
   return (
     <Card className="border-0 shadow-2xl w-full max-w-6xl">
@@ -376,6 +454,73 @@ export default function OrderForm() {
             </div>
           </div>
 
+          {/* Rental Dates and Times */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Rental Period</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 block">Start Date *</label>
+                <Input
+                  type="date"
+                  value={orderData.rental_start_date}
+                  onChange={(e) => setOrderData({ ...orderData, rental_start_date: e.target.value })}
+                  required
+                  className="h-12 border-slate-300 focus:border-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 block">End Date *</label>
+                <Input
+                  type="date"
+                  value={orderData.rental_end_date}
+                  onChange={(e) => setOrderData({ ...orderData, rental_end_date: e.target.value })}
+                  required
+                  className="h-12 border-slate-300 focus:border-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 block">Pickup Time</label>
+                <Input
+                  type="time"
+                  value={orderData.pickup_time}
+                  onChange={(e) => setOrderData({ ...orderData, pickup_time: e.target.value })}
+                  className="h-12 border-slate-300 focus:border-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 block">Return Time</label>
+                <Input
+                  type="time"
+                  value={orderData.return_time}
+                  onChange={(e) => setOrderData({ ...orderData, return_time: e.target.value })}
+                  className="h-12 border-slate-300 focus:border-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 block">Pickup Branch</label>
+                <Select 
+                  value={orderData.pickup_branch_id} 
+                  onValueChange={(value) => setOrderData({ ...orderData, pickup_branch_id: value })}
+                  disabled={user?.role === 'staff' || user?.role === 'manager'}
+                >
+                  <SelectTrigger className="h-12 border-slate-300 focus:border-primary">
+                    <SelectValue placeholder="Select pickup branch..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map(branch => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(user?.role === 'staff' || user?.role === 'manager') && (
+                  <p className="text-xs text-slate-500">Branch selection is restricted for your role</p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Product Selection */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Add Products</h3>
@@ -435,43 +580,48 @@ export default function OrderForm() {
               <div className="mt-6 space-y-4">
                 <h4 className="text-md font-semibold text-slate-900">Order Items ({cart.length})</h4>
                 <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  {cart.map((item) => (
-                    <div key={item.product.id} className="flex items-center justify-between p-4 border-b border-slate-200 last:border-b-0 bg-slate-50">
-                      <div className="flex-1">
-                        <p className="font-medium text-slate-900">{item.product.name}</p>
-                        <p className="text-sm text-slate-600">₹{item.product.price_per_day}/day</p>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
+                  {cart.map((item) => {
+                    const product = products.find((p: any) => p.id === item.product_id);
+                    if (!product) return null;
+                    return (
+                      <div key={item.product_id} className="flex items-center justify-between p-4 border-b border-slate-200 last:border-b-0 bg-slate-50">
+                        <div className="flex-1">
+                          <p className="font-medium text-slate-900">{product.name}</p>
+                          <p className="text-sm text-slate-600">₹{item.price_per_day}/day</p>
+                          <p className="text-xs text-slate-500">Security Deposit: ₹{item.security_deposit}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.product_id, item.quantity - 1)}
+                              className="w-8 h-8 rounded bg-slate-200 hover:bg-slate-300 flex items-center justify-center"
+                            >
+                              -
+                            </button>
+                            <span className="w-8 text-center font-medium">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.product_id, item.quantity + 1)}
+                              className="w-8 h-8 rounded bg-slate-200 hover:bg-slate-300 flex items-center justify-center"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <Badge className="bg-purple-100 text-purple-700">
+                            ₹{item.price_per_day * item.quantity * rentalDays}
+                          </Badge>
                           <button
                             type="button"
-                            onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                            className="w-8 h-8 rounded bg-slate-200 hover:bg-slate-300 flex items-center justify-center"
+                            onClick={() => removeFromCart(item.product_id)}
+                            className="p-2 hover:bg-red-100 rounded-lg transition-colors"
                           >
-                            -
-                          </button>
-                          <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <button
-                            type="button"
-                            onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                            className="w-8 h-8 rounded bg-slate-200 hover:bg-slate-300 flex items-center justify-center"
-                          >
-                            +
+                            <Trash2 className="w-4 h-4 text-red-500" />
                           </button>
                         </div>
-                        <Badge className="bg-purple-100 text-purple-700">
-                          ₹{item.product.price_per_day * item.quantity * rentalDays}
-                        </Badge>
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.product.id)}
-                          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -519,17 +669,102 @@ export default function OrderForm() {
                   <span className="font-semibold text-slate-900">{rentalDays} day{rentalDays > 1 ? 's' : ''}</span>
                 </div>
                 {cart.length > 0 && (
-                  <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-300">
-                    <span className="text-slate-700 font-medium">Total Amount:</span>
-                    <span className="font-bold text-xl text-primary">₹{totalAmount.toLocaleString()}</span>
-                  </div>
+                  <>
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-300">
+                      <span className="text-slate-700">Rental Subtotal:</span>
+                      <span className="font-medium text-slate-900">₹{subtotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-slate-700">GST ({gstPercentage}%):</span>
+                      <span className="font-medium text-slate-900">₹{gst.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-slate-700">Security Deposit:</span>
+                      <span className="font-medium text-slate-900">₹{totalSecurityDeposit.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-300">
+                      <span className="text-slate-700 font-medium">Total Amount:</span>
+                      <span className="font-bold text-xl text-primary">₹{total.toLocaleString()}</span>
+                    </div>
+                  </>
                 )}
               </div>
             )}
           </div>
 
+          {/* Payment Section */}
+          {cart.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">Payment Collection</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Payment Type</label>
+                  <Select 
+                    value={paymentData.payment_type} 
+                    onValueChange={(value: PaymentType) => setPaymentData({ ...paymentData, payment_type: value })}
+                  >
+                    <SelectTrigger className="h-12 border-slate-300 focus:border-primary">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={PaymentType.DEPOSIT}>Deposit</SelectItem>
+                      <SelectItem value={PaymentType.FINAL}>Final Payment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Payment Mode</label>
+                  <Select 
+                    value={paymentData.payment_mode} 
+                    onValueChange={(value: PaymentMode) => setPaymentData({ ...paymentData, payment_mode: value })}
+                  >
+                    <SelectTrigger className="h-12 border-slate-300 focus:border-primary">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={PaymentMode.CASH}>Cash</SelectItem>
+                      <SelectItem value={PaymentMode.UPI}>UPI</SelectItem>
+                      <SelectItem value={PaymentMode.CARD}>Card</SelectItem>
+                      <SelectItem value={PaymentMode.BANK_TRANSFER}>Bank Transfer</SelectItem>
+                      <SelectItem value={PaymentMode.CHEQUE}>Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Amount (₹)</label>
+                  <Input
+                    type="number"
+                    value={paymentData.amount}
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
+                    min="0"
+                    step="0.01"
+                    className="h-12 border-slate-300 focus:border-primary"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-slate-700 block">Transaction ID (Optional)</label>
+                  <Input
+                    value={paymentData.transaction_id}
+                    onChange={(e) => setPaymentData({ ...paymentData, transaction_id: e.target.value })}
+                    placeholder="Enter transaction ID..."
+                    className="h-12 border-slate-300 focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700 block">Payment Notes (Optional)</label>
+                <Input
+                  value={paymentData.notes}
+                  onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
+                  placeholder="Any additional payment notes..."
+                  className="h-12 border-slate-300 focus:border-primary"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-4 pt-6 border-t border-slate-200">
-            <Button type="submit" loading={loading} disabled={cart.length === 0} className="flex-1 h-12 text-base shadow-lg shadow-primary/25">
+            <Button type="submit" disabled={loading || cart.length === 0} variant="gradient" className="flex-1 h-12 text-base">
               {loading ? "Creating..." : "Create Order"}
             </Button>
             <Button

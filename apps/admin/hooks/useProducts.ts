@@ -2,7 +2,9 @@
  * Product Hooks
  *
  * Custom React hooks for product operations using TanStack Query.
- * Provides a clean interface between components and the service layer.
+ * All operations go through API routes (server-side, service role key).
+ *
+ * Flow: UI → hooks → fetch(/api/products) → service → repository → supabase
  *
  * @module hooks/useProducts
  */
@@ -18,20 +20,45 @@ import {
   BulkProductOperation,
   BulkOperationResult
 } from '@/domain';
-import { productService } from '@/services';
-import { queryKeys, queryUtils } from '@/lib/query-client';
 import { useAppStore, useProductStore } from '@/stores';
 import { useCallback } from 'react';
+
+const productKeys = {
+  all: ['products'] as const,
+  detail: (id: string) => ['products', id] as const,
+  search: (query: string) => ['products', 'search', query] as const,
+};
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
 
 /**
  * Hook for fetching products with search and filtering
  */
 export function useProducts(params: ProductSearchParams = {}) {
   const query = useQuery({
-    queryKey: [...queryKeys.products, params],
-    queryFn: () => productService.getProducts(params),
+    queryKey: productKeys.all,
+    queryFn: async () => {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          searchParams.append(key, String(value));
+        }
+      });
+      const url = `/api/products${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+      const response = await apiFetch<{ success: boolean; data: ProductSearchResult }>(url);
+      return response.data;
+    },
     staleTime: 2 * 60 * 1000, // 2 minutes
-    select: (result) => result.data,
   });
 
   return {
@@ -51,17 +78,25 @@ export function useProducts(params: ProductSearchParams = {}) {
  */
 export function useProduct(id: string) {
   const query = useQuery({
-    queryKey: queryKeys.product(id),
-    queryFn: () => productService.getProductById(id),
+    queryKey: productKeys.detail(id),
+    queryFn: async () => {
+      console.log('Fetching product with ID:', id);
+      const response = await apiFetch<{ success: boolean; data: ProductWithRelations }>(`/api/products/${id}`);
+      console.log('API response:', response);
+      if (!response || !response.data) {
+        throw new Error('Invalid response from API');
+      }
+      return response.data;
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    select: (result) => result.data,
   });
 
   return {
     ...query,
     product: query.data,
     isLoading: query.isLoading || query.isFetching,
+    error: query.error,
   };
 }
 
@@ -74,19 +109,14 @@ export function useCreateProduct() {
   const closeCreateModal = useProductStore((state) => state.closeCreateModal);
 
   const mutation = useMutation({
-    mutationFn: (data: CreateProductDTO) => productService.createProduct(data),
+    mutationFn: (data: CreateProductDTO) =>
+      apiFetch('/api/products', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateProducts();
-        showSuccess('Product created successfully');
-        closeCreateModal();
-      } else {
-        showError('Failed to create product', result.error?.message);
-      }
+      queryClient.refetchQueries({ queryKey: ['products'] });
+      showSuccess('Product created successfully');
+      closeCreateModal();
     },
-    onError: (error) => {
-      showError('Failed to create product', error.message);
-    },
+    onError: (error) => showError('Failed to create product', error.message),
   });
 
   return {
@@ -105,20 +135,15 @@ export function useUpdateProduct() {
   const closeEditModal = useProductStore((state) => state.closeEditModal);
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateProductDTO }) => 
-      productService.updateProduct(id, data),
-    onSuccess: (result, variables) => {
-      if (result.success) {
-        queryUtils.invalidateProduct(variables.id);
-        showSuccess('Product updated successfully');
-        closeEditModal();
-      } else {
-        showError('Failed to update product', result.error?.message);
-      }
+    mutationFn: ({ id, data }: { id: string; data: UpdateProductDTO }) =>
+      apiFetch(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: (_data, variables) => {
+      queryClient.refetchQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.id) });
+      showSuccess('Product updated successfully');
+      closeEditModal();
     },
-    onError: (error) => {
-      showError('Failed to update product', error.message);
-    },
+    onError: (error) => showError('Failed to update product', error.message),
   });
 
   return {
@@ -137,19 +162,14 @@ export function useDeleteProduct() {
   const closeDeleteModal = useProductStore((state) => state.closeDeleteModal);
 
   const mutation = useMutation({
-    mutationFn: (id: string) => productService.deleteProduct(id),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateProducts();
-        showSuccess('Product deleted successfully');
-        closeDeleteModal();
-      } else {
-        showError('Failed to delete product', result.error?.message);
-      }
+    mutationFn: (id: string) =>
+      apiFetch(`/api/products/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.refetchQueries({ queryKey: productKeys.all });
+      showSuccess('Product deleted successfully');
+      closeDeleteModal();
     },
-    onError: (error) => {
-      showError('Failed to delete product', error.message);
-    },
+    onError: (error) => showError('Failed to delete product', error.message),
   });
 
   return {
@@ -165,14 +185,8 @@ export function useDeleteProduct() {
 export function useCanDeleteProduct(id: string) {
   const query = useQuery({
     queryKey: ['product-can-delete', id],
-    queryFn: () => productService.deleteProduct(id), // This will check canDelete internally
+    queryFn: () => apiFetch<{ canDelete: boolean; reason?: string }>(`/api/products/${id}/can-delete`),
     enabled: false, // Manual query
-    select: (result) => {
-      if (!result.success) {
-        return { canDelete: false, reason: result.error?.message };
-      }
-      return { canDelete: true };
-    },
   });
 
   return {
@@ -193,12 +207,12 @@ export function useBulkProductOperation() {
   const closeBulkDeleteModal = useProductStore((state) => state.closeBulkDeleteModal);
 
   const mutation = useMutation({
-    mutationFn: (operation: BulkProductOperation) => 
-      productService.performBulkOperation(operation),
+    mutationFn: (operation: BulkProductOperation) =>
+      apiFetch<{ success: boolean; data: BulkOperationResult }>('/api/products/bulk', { method: 'POST', body: JSON.stringify(operation) }),
     onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateProducts();
-        const { successful, failed, total_successful, total_failed } = result.data!;
+      queryClient.refetchQueries({ queryKey: productKeys.all });
+      if (result.success && result.data) {
+        const { successful, failed, total_successful, total_failed } = result.data;
         
         if (total_failed === 0) {
           showSuccess(`Successfully processed ${total_successful} products`);
@@ -211,135 +225,15 @@ export function useBulkProductOperation() {
         clearSelection();
         closeBulkDeleteModal();
       } else {
-        showError('Bulk operation failed', result.error?.message);
+        showError('Bulk operation failed');
       }
     },
-    onError: (error) => {
-      showError('Bulk operation failed', error.message);
-    },
+    onError: (error) => showError('Bulk operation failed', error.message),
   });
 
   return {
     ...mutation,
     performBulkOperation: mutation.mutateAsync,
-    isLoading: mutation.isPending,
-  };
-}
-
-/**
- * Hook for searching products
- */
-export function useProductSearch(query: string, enabled: boolean = true) {
-  const searchQuery = useQuery({
-    queryKey: queryKeys.productsSearch(query),
-    queryFn: () => productService.searchProducts(query, 10),
-    enabled: enabled && query.length > 0,
-    staleTime: 30 * 1000, // 30 seconds
-    select: (result) => result.data,
-  });
-
-  return {
-    ...searchQuery,
-    searchResults: searchQuery.data || [],
-    isLoading: searchQuery.isLoading || searchQuery.isFetching,
-  };
-}
-
-/**
- * Hook for getting featured products
- */
-export function useFeaturedProducts(limit: number = 10) {
-  const query = useQuery({
-    queryKey: ['products-featured', limit],
-    queryFn: () => productService.getFeaturedProducts(limit),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    select: (result) => result.data,
-  });
-
-  return {
-    ...query,
-    featuredProducts: query.data || [],
-    isLoading: query.isLoading || query.isFetching,
-  };
-}
-
-/**
- * Hook for getting low stock products
- */
-export function useLowStockProducts() {
-  const query = useQuery({
-    queryKey: ['products-low-stock'],
-    queryFn: () => productService.getLowStockProducts(),
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    select: (result) => result.data,
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
-  });
-
-  return {
-    ...query,
-    lowStockProducts: query.data || [],
-    isLoading: query.isLoading || query.isFetching,
-  };
-}
-
-/**
- * Hook for updating product inventory
- */
-export function useUpdateInventory() {
-  const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
-
-  const mutation = useMutation({
-    mutationFn: ({ productId, availableQuantity }: { 
-      productId: string; 
-      availableQuantity: number 
-    }) => productService.updateInventory(productId, availableQuantity),
-    onSuccess: (result, variables) => {
-      if (result.success) {
-        queryUtils.invalidateProduct(variables.productId);
-        showSuccess('Inventory updated successfully');
-      } else {
-        showError('Failed to update inventory', result.error?.message);
-      }
-    },
-    onError: (error) => {
-      showError('Failed to update inventory', error.message);
-    },
-  });
-
-  return {
-    ...mutation,
-    updateInventory: mutation.mutate,
-    isLoading: mutation.isPending,
-  };
-}
-
-/**
- * Hook for cloning a product
- */
-export function useCloneProduct() {
-  const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
-
-  const mutation = useMutation({
-    mutationFn: ({ id, newName }: { id: string; newName?: string }) => 
-      productService.cloneProduct(id, newName),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateProducts();
-        showSuccess('Product cloned successfully');
-      } else {
-        showError('Failed to clone product', result.error?.message);
-      }
-    },
-    onError: (error) => {
-      showError('Failed to clone product', error.message);
-    },
-  });
-
-  return {
-    ...mutation,
-    cloneProduct: mutation.mutate,
     isLoading: mutation.isPending,
   };
 }

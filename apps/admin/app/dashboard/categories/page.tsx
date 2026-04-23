@@ -21,14 +21,15 @@ import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { getCategories } from "@/lib/supabase/categories";
+import { categoryService } from "@/services";
 import CategoryTree from "@/components/admin/CategoryTree";
 
 /**
  * Async server component that fetches categories and renders the tree view.
  */
 export default async function CategoriesPage() {
-  const categories = await getCategories();
+  const result = await categoryService.getAllCategories();
+  const categories = result.success ? (result.data || []) : [];
 
   return (
     <div className="space-y-6">
@@ -38,7 +39,7 @@ export default async function CategoriesPage() {
           <p className="text-slate-500 mt-1">Manage Main, Sub, and Variant categories</p>
         </div>
         <Link href="/dashboard/categories/create">
-          <Button className="shadow-lg shadow-primary/25">
+          <Button variant="gradient">
             <Plus className="w-4 h-4 mr-2" />
             Add Category
           </Button>

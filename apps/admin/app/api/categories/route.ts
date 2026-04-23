@@ -2,8 +2,8 @@
  * Categories REST API — Collection Endpoint
  *
  * Routes:
- *   GET  /api/categories       List all categories (anon, read-only, RLS-gated)
- *   POST /api/categories       Create a new category (admin, bypasses RLS)
+ *   GET  /api/categories       List all categories (super_admin, admin, manager)
+ *   POST /api/categories       Create a new category (super_admin, admin, manager)
  *
  * Request body for POST (JSON):
  *   {
@@ -12,8 +12,7 @@
  *     description?: string | null
  *     image_url?: string | null (R2 public URL)
  *     parent_id?: string | null (UUID of parent category; null for Main)
- *     store_id?: string | null  (UUID of store; null for global)
- *     is_global?: boolean       (default: false)
+ *     is_global?: boolean       (default: true)
  *     is_active?: boolean       (default: true)
  *     sort_order?: number       (default: 0)
  *   }
@@ -27,18 +26,26 @@
  * @module app/api/categories/route
  */
 
-import { NextResponse } from "next/server";
-import {
-  getCategories,
-  createCategory,
-  type CategoryCreateInput,
-} from "@/lib/supabase/categories";
+import { NextRequest, NextResponse } from "next/server";
+import { categoryService } from "@/services/categoryService";
+import { apiGuard } from "@/lib/apiGuard";
+import { getAuthUser } from "@/lib/auth";
 
 /** GET /api/categories — list all categories */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const categories = await getCategories();
-    return NextResponse.json({ categories });
+    // Super Admin, Admin, and Manager can view categories
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
+    const result = await categoryService.getAllCategories();
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error?.message || 'Failed to fetch categories' },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json({ categories: result.data });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -46,39 +53,28 @@ export async function GET() {
 }
 
 /** POST /api/categories — create a new category */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Super Admin, Admin, and Manager can create categories
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
+    // Get authenticated user for audit fields
+    const authUser = await getAuthUser(request);
+    
+    // Set user context in service
+    categoryService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+
     const body = await request.json();
 
-    // Validate required fields
-    if (!body.name || typeof body.name !== "string") {
+    const result = await categoryService.createCategory(body);
+    if (!result.success) {
       return NextResponse.json(
-        { error: "Missing or invalid 'name' field (string required)" },
+        { error: result.error?.message || 'Failed to create category' },
         { status: 400 }
       );
     }
-    if (!body.slug || typeof body.slug !== "string") {
-      return NextResponse.json(
-        { error: "Missing or invalid 'slug' field (string required)" },
-        { status: 400 }
-      );
-    }
-
-    // Coerce into strict input shape with sensible defaults
-    const input: CategoryCreateInput = {
-      name: body.name,
-      slug: body.slug,
-      description: body.description ?? null,
-      image_url: body.image_url ?? null,
-      parent_id: body.parent_id ?? null,
-      store_id: body.store_id ?? null,
-      is_global: body.is_global ?? false,
-      is_active: body.is_active ?? true,
-      sort_order: typeof body.sort_order === "number" ? body.sort_order : 0,
-    };
-
-    const category = await createCategory(input);
-    return NextResponse.json({ category }, { status: 201 });
+    return NextResponse.json({ category: result.data }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

@@ -182,13 +182,11 @@ export default function ProductForm({ product, onSuccess, onCancel }: ProductFor
       };
 
       if (isEditing && product) {
-        const result = await updateProduct.mutateAsync({ id: product.id, data: payload });
+        const result: any = await updateProduct.mutateAsync({ id: product.id, data: payload });
         if (!result.success) { showError('Update Failed', result.error?.message || 'Failed'); return; }
-        showSuccess('Updated', 'Product updated successfully');
       } else {
-        const result = await createProduct.mutateAsync(payload as CreateProductDTO);
+        const result: any = await createProduct.mutateAsync(payload as CreateProductDTO);
         if (!result.success) { showError('Creation Failed', result.error?.message || 'Failed'); return; }
-        showSuccess('Created', 'Product created successfully');
       }
 
       onSuccess?.();

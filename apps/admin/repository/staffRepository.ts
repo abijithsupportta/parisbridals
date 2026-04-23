@@ -9,7 +9,7 @@
 import { BaseRepository, RepositoryResult } from './supabaseClient';
 import { Staff, StaffWithBranch, CreateStaffDTO, UpdateStaffDTO } from '@/domain/types/branch';
 
-class StaffRepository extends BaseRepository {
+export class StaffRepository extends BaseRepository {
   private readonly tableName = 'staff';
 
   async findAll(storeId: string): Promise<RepositoryResult<StaffWithBranch[]>> {
@@ -52,10 +52,10 @@ class StaffRepository extends BaseRepository {
     return this.handleResponse<Staff | null>({ data, error });
   }
 
-  async create(data: any): Promise<RepositoryResult<Staff>> {
+  async create(data: CreateStaffDTO): Promise<RepositoryResult<Staff>> {
     const { data: staff, error } = await this.client
       .from(this.tableName)
-      .insert(data)
+      .insert({ ...data, ...this.getCreateAuditFields() })
       .select()
       .single();
 
@@ -65,7 +65,7 @@ class StaffRepository extends BaseRepository {
   async update(id: string, data: UpdateStaffDTO): Promise<RepositoryResult<Staff>> {
     const { data: staff, error } = await this.client
       .from(this.tableName)
-      .update({ ...data, updated_at: new Date().toISOString() })
+      .update({ ...data, updated_at: new Date().toISOString(), ...this.getUpdateAuditFields() })
       .eq('id', id)
       .select()
       .single();

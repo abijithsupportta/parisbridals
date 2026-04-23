@@ -4,10 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getBanners, type Banner } from "@/lib/supabase/queries";
+import { bannerService } from "@/services";
+import { type Banner } from "@/domain";
 
 export default async function BannersPage() {
-  const banners = await getBanners();
+  const bannersResult = await bannerService.getAllBanners();
+  const banners = bannersResult.success ? bannersResult.data || [] : [];
 
   return (
     <div className="space-y-8">
@@ -79,9 +81,6 @@ export default async function BannersPage() {
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }>
                         {banner.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <Badge className="bg-purple-100 text-purple-700">
-                        {banner.banner_type}
                       </Badge>
                       <Badge className="bg-slate-100 text-slate-700">
                         Priority: {banner.priority}
