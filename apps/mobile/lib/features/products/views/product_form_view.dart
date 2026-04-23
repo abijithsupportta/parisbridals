@@ -351,16 +351,22 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
 
   Widget _buildSectionTitle(String number, String title, MaterialColor color) {
     return Padding(
-      padding: Responsive.only(bottom: 8, left: 4),
+      padding: Responsive.only(bottom: 10, left: 2),
       child: Row(
         children: [
           Container(
-            padding: Responsive.all(7),
-            decoration: BoxDecoration(color: color.shade50, shape: BoxShape.circle),
-            child: Text(number, style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: color.shade600)),
+            width: Responsive.w(24),
+            height: Responsive.w(24),
+            decoration: BoxDecoration(
+              color: _primary,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(number, style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
           ),
-          SizedBox(width: Responsive.w(6)),
-          Text(title, style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: Colors.black87)),
+          SizedBox(width: Responsive.w(8)),
+          Text(title, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w700, color: _primary)),
         ],
       ),
     );
@@ -648,23 +654,23 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: Colors.grey[700])),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.grey[600])),
         SizedBox(height: Responsive.h(6)),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
           keyboardType: keyboardType,
-          style: TextStyle(fontSize: Responsive.sp(13)),
+          style: TextStyle(fontSize: Responsive.sp(13), color: _primary),
           validator: required ? (v) => v == null || v.isEmpty ? 'Required' : null : null,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(12)),
             filled: true,
-            fillColor: const Color(0xFFFAEBCD),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide(color: Colors.grey[300]!)),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide(color: Colors.grey[300]!)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: const BorderSide(color: _primary, width: 2)),
-            contentPadding: Responsive.symmetric(horizontal: 12, vertical: 10),
+            fillColor: const Color(0xFFF5F5F7),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide(color: _primary, width: 1.5)),
+            contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
           ),
         ),
       ],
@@ -675,18 +681,22 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: Colors.grey[700])),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.grey[600])),
         SizedBox(height: Responsive.h(6)),
         Container(
-          padding: Responsive.symmetric(horizontal: 12, vertical: 2),
-          decoration: BoxDecoration(color: disabled ? Colors.grey[100] : const Color(0xFFFAEBCD), borderRadius: BorderRadius.circular(Responsive.r(10)), border: Border.all(color: Colors.grey[300]!)),
+          padding: Responsive.symmetric(horizontal: 14, vertical: 2),
+          decoration: BoxDecoration(
+            color: disabled ? Colors.grey[100] : const Color(0xFFF5F5F7),
+            borderRadius: BorderRadius.circular(Responsive.r(10)),
+          ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
               value: value,
               hint: Text(disabled ? 'None available' : 'Select $label', style: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(12))),
-              items: items.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: TextStyle(fontSize: Responsive.sp(13))))).toList(),
+              items: items.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: TextStyle(fontSize: Responsive.sp(13), color: _primary)))).toList(),
               onChanged: disabled ? null : onChanged,
+              icon: Icon(Icons.keyboard_arrow_down_rounded, size: Responsive.icon(20), color: Colors.grey[500]),
             ),
           ),
         ),
@@ -695,12 +705,23 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   }
 
   Widget _buildSwitch({required String label, required bool value, required Function(bool) onChanged}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.black87)),
-        Switch(value: value, onChanged: onChanged, activeTrackColor: _primary, activeThumbColor: Colors.white),
-      ],
+    return Container(
+      padding: Responsive.symmetric(horizontal: 4, vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w500, color: _primary), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: _primary,
+            activeThumbColor: Colors.white,
+            inactiveTrackColor: Colors.grey[300],
+          ),
+        ],
+      ),
     );
   }
 }

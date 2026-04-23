@@ -116,7 +116,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
       padding: Responsive.all(12),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFFAEBCD),
+          color: const Color(0xFFF5F5F7),
           borderRadius: BorderRadius.circular(Responsive.r(12)),
           border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
         ),
