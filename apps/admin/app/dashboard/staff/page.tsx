@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AddButton from "@/components/admin/AddButton";
 import Modal from "@/components/admin/Modal";
+import PasswordInput from "@/components/admin/PasswordInput";
 import { useStaff, useBranches, useCreateStaff, useUpdateStaff, useDeleteStaff } from "@/hooks";
 import type { StaffWithBranch, StaffRole } from "@/domain/types/branch";
 
@@ -207,7 +208,7 @@ export default function StaffPage() {
           {!editStaff && (
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Password *</label>
-              <Input name="password" type="password" placeholder="Min 6 characters" required minLength={6} className="mt-1 h-10" />
+              <PasswordInput name="password" placeholder="Min 6 characters" required minLength={6} className="mt-1 h-10" />
             </div>
           )}
           <div>

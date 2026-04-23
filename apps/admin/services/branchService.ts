@@ -162,17 +162,20 @@ class BranchService {
       return validationError('Staff member not found', 'NOT_FOUND');
     }
 
-    // Delete auth user if linked
+    // Delete auth user first — must succeed before deleting staff record
     if (staff.data.user_id) {
       try {
         const supabase = createAdminClient();
-        await supabase.auth.admin.deleteUser(staff.data.user_id);
-      } catch {
-        // Log but don't block staff deletion
-        console.warn(`[branchService] Failed to delete auth user ${staff.data.user_id}`);
+        const { error } = await supabase.auth.admin.deleteUser(staff.data.user_id);
+        if (error) {
+          return validationError(`Failed to remove login access: ${error.message}`, 'AUTH_DELETE_FAILED');
+        }
+      } catch (err: any) {
+        return validationError(`Failed to remove login access: ${err.message}`, 'AUTH_DELETE_FAILED');
       }
     }
 
+    // Auth user removed — now delete staff record
     return staffRepository.delete(id);
   }
 }
