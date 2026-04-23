@@ -13,19 +13,25 @@ export interface Store {
   created_at: string;
 }
 
-export interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  image_url: string | null;
-  parent_id: string | null;
-  store_id: string | null;
-  is_global: boolean;
-  is_active: boolean;
-  sort_order: number;
-  created_at: string;
-}
+// Category interface and CRUD functions are defined in ./categories.ts
+// and re-exported below to maintain backward compatibility.
+export type {
+  Category,
+  CategoryCreateInput,
+  CategoryUpdateInput,
+} from "./categories";
+export {
+  getCategories,
+  getCategoryById,
+  getCategoryProductCount,
+  canDeleteCategory,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  getCategoryLevel,
+} from "./categories";
+
+import type { Category } from "./categories";
 
 export interface Product {
   id: string;
@@ -165,68 +171,64 @@ export async function deleteStore(id: string): Promise<boolean> {
   return true;
 }
 
-// Category CRUD
-export async function getCategories(): Promise<Category[]> {
+// Category CRUD functions are in ./categories.ts and re-exported at the top of this file.
+// getCategoriesHierarchy and getSubCategories helpers remain here for now.
+
+/**
+ * Fetches all categories and splits them into a 3-level hierarchy.
+ * Useful for tree-view rendering.
+ *
+ * @returns Object with mains, subs, and variants arrays
+ */
+export async function getCategoriesHierarchy(): Promise<{
+  mains: Category[];
+  subs: Category[];
+  variants: Category[];
+}> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('categories')
     .select('*')
-    .order('sort_order', { ascending: true });
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
 
   if (error) {
     console.error('Error fetching categories:', error);
+    return { mains: [], subs: [], variants: [] };
+  }
+
+  const all = (data || []) as Category[];
+  const mains = all.filter((c) => !c.parent_id);
+  const subs = all.filter((c) => c.parent_id && !all.find((p) => p.id === c.parent_id)?.parent_id);
+  const variants = all.filter((c) => {
+    const parent = all.find((p) => p.id === c.parent_id);
+    return parent?.parent_id != null;
+  });
+
+  return { mains, subs, variants };
+}
+
+/**
+ * Fetches direct child categories of a given parent.
+ *
+ * @param parentId - Parent category UUID
+ * @returns Array of child categories
+ */
+export async function getSubCategories(parentId: string): Promise<Category[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .eq('parent_id', parentId)
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching sub categories:', error);
     return [];
   }
 
-  return data || [];
-}
-
-export async function createCategory(category: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('categories')
-    .insert(category)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error creating category:', error);
-    return null;
-  }
-
-  return data;
-}
-
-export async function updateCategory(id: string, category: Partial<Category>): Promise<Category | null> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('categories')
-    .update(category)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error updating category:', error);
-    return null;
-  }
-
-  return data;
-}
-
-export async function deleteCategory(id: string): Promise<boolean> {
-  const supabase = createClient();
-  const { error } = await supabase
-    .from('categories')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error('Error deleting category:', error);
-    return false;
-  }
-
-  return true;
+  return (data || []) as Category[];
 }
 
 // Product CRUD

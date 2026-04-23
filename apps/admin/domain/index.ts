@@ -1,0 +1,34 @@
+/**
+ * Domain Layer Index
+ *
+ * Central export point for the entire domain layer.
+ *
+ * @module domain/index
+ */
+
+// Types
+export * from './types';
+
+// Schemas - avoid re-exporting conflicting names
+export {
+  ProductImageSchema,
+  CreateProductImageSchema,
+  ProductVariantSchema,
+  CreateProductVariantSchema,
+  CreateProductSchema,
+  UpdateProductSchema,
+  ProductSearchSchema,
+  BulkProductOperationSchema,
+  ProductImportSchema,
+  validateProductSlug,
+  generateProductSlug,
+  validateProductPricing,
+  validateProductInventory,
+} from './schemas';
+
+export type {
+  CreateProductInput,
+  UpdateProductInput,
+  BulkProductOperationInput,
+  ProductImportInput,
+} from './schemas';
