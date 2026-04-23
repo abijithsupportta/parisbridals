@@ -5,17 +5,7 @@ This directory contains the Flutter mobile application for **Paris Bridals**, ac
 ## Overview
 The mobile app mirrors the functionality of the web admin portal, allowing store managers, administrators, and staff to manage products, categories, stores, branches, customers, and orders right from their mobile devices. 
 
-It consumes the identical Next.js API (`https://parisbridals-admin.vercel.app/api`) built for the web admin portal, meaning business logic is centralized and synchronized in real-time.
-
----
-
-## Users & Roles
-The app is primarily for internal staff and management:
-1. **Super Admin**: Has access to all stores, settings, branches, and staff management.
-2. **Store Manager / Branch Manager**: Can manage inventory, orders, and customers for their assigned store/branch.
-3. **Staff / Agent**: Primarily accesses order fulfillment, viewing available products, and assisting customers.
-
-*(Note: Fine-grained Role-Based Access Control (RBAC) is enforced at the API level.)*
+It consumes the exact same Next.js API (`https://parisbridals-admin.vercel.app/api`) built for the web admin portal, meaning business logic is centralized and synchronized in real-time.
 
 ---
 
@@ -27,8 +17,49 @@ The app uses a **Feature-First Architecture**. Instead of grouping by technical 
 *   **Framework**: Flutter (Dart)
 *   **State Management**: Riverpod (`flutter_riverpod`, `riverpod_annotation`)
 *   **Networking / HTTP**: Dio (`dio`)
+*   **Performance Optimization**: `cached_network_image`, `shimmer`
 *   **Environment Config**: `flutter_dotenv` (loading `.env` files)
-*   **Local Storage**: `flutter_secure_storage` (for auth tokens), Isar (for offline caching if implemented)
+*   **Local Storage**: `flutter_secure_storage` (for auth tokens)
+
+---
+
+## Implemented Features
+
+### 1. Unified Dashboard
+*   **Greeting Banner**: Dynamic greeting tailored to the logged-in user.
+*   **Quick Actions & Summary**: Direct access to creating orders, adding products, and viewing high-level stats (Total Sales, Pending Orders, Customers).
+*   **Recent Orders**: A snapshot of the latest order status natively embedded in the dashboard.
+
+### 2. Product Management Module
+*   **Infinite Scroll & Pagination**: The product list integrates `page` and `limit` to lazily load catalog items, eliminating lag for large datasets.
+*   **Instant Fire-and-Forget Saving**: Editing or creating products pops the UI instantly. The Riverpod repository handles heavy image uploads and API submission in the background, updating the state upon success.
+*   **Smart Quantity Stepper**: Uses deeply optimized custom `TextEditingController` steppers to modify quantities instantly without triggering expensive widget tree rebuilds.
+*   **Barcode Auto-Generation**: One-tap 8-digit numeric barcode generation for new inventory items.
+*   **Camera & Gallery Integration**: Uses `image_picker` to allow rapid image assignment to products.
+*   **Cascading Categories**: Selecting a main category instantly fetches related sub-categories and variants.
+
+### 3. Native Image Loading
+*   Uses `Image.network` natively combined with a `loadingBuilder`.
+*   Displays a beautiful `Shimmer` skeleton effect while images download to give a premium, polished user experience.
+
+### 4. Role-Based Access Control (RBAC)
+The app restricts UI based on the user's role:
+*   **Super Admin**: Has access to all stores, settings, branches, and staff management.
+*   **Store Manager**: Can manage inventory, edit product fields, and manage stock.
+*   **Staff / Agent**: Restricted to read-only views for products. Staff can browse the catalog and assist customers, but cannot edit fields or add new inventory.
+
+---
+
+## Custom Premium Theme
+
+The application strictly adheres to a luxurious, 4-color custom theme sourced from ColorHunt:
+
+*   **`0xFFF8F8F8` (Off-White)**: The primary Scaffold Background, giving a clean and minimalist base.
+*   **`0xFFFAEBCD` (Blanched Almond)**: The Surface color for cards, search bars, and avatar backgrounds.
+*   **`0xFFF7C873` (Golden)**: The Accent color. Used for price tags, floating action buttons (FABs), and high-visibility badges.
+*   **`0xFF434343` (Charcoal)**: The Primary Active color. Used for app bars, primary text, main buttons, and dominant gradients, replacing all default Material colors.
+
+All theme configurations are strictly controlled in `lib/core/theme.dart`.
 
 ---
 
@@ -39,74 +70,20 @@ lib/
 ├── core/                       # Shared code applicable across all features
 │   ├── api_client.dart         # Singleton Dio client with base URL & interceptors
 │   ├── main_layout.dart        # Scaffold containing the Drawer and main body switching
-│   └── theme.dart              # Global UI theme (Black & White aesthetic)
+│   └── theme.dart              # Global UI theme (Charcoal/Golden aesthetic)
 ├── exceptions/                 # Custom Exception classes
 ├── features/                   # Feature modules
-│   ├── auth/                   # Authentication feature (Login, Tokens, etc.)
-│   ├── products/               # Products Management
-│   │   ├── models/             # Data models (e.g., product.dart)
-│   │   ├── providers/          # Riverpod providers for state/fetching
-│   │   └── views/              # UI screens (e.g., products_view.dart)
-│   └── ...                     # Future modules (orders, categories, etc.)
+│   ├── auth/                   # Authentication feature (Login, Splash, Tokens)
+│   ├── dashboard/              # Home view with greeting and summary metrics
+│   ├── products/               # Products Management (List, Add, Edit, Detail)
+│   ├── categories/             # Category Management
+│   └── orders/                 # Order viewing
 ├── utils/                      # Helper utilities (formatting, validators)
 └── main.dart                   # Application entry point
 ```
 
 ---
 
-## Detailed Data Flow (A to Z)
-
-Here is a step-by-step example of how data flows in the application when navigating to the **Products** screen:
-
-1. **App Initialization**:
-   - `main.dart` is executed.
-   - `WidgetsFlutterBinding.ensureInitialized()` is called.
-   - Environment variables are loaded using `dotenv.load()`.
-   - The app is wrapped in `ProviderScope` to enable Riverpod state management.
-
-2. **UI Navigation**:
-   - The user opens the **Drawer** in `MainLayout` and taps on **Products**.
-   - `_selectedIndex` state updates, and `MainLayout` renders `ProductsView`.
-
-3. **State Observation (View Level)**:
-   - `ProductsView` is a `ConsumerWidget`. In its `build` method, it calls `ref.watch(productsProvider)`.
-
-4. **Data Fetching (Provider Level)**:
-   - `productsProvider` (in `product_provider.dart`) is a `FutureProvider`. 
-   - Since it's being watched for the first time, it executes its asynchronous function.
-   - It calls `apiClient.get('/products')`.
-
-5. **Networking (Core Level)**:
-   - The singleton `ApiClient` receives the request.
-   - Dio appends the `baseUrl` (`https://parisbridals-admin.vercel.app/api`) and applies any interceptors (e.g., adding Authorization tokens).
-   - The HTTP GET request goes to the Next.js API.
-
-6. **Data Parsing**:
-   - The API returns JSON data.
-   - `productsProvider` verifies `response.statusCode == 200` and extracts `data['data']['products']`.
-   - It maps the raw JSON maps into strongly-typed `Product` objects using `Product.fromJson(json)`.
-
-7. **UI Update**:
-   - `productsProvider` yields an `AsyncValue`.
-   - While fetching, `ProductsView` renders the `loading:` state (a `CircularProgressIndicator`).
-   - If an error occurs, it renders the `error:` state with a retry button.
-   - On success, it renders the `data:` state, building a `ListView` of product cards using the loaded `List<Product>`.
-
----
-
-## Design System
-
-The app follows a premium **Black & White** aesthetic, stripping away default material colors (like purple/violet).
-*   **Primary Color**: Black
-*   **Scaffold Background**: White
-*   **Cards/Containers**: White with subtle grey borders (`#E0E0E0`) or light grey backgrounds (`#F9F9F9`).
-*   **Typography**: Clean, sans-serif fonts using standard Material 3, optimized for readability.
-
-All theme configurations are strictly controlled in `lib/core/theme.dart`.
-
----
-
 ## Next Steps / Roadmap
-*   Implement Authentication flow (Login screen & token persistence).
-*   Build out specific Create/Edit Product forms in `features/products/views/product_detail_view.dart`.
-*   Expand other feature directories (Orders, Categories, Customers).
+*   Finalize Calendar & Date-picker module for tracking exact rental dates.
+*   Implement Order Creation flow (adding products to a cart and assigning a customer).
