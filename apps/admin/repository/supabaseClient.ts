@@ -1,0 +1,261 @@
+/**
+ * Supabase Client Repository
+ *
+ * Abstraction layer over Supabase client for consistent data access patterns.
+ * Provides type-safe database operations with error handling.
+ *
+ * @module repository/supabaseClient
+ */
+
+import { createClient } from '@/lib/supabase/server';
+import { createClient as createClientComponent } from '@/lib/supabase/client';
+import { PostgrestError } from '@supabase/supabase-js';
+
+// Repository response type
+export interface RepositoryResult<T> {
+  data: T | null;
+  error: PostgrestError | null;
+  success: boolean;
+}
+
+// Repository error types
+export class RepositoryError extends Error implements PostgrestError {
+  public hint: string;
+  public details: any;
+
+  constructor(
+    message: string,
+    public code: string,
+    details?: any,
+    hint?: string
+  ) {
+    super(message);
+    this.name = 'RepositoryError';
+    this.details = details;
+    this.hint = hint || '';
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      details: this.details,
+      hint: this.hint,
+    };
+  }
+}
+
+// Base repository class
+export abstract class BaseRepository {
+  protected client = createClient();
+  protected clientComponent = createClientComponent();
+
+  /**
+   * Handle Supabase response and convert to RepositoryResult
+   */
+  protected handleResponse<T>(response: {
+    data: T | null;
+    error: PostgrestError | null;
+  }): RepositoryResult<T> {
+    if (response.error) {
+      return {
+        data: null,
+        error: response.error,
+        success: false,
+      };
+    }
+
+    return {
+      data: response.data,
+      error: null,
+      success: true,
+    };
+  }
+
+  /**
+   * Handle repository errors and throw appropriate exceptions
+   */
+  protected handleError(error: PostgrestError | any): RepositoryError {
+    if (error?.code) {
+      return new RepositoryError(
+        error.message || 'Database operation failed',
+        error.code,
+        error.details
+      );
+    }
+
+    return new RepositoryError(
+      error?.message || 'Unknown repository error',
+      'UNKNOWN_ERROR',
+      error
+    );
+  }
+
+  /**
+   * Execute a database operation with error handling
+   */
+  protected async executeOperation<T>(
+    operation: () => Promise<{
+      data: T | null;
+      error: PostgrestError | null;
+    }>
+  ): Promise<RepositoryResult<T>> {
+    try {
+      const response = await operation();
+      return this.handleResponse(response);
+    } catch (error) {
+      return {
+        data: null,
+        error: error as PostgrestError,
+        success: false,
+      };
+    }
+  }
+
+  /**
+   * Check if a record exists
+   */
+  protected async exists(
+    table: string,
+    column: string,
+    value: any
+  ): Promise<boolean> {
+    const { data, error } = await this.client
+      .from(table)
+      .select('id')
+      .eq(column, value)
+      .single();
+
+    return !error && !!data;
+  }
+
+  /**
+   * Get count of records
+   */
+  protected async getCount(
+    table: string,
+    filters: Record<string, any> = {}
+  ): Promise<number> {
+    let query = this.client.from(table);
+
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        query = (query as any).eq(key, value);
+      }
+    });
+
+    const { count, error } = await query.select('*', { count: 'exact', head: true });
+
+    if (error) {
+      throw this.handleError(error);
+    }
+
+    return count || 0;
+  }
+
+  /**
+   * Build query with filters and sorting
+   */
+  protected buildQuery(
+    table: string,
+    options: {
+      select?: string;
+      filters?: Record<string, any>;
+      orderBy?: { column: string; ascending?: boolean };
+      limit?: number;
+      offset?: number;
+    } = {}
+  ) {
+    let query = this.client.from(table);
+
+    // Select columns
+    if (options.select) {
+      query = (query as any).select(options.select);
+    }
+
+    // Apply filters
+    if (options.filters) {
+      Object.entries(options.filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            query = (query as any).in(key, value);
+          } else {
+            query = (query as any).eq(key, value);
+          }
+        }
+      });
+    }
+
+    // Apply ordering
+    if (options.orderBy) {
+      query = (query as any).order(options.orderBy.column, { ascending: options.orderBy.ascending });
+    }
+
+    // Apply pagination
+    if (options.limit) {
+      query = (query as any).limit(options.limit);
+    }
+
+    if (options.offset) {
+      query = (query as any).range(options.offset, options.offset + (options.limit || 10) - 1);
+    }
+
+    return query;
+  }
+
+  /**
+   * Transaction helper (for multiple operations)
+   */
+  protected async transaction<T>(
+    operations: (() => Promise<RepositoryResult<any>>)[]
+  ): Promise<RepositoryResult<T[]>> {
+    const results: T[] = [];
+    const errors: PostgrestError[] = [];
+
+    for (const operation of operations) {
+      try {
+        const result = await operation();
+        if (result.success && result.data) {
+          results.push(result.data);
+        } else if (result.error) {
+          errors.push(result.error);
+        }
+      } catch (error) {
+        errors.push(error as PostgrestError);
+      }
+    }
+
+    if (errors.length > 0) {
+      return {
+        data: null,
+        error: errors[0], // Return first error
+        success: false,
+      };
+    }
+
+    return {
+      data: results,
+      error: null,
+      success: true,
+    };
+  }
+}
+
+// Utility functions
+export const createRepositoryResult = <T>(
+  data: T | null,
+  error: PostgrestError | null = null
+): RepositoryResult<T> => ({
+  data,
+  error,
+  success: !error,
+});
+
+export const isRepositorySuccess = <T>(result: RepositoryResult<T>): result is RepositoryResult<T> & { data: T } => {
+  return result.success && result.data !== null;
+};
+
+export const isRepositoryError = <T>(result: RepositoryResult<T>): boolean => {
+  return !result.success || result.error !== null;
+};
