@@ -44,7 +44,6 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
 
   void _onSearchChanged(String val) {
     setState(() => _searchQuery = val);
-    // Debounce can be added here if needed, or trigger immediately
     ref.read(productsProvider.notifier).search(val);
   }
 
@@ -73,9 +72,9 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   onRefresh: () async => ref.refresh(productsProvider),
                   child: ListView.separated(
                     controller: _scrollController,
-                    padding: Responsive.only(left: 16, right: 16, top: 8, bottom: 80),
+                    padding: Responsive.only(left: 12, right: 12, top: 6, bottom: 70),
                     itemCount: products.length + (paginatedData.page < paginatedData.totalPages ? 1 : 0),
-                    separatorBuilder: (_, __) => SizedBox(height: Responsive.h(12)),
+                    separatorBuilder: (_, __) => SizedBox(height: Responsive.h(8)),
                     itemBuilder: (context, index) {
                       if (index == products.length) {
                         return _buildShimmerCard();
@@ -98,13 +97,13 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   MaterialPageRoute(builder: (_) => const ProductFormView()),
                 );
               },
-              backgroundColor: const Color(0xFFF7C873), // Golden Accent
-              icon: Icon(Icons.add_rounded, size: Responsive.icon(24), color: const Color(0xFF434343)),
+              backgroundColor: const Color(0xFFF7C873),
+              icon: Icon(Icons.add_rounded, size: Responsive.icon(18), color: const Color(0xFF434343)),
               label: Text(
                 'New Product',
-                style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: const Color(0xFF434343)),
+                style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: const Color(0xFF434343)),
               ),
-              elevation: 4,
+              elevation: 3,
             )
           : null,
     );
@@ -113,25 +112,25 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   Widget _buildSearchBar() {
     return Container(
       color: Colors.white,
-      padding: Responsive.only(left: 16, right: 16, top: 16, bottom: 16),
+      padding: Responsive.all(12),
       child: Container(
         decoration: BoxDecoration(
           color: const Color(0xFFFAEBCD),
-          borderRadius: BorderRadius.circular(Responsive.r(16)),
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
           border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
         ),
         child: TextField(
           controller: _searchController,
           onSubmitted: _onSearchChanged,
           textInputAction: TextInputAction.search,
-          style: TextStyle(fontSize: Responsive.sp(16)),
+          style: TextStyle(fontSize: Responsive.sp(13)),
           decoration: InputDecoration(
-            hintText: 'Search products or SKU... (Press Enter)',
-            hintStyle: TextStyle(fontSize: Responsive.sp(16), color: Colors.grey[500]),
-            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(24), color: _primary),
+            hintText: 'Search products or SKU...',
+            hintStyle: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[500]),
+            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(18), color: _primary),
             suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.close_rounded, size: Responsive.icon(22), color: Colors.grey[500]),
+                    icon: Icon(Icons.close_rounded, size: Responsive.icon(16), color: Colors.grey[500]),
                     onPressed: () {
                       _searchController.clear();
                       _onSearchChanged('');
@@ -139,7 +138,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   )
                 : null,
             border: InputBorder.none,
-            contentPadding: Responsive.symmetric(vertical: 16),
+            contentPadding: Responsive.symmetric(vertical: 12),
           ),
         ),
       ),
@@ -147,17 +146,16 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   }
 
   Widget _buildProductCard(Product product, bool canManage) {
-    // Determine Stock Status
     Color stockColor;
     String stockText;
     if (product.availableQuantity <= 0) {
-      stockColor = const Color(0xFFFF6B8A); // Red
-      stockText = 'Out of Stock';
+      stockColor = const Color(0xFFFF6B8A);
+      stockText = 'Out';
     } else if (product.availableQuantity <= product.lowStockThreshold) {
-      stockColor = const Color(0xFFF5A623); // Orange
-      stockText = 'Low Stock (${product.availableQuantity})';
+      stockColor = const Color(0xFFF5A623);
+      stockText = 'Low (${product.availableQuantity})';
     } else {
-      stockColor = const Color(0xFF2ECC71); // Green
+      stockColor = const Color(0xFF2ECC71);
       stockText = 'In Stock (${product.availableQuantity})';
     }
 
@@ -166,20 +164,20 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(16)),
+        borderRadius: BorderRadius.circular(Responsive.r(12)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: Responsive.r(10),
-            offset: Offset(0, Responsive.h(4)),
+            blurRadius: Responsive.r(6),
+            offset: Offset(0, Responsive.h(2)),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(Responsive.r(16)),
+        borderRadius: BorderRadius.circular(Responsive.r(12)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(Responsive.r(16)),
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
           onTap: () {
             if (canManage) {
               Navigator.of(context).push(MaterialPageRoute(
@@ -192,125 +190,122 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
             }
           },
           child: Padding(
-            padding: Responsive.all(12),
+            padding: Responsive.all(10),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Thumbnail
                 Container(
-                  width: Responsive.w(100),
-                  height: Responsive.w(100),
+                  width: Responsive.w(70),
+                  height: Responsive.w(70),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFAEBCD),
-                    borderRadius: BorderRadius.circular(Responsive.r(16)),
+                    borderRadius: BorderRadius.circular(Responsive.r(10)),
                   ),
                   child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
                       ? ClipRRect(
-                          borderRadius: BorderRadius.circular(Responsive.r(16)),
+                          borderRadius: BorderRadius.circular(Responsive.r(10)),
                           child: CachedNetworkImage(
                             imageUrl: imageUrl,
                             fit: BoxFit.cover,
-                            width: Responsive.w(100),
-                            height: Responsive.w(100),
+                            width: Responsive.w(70),
+                            height: Responsive.w(70),
                             placeholder: (context, url) => Shimmer.fromColors(
                               baseColor: const Color(0xFFE8E8E8),
                               highlightColor: const Color(0xFFF5F5F5),
-                              child: Container(
-                                color: Colors.white,
-                                width: Responsive.w(100),
-                                height: Responsive.w(100),
-                              ),
+                              child: Container(color: Colors.white),
                             ),
                             errorWidget: (_, __, ___) => _buildFallbackImage(),
                           ),
                         )
                       : _buildFallbackImage(),
                 ),
-                SizedBox(width: Responsive.w(18)),
+                SizedBox(width: Responsive.w(10)),
                 
                 // Details
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Text(
                               product.name,
                               style: TextStyle(
-                                fontSize: Responsive.sp(16),
-                                fontWeight: FontWeight.bold,
+                                fontSize: Responsive.sp(13),
+                                fontWeight: FontWeight.w600,
                                 color: _primary,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (!product.isActive)
                             Container(
-                              padding: Responsive.symmetric(horizontal: 8, vertical: 4),
+                              margin: Responsive.only(left: 4),
+                              padding: Responsive.symmetric(horizontal: 4, vertical: 2),
                               decoration: BoxDecoration(
                                 color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(Responsive.r(6)),
+                                borderRadius: BorderRadius.circular(Responsive.r(4)),
                               ),
                               child: Text(
-                                'Inactive',
-                                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.bold, color: Colors.grey[600]),
+                                'Off',
+                                style: TextStyle(fontSize: Responsive.sp(8), fontWeight: FontWeight.bold, color: Colors.grey[600]),
                               ),
                             ),
                         ],
                       ),
-                      SizedBox(height: Responsive.h(6)),
                       if (product.sku != null && product.sku!.isNotEmpty) ...[
+                        SizedBox(height: Responsive.h(2)),
                         Text(
                           'SKU: ${product.sku}',
-                          style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600], fontFamily: 'monospace', fontWeight: FontWeight.w600),
+                          style: TextStyle(fontSize: Responsive.sp(10), color: Colors.grey[500], fontFamily: 'monospace'),
                         ),
-                        SizedBox(height: Responsive.h(12)),
-                      ] else ...[
-                        SizedBox(height: Responsive.h(12)),
                       ],
-                      
+                      SizedBox(height: Responsive.h(6)),
                       // Bottom Row: Price & Stock
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            '₹${product.pricePerDay.toStringAsFixed(0)} / day',
+                            '₹${product.pricePerDay.toStringAsFixed(0)}/day',
                             style: TextStyle(
-                              fontSize: Responsive.sp(16),
+                              fontSize: Responsive.sp(13),
                               fontWeight: FontWeight.w800,
-                              color: const Color(0xFFF7C873), // Golden
+                              color: const Color(0xFFF7C873),
                             ),
                           ),
-                          Container(
-                            padding: Responsive.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: stockColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(Responsive.r(20)),
-                              border: Border.all(color: stockColor.withValues(alpha: 0.2)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: Responsive.w(8),
-                                  height: Responsive.w(8),
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: stockColor),
-                                ),
-                                SizedBox(width: Responsive.w(6)),
-                                Text(
-                                  stockText,
-                                  style: TextStyle(
-                                    fontSize: Responsive.sp(12),
-                                    fontWeight: FontWeight.w800,
-                                    color: stockColor,
+                          Flexible(
+                            child: Container(
+                              padding: Responsive.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: stockColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(Responsive.r(12)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: Responsive.w(5),
+                                    height: Responsive.w(5),
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: stockColor),
                                   ),
-                                ),
-                              ],
+                                  SizedBox(width: Responsive.w(3)),
+                                  Flexible(
+                                    child: Text(
+                                      stockText,
+                                      style: TextStyle(
+                                        fontSize: Responsive.sp(9),
+                                        fontWeight: FontWeight.w700,
+                                        color: stockColor,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -328,7 +323,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
 
   Widget _buildFallbackImage() {
     return Center(
-      child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(28), color: Colors.grey[400]),
+      child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(22), color: Colors.grey[400]),
     );
   }
 
@@ -338,24 +333,24 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: Responsive.all(24),
+            padding: Responsive.all(18),
             decoration: BoxDecoration(
               color: _primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.inventory_2_outlined, size: Responsive.icon(48), color: _primary),
+            child: Icon(Icons.inventory_2_outlined, size: Responsive.icon(36), color: _primary),
           ),
-          SizedBox(height: Responsive.h(24)),
+          SizedBox(height: Responsive.h(16)),
           Text(
             _searchQuery.isEmpty ? 'No Products Found' : 'No matches found',
-            style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold, color: Colors.black87),
+            style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.black87),
           ),
-          SizedBox(height: Responsive.h(8)),
+          SizedBox(height: Responsive.h(6)),
           Text(
             _searchQuery.isEmpty 
               ? 'Add your first product to start renting'
               : 'Try a different search term or SKU',
-            style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey[500]),
+            style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[500]),
           ),
         ],
       ),
@@ -365,31 +360,31 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   Widget _buildErrorState(String error) {
     return Center(
       child: Padding(
-        padding: Responsive.all(32),
+        padding: Responsive.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline_rounded, color: const Color(0xFFFF6B8A), size: Responsive.icon(48)),
-            SizedBox(height: Responsive.h(16)),
+            Icon(Icons.error_outline_rounded, color: const Color(0xFFFF6B8A), size: Responsive.icon(36)),
+            SizedBox(height: Responsive.h(12)),
             Text(
               'Failed to Load Products',
-              style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
             ),
-            SizedBox(height: Responsive.h(8)),
+            SizedBox(height: Responsive.h(6)),
             Text(
               error,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[600]),
+              style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600]),
             ),
-            SizedBox(height: Responsive.h(24)),
+            SizedBox(height: Responsive.h(16)),
             ElevatedButton.icon(
               onPressed: () => ref.refresh(productsProvider),
-              icon: Icon(Icons.refresh_rounded, size: Responsive.icon(18)),
+              icon: Icon(Icons.refresh_rounded, size: Responsive.icon(16)),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primary,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
               ),
             ),
           ],
@@ -401,9 +396,9 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   /// Full-page shimmer skeleton shown during initial load
   Widget _buildShimmerList() {
     return ListView.separated(
-      padding: Responsive.only(left: 16, right: 16, top: 8, bottom: 80),
+      padding: Responsive.only(left: 12, right: 12, top: 6, bottom: 70),
       itemCount: 6,
-      separatorBuilder: (_, __) => SizedBox(height: Responsive.h(12)),
+      separatorBuilder: (_, __) => SizedBox(height: Responsive.h(8)),
       itemBuilder: (_, __) => _buildShimmerCard(),
     );
   }
@@ -414,64 +409,61 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
       baseColor: const Color(0xFFE8E8E8),
       highlightColor: const Color(0xFFF5F5F5),
       child: Container(
-        padding: Responsive.all(14),
+        padding: Responsive.all(10),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(Responsive.r(16)),
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
         ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Thumbnail placeholder
             Container(
-              width: Responsive.w(100),
-              height: Responsive.w(100),
+              width: Responsive.w(70),
+              height: Responsive.w(70),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(Responsive.r(16)),
+                borderRadius: BorderRadius.circular(Responsive.r(10)),
               ),
             ),
-            SizedBox(width: Responsive.w(18)),
-            // Text placeholders
+            SizedBox(width: Responsive.w(10)),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    height: Responsive.h(16),
+                    height: Responsive.h(12),
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(Responsive.r(8)),
+                      borderRadius: BorderRadius.circular(Responsive.r(4)),
+                    ),
+                  ),
+                  SizedBox(height: Responsive.h(6)),
+                  Container(
+                    height: Responsive.h(8),
+                    width: Responsive.w(80),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(Responsive.r(4)),
                     ),
                   ),
                   SizedBox(height: Responsive.h(10)),
-                  Container(
-                    height: Responsive.h(12),
-                    width: Responsive.w(120),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(Responsive.r(6)),
-                    ),
-                  ),
-                  SizedBox(height: Responsive.h(20)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        height: Responsive.h(14),
-                        width: Responsive.w(80),
+                        height: Responsive.h(10),
+                        width: Responsive.w(60),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(Responsive.r(6)),
+                          borderRadius: BorderRadius.circular(Responsive.r(4)),
                         ),
                       ),
                       Container(
-                        height: Responsive.h(22),
-                        width: Responsive.w(80),
+                        height: Responsive.h(16),
+                        width: Responsive.w(60),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(Responsive.r(20)),
+                          borderRadius: BorderRadius.circular(Responsive.r(12)),
                         ),
                       ),
                     ],
