@@ -8,7 +8,6 @@ import {
   Package, 
   ShoppingCart, 
   Users, 
-  Store, 
   Settings,
   LogOut,
   ChevronDown,
@@ -29,7 +28,6 @@ const navigation = [
   { name: "Banners", href: "/dashboard/banners", icon: ImageIcon },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
   { name: "Customers", href: "/dashboard/customers", icon: Users },
-  { name: "Stores", href: "/dashboard/stores", icon: Store },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

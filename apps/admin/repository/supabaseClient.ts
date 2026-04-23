@@ -48,10 +48,20 @@ export class RepositoryError extends Error implements PostgrestError {
 
 // Base repository class
 // Uses admin client (service_role key) which bypasses RLS.
-// All admin panel operations run server-side via API routes.
+// Clients are lazily initialized on first use, not at import time.
 export abstract class BaseRepository {
-  protected client = createAdminClient();
-  protected clientComponent = createClientComponent();
+  private _client: ReturnType<typeof createAdminClient> | null = null;
+  private _clientComponent: ReturnType<typeof createClientComponent> | null = null;
+
+  protected get client() {
+    if (!this._client) this._client = createAdminClient();
+    return this._client;
+  }
+
+  protected get clientComponent() {
+    if (!this._clientComponent) this._clientComponent = createClientComponent();
+    return this._clientComponent;
+  }
 
   /**
    * Handle Supabase response and convert to RepositoryResult
