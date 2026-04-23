@@ -109,3 +109,18 @@ export {
   isValidMoney,
   isValidDateRange,
 } from './common';
+
+// Branch & Staff types
+export type {
+  Branch,
+  BranchWithStaffCount,
+  Staff,
+  StaffWithBranch,
+  StaffRole,
+  CreateBranchDTO,
+  UpdateBranchDTO,
+  CreateStaffDTO,
+  UpdateStaffDTO,
+  BranchSearchParams,
+  StaffSearchParams,
+} from './branch';

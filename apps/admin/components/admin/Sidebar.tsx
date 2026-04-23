@@ -13,7 +13,9 @@ import {
   LogOut,
   ChevronDown,
   User,
-  ImageIcon
+  ImageIcon,
+  Building2,
+  UserCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +24,8 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Products", href: "/dashboard/products", icon: Package },
   { name: "Categories", href: "/dashboard/categories", icon: Package },
+  { name: "Branches", href: "/dashboard/branches", icon: Building2 },
+  { name: "Staff", href: "/dashboard/staff", icon: UserCircle },
   { name: "Banners", href: "/dashboard/banners", icon: ImageIcon },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
   { name: "Customers", href: "/dashboard/customers", icon: Users },

@@ -47,8 +47,10 @@ export class RepositoryError extends Error implements PostgrestError {
 }
 
 // Base repository class
+// Uses admin client (service_role key) which bypasses RLS.
+// All admin panel operations run server-side via API routes.
 export abstract class BaseRepository {
-  protected client = createClient();
+  protected client = createAdminClient();
   protected clientComponent = createClientComponent();
 
   /**

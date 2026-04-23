@@ -99,3 +99,105 @@ Run: `powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy
 - Module-level JSDoc on every new file (purpose, env vars, security notes).
 - Every exported function has `@param` / `@returns` / `@throws`.
 - Inline comments for non-obvious business logic (hierarchy detection, slug auto-gen, safety check, etc.).
+
+---
+
+## 🔒 Agent Rules (MUST follow every session)
+
+1. **Always check build** — `npx next build` must pass with zero type errors before pushing
+2. **Always push to `abijithcb` branch** after every work session — do NOT merge to `main` (colleague working on orders)
+3. **Always update this file** (`AGENTS.md`) after every session with changes made
+4. **Always enable RLS** on every table — no exceptions. Use `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`
+5. **Use service role key** (via `createAdminClient()`) for all admin panel DB operations via `BaseRepository`
+6. **Design consistency** — reuse existing UI components (`Card`, `Badge`, `Button`, `Input`, `Select`, same table/modal patterns). No new design system
+7. **Do NOT touch order module files** — colleague working on it, avoid merge conflicts
+8. **Maximum speed** — optimize performance, minimize unnecessary re-renders
+
+---
+
+## 🏗️ Repository Architecture (Data Flow)
+
+```
+UI (pages) → hooks (TanStack Query) → services (validation) → repositories (Supabase) → Database
+```
+
+- `BaseRepository` uses `createAdminClient()` (service_role key) → bypasses RLS
+- All admin panel DB operations are server-side secure
+- Staff login uses `authenticated` role → RLS policies restrict by branch
+- Helper functions: `get_user_branch_id()`, `get_user_role()`, `is_admin()`
+
+---
+
+## Branches & Staff Module (Apr 23, 2026)
+
+### Database
+- `branches`: `id`, `store_id`, `name`, `address`, `phone`, `is_main`, `is_active`
+- `staff`: `id`, `store_id`, `branch_id`, `user_id` (→ auth.users), `name`, `email`, `role`, `is_active`
+- Roles: `admin`, `manager`, `staff`
+
+### Staff Auth Integration
+- Staff created via `supabase.auth.admin.createUser()` (email + password, auto-confirmed)
+- `user_id` stored in staff table, links to `auth.users`
+- On staff deletion, auth user is also deleted via `auth.admin.deleteUser()`
+- Rollback: if staff record creation fails after auth user creation, auth user is cleaned up
+
+### Pages
+- `/dashboard/branches` — List with search, CRUD modal, staff count per branch
+- `/dashboard/branches/[id]` — Detail page with inline staff table + add/edit/delete staff
+- `/dashboard/staff` — All staff across branches with branch filter dropdown
+
+### Key Files
+- Types: `domain/types/branch.ts`
+- Schemas: `domain/schemas/branch.schema.ts`
+- Repos: `repository/branchRepository.ts`, `repository/staffRepository.ts`
+- Service: `services/branchService.ts` (handles both branch + staff + auth)
+- Hooks: `hooks/useBranches.ts`, `hooks/useStaff.ts`
+
+### RLS Policies (Migration 003)
+All tables have RLS enabled. Policies for `authenticated` role:
+| Table | Admin | Staff |
+|-------|-------|-------|
+| `stores` | Read all | Read all |
+| `branches` | Read all | Own branch only |
+| `staff` | Read all | Own record only |
+| `categories` | Read all | Read all |
+| `products` | Read all | Own branch products |
+| `orders` | Read all | Own branch orders |
+| `order_items` | Read all | If parent order accessible |
+
+Write operations go through API routes using service_role (bypasses RLS).
+
+---
+
+## Products Module Updates (Apr 23, 2026)
+
+- Fixed product creation 400 error (empty UUID strings → null, empty strings → undefined)
+- Fixed dropdown clipping/transparency (z-[9999], bg-white)
+- Removed `available_quantity` field (auto-set to `quantity` on create/edit)
+- Removed `security_deposit` from UI
+- Renamed `price_per_day` to "Rent Amount" in UI
+- Added product detail page at `/dashboard/products/[id]`
+- Made product names clickable links to detail page
+- Fixed image rendering for JSONB objects (extract `img.url`)
+
+## Vercel Deployment Fix (Apr 23, 2026)
+
+- Added `globalEnv` to `turbo.json` with all required env vars
+- Made `createAdminClient()` fall back to anon key during build-time SSG (prevents crash)
+- All env vars: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_*`
+
+## Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key (browser) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only admin key (bypasses RLS) |
+| `R2_ENDPOINT` | Cloudflare R2 endpoint |
+| `R2_ACCESS_KEY_ID` | R2 access key |
+| `R2_SECRET_ACCESS_KEY` | R2 secret key |
+| `R2_BUCKET_NAME` | R2 bucket name |
+| `R2_PUBLIC_URL` | R2 public CDN URL |
+| `R2_ACCOUNT_ID` | R2 account ID |
+
+Default Store ID: `00000000-0000-0000-0000-000000000001` (single-tenant)
