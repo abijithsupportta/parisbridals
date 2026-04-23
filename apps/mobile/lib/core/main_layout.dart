@@ -439,8 +439,8 @@ class _MainLayoutState extends State<MainLayout> {
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
+            blurRadius: Responsive.r(20),
+            offset: Offset(0, Responsive.h(-4)),
           ),
         ],
       ),

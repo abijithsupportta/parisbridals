@@ -9,6 +9,7 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 
 /// Fetches all categories via the repository layer.
 final categoriesProvider = FutureProvider<List<Category>>((ref) async {
+  ref.keepAlive();
   final repo = ref.read(categoryRepositoryProvider);
   return repo.getCategories();
 });

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -77,19 +78,14 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                     separatorBuilder: (_, __) => SizedBox(height: Responsive.h(12)),
                     itemBuilder: (context, index) {
                       if (index == products.length) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: CircularProgressIndicator(color: _primary),
-                          ),
-                        );
+                        return _buildShimmerCard();
                       }
                       return _buildProductCard(products[index], canManage);
                     },
                   ),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator(color: _primary)),
+              loading: () => _buildShimmerList(),
               error: (error, stack) => _buildErrorState(error.toString()),
             ),
           ),
@@ -211,22 +207,21 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(Responsive.r(16)),
-                          child: Image.network(
-                            imageUrl,
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl,
                             fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Shimmer.fromColors(
-                                baseColor: Colors.grey[200]!,
-                                highlightColor: Colors.grey[100]!,
-                                child: Container(
-                                  color: Colors.white,
-                                  width: Responsive.w(100),
-                                  height: Responsive.w(100),
-                                ),
-                              );
-                            },
-                            errorBuilder: (_, __, ___) => _buildFallbackImage(),
+                            width: Responsive.w(100),
+                            height: Responsive.w(100),
+                            placeholder: (context, url) => Shimmer.fromColors(
+                              baseColor: const Color(0xFFE8E8E8),
+                              highlightColor: const Color(0xFFF5F5F5),
+                              child: Container(
+                                color: Colors.white,
+                                width: Responsive.w(100),
+                                height: Responsive.w(100),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => _buildFallbackImage(),
                           ),
                         )
                       : _buildFallbackImage(),
@@ -395,6 +390,93 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                 backgroundColor: _primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Full-page shimmer skeleton shown during initial load
+  Widget _buildShimmerList() {
+    return ListView.separated(
+      padding: Responsive.only(left: 16, right: 16, top: 8, bottom: 80),
+      itemCount: 6,
+      separatorBuilder: (_, __) => SizedBox(height: Responsive.h(12)),
+      itemBuilder: (_, __) => _buildShimmerCard(),
+    );
+  }
+
+  /// Single shimmer card skeleton matching the product card layout
+  Widget _buildShimmerCard() {
+    return Shimmer.fromColors(
+      baseColor: const Color(0xFFE8E8E8),
+      highlightColor: const Color(0xFFF5F5F5),
+      child: Container(
+        padding: Responsive.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(Responsive.r(16)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Thumbnail placeholder
+            Container(
+              width: Responsive.w(100),
+              height: Responsive.w(100),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(Responsive.r(16)),
+              ),
+            ),
+            SizedBox(width: Responsive.w(18)),
+            // Text placeholders
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    height: Responsive.h(16),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(Responsive.r(8)),
+                    ),
+                  ),
+                  SizedBox(height: Responsive.h(10)),
+                  Container(
+                    height: Responsive.h(12),
+                    width: Responsive.w(120),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(Responsive.r(6)),
+                    ),
+                  ),
+                  SizedBox(height: Responsive.h(20)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        height: Responsive.h(14),
+                        width: Responsive.w(80),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(Responsive.r(6)),
+                        ),
+                      ),
+                      Container(
+                        height: Responsive.h(22),
+                        width: Responsive.w(80),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(Responsive.r(20)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],

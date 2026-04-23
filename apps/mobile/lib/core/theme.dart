@@ -1,64 +1,65 @@
 import 'package:flutter/material.dart';
 
 class AppTheme {
-  // A premium, minimalistic black and white theme suited for a bridal boutique
+  // Premium 4-color palette theme for Paris Bridals
+  static const _charcoal = Color(0xFF434343);
+  static const _offWhite = Color(0xFFF8F8F8);
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      primaryColor: Colors.black,
-      scaffoldBackgroundColor: Colors.white,
+      primaryColor: _charcoal,
+      scaffoldBackgroundColor: _offWhite,
       colorScheme: const ColorScheme.light(
-        primary: Colors.black,
+        primary: _charcoal,
         onPrimary: Colors.white,
-        secondary: Color(0xFFEEEEEE), // Light grey for secondary accents
-        onSecondary: Colors.black,
+        secondary: Color(0xFFFAEBCD), // Almond
+        onSecondary: _charcoal,
         surface: Colors.white,
-        onSurface: Colors.black,
+        onSurface: _charcoal,
         error: Colors.redAccent,
         onError: Colors.white,
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: _charcoal,
+        foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: true,
-        iconTheme: IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: Colors.white),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.black,
+          backgroundColor: _charcoal,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: Colors.black,
+          foregroundColor: _charcoal,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFF9F9F9),
+        fillColor: const Color(0xFFFAEBCD),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.black, width: 1.5),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _charcoal, width: 1.5),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }

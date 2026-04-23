@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/responsive.dart';
 import '../models/product.dart';
@@ -34,23 +35,22 @@ class ProductDetailView extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(Responsive.r(20)),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: Responsive.r(10), offset: Offset(0, Responsive.h(4)))],
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(Responsive.r(20)),
                 child: imageUrl.isNotEmpty && imageUrl.startsWith('http')
-                    ? Image.network(
-                        imageUrl,
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
                         fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Shimmer.fromColors(
-                            baseColor: Colors.grey[200]!,
-                            highlightColor: Colors.grey[100]!,
-                            child: Container(color: Colors.white),
-                          );
-                        },
-                        errorBuilder: (_, __, ___) => Icon(Icons.inventory_2_rounded, size: Responsive.icon(64), color: Colors.grey[300]),
+                        width: double.infinity,
+                        height: Responsive.w(250),
+                        placeholder: (context, url) => Shimmer.fromColors(
+                          baseColor: const Color(0xFFE8E8E8),
+                          highlightColor: const Color(0xFFF5F5F5),
+                          child: Container(color: Colors.white),
+                        ),
+                        errorWidget: (_, __, ___) => Icon(Icons.inventory_2_rounded, size: Responsive.icon(64), color: Colors.grey[300]),
                       )
                     : Icon(Icons.inventory_2_rounded, size: Responsive.icon(64), color: Colors.grey[300]),
               ),
@@ -96,7 +96,7 @@ class ProductDetailView extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(Responsive.r(16)),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: Responsive.r(10), offset: Offset(0, Responsive.h(4)))],
               ),
               child: Column(
                 children: [
@@ -156,7 +156,7 @@ class ProductDetailView extends StatelessWidget {
         children: [
           Container(
             padding: Responsive.all(12),
-            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: stockColor.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))]),
+            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: stockColor.withValues(alpha: 0.2), blurRadius: Responsive.r(10), offset: Offset(0, Responsive.h(4)))]),
             child: Icon(stockIcon, color: stockColor, size: Responsive.icon(28)),
           ),
           SizedBox(width: Responsive.w(16)),

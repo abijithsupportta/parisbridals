@@ -511,7 +511,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   Widget _buildCard({required Widget child}) {
     return Container(
       padding: Responsive.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(16)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(16)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: Responsive.r(10), offset: Offset(0, Responsive.h(4)))]),
       child: child,
     );
   }

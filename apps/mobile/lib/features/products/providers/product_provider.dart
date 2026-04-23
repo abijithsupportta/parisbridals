@@ -13,6 +13,8 @@ class ProductsNotifier extends AsyncNotifier<PaginatedProducts> {
 
   @override
   Future<PaginatedProducts> build() async {
+    // Keep data alive across tab switches to avoid re-fetching
+    ref.keepAlive();
     _currentPage = 1;
     final repo = ref.watch(productRepositoryProvider);
     return repo.getProducts(page: _currentPage, search: _currentSearch);
