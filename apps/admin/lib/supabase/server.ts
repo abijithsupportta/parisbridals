@@ -41,19 +41,32 @@ export function createClient(): SupabaseClient {
 export function createAdminClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL in .env.local');
   }
-  if (!serviceRoleKey) {
+
+  // Prefer service role key for full admin access (bypasses RLS).
+  // Fall back to anon key during build-time static generation or when
+  // the service role key isn't configured — works because RLS is disabled
+  // on admin tables.
+  const key = serviceRoleKey || anonKey;
+  if (!key) {
     throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE_KEY in .env.local. ' +
-      'This key is required for admin mutations that bypass RLS. ' +
-      'Find it in Supabase Dashboard > Project Settings > API > service_role.'
+      'Missing both SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_ANON_KEY. ' +
+      'At least one must be set.'
     );
   }
 
-  return createSupabaseClient(url, serviceRoleKey, {
+  if (!serviceRoleKey) {
+    console.warn(
+      '[supabase] SUPABASE_SERVICE_ROLE_KEY not found — falling back to anon key. ' +
+      'Admin mutations will only work if RLS is disabled on the target tables.'
+    );
+  }
+
+  return createSupabaseClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
