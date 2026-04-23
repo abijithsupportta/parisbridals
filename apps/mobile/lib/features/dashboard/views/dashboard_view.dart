@@ -19,7 +19,13 @@ class DashboardView extends StatelessWidget {
         children: [
           _buildGreetingBanner(),
           SizedBox(height: Responsive.h(14)),
-          _buildSummaryCards(),
+          // LayoutBuilder: adaptive grid columns based on screen width
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 500 ? 3 : 2;
+              return _buildSummaryCards(crossAxisCount);
+            },
+          ),
           SizedBox(height: Responsive.h(16)),
           _buildSectionTitle('Quick Actions'),
           SizedBox(height: Responsive.h(8)),
@@ -36,7 +42,7 @@ class DashboardView extends StatelessWidget {
 
   Widget _buildGreetingBanner() {
     return Container(
-      padding: Responsive.all(14),
+      padding: Responsive.all(16),
       decoration: BoxDecoration(
         color: _primary,
         borderRadius: BorderRadius.circular(Responsive.r(16)),
@@ -50,6 +56,7 @@ class DashboardView extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Expanded so text column takes remaining space
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,14 +64,21 @@ class DashboardView extends StatelessWidget {
                 Text(
                   'Good Afternoon 👋',
                   style: TextStyle(color: Colors.white70, fontSize: Responsive.sp(12)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: Responsive.h(4)),
-                Text(
-                  'Welcome back, Admin!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: Responsive.sp(16),
-                    fontWeight: FontWeight.bold,
+                // FittedBox: auto-shrink if name is too long
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Welcome back, Admin!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: Responsive.sp(18),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 SizedBox(height: Responsive.h(10)),
@@ -76,7 +90,9 @@ class DashboardView extends StatelessWidget {
                   ),
                   child: Text(
                     '🎉  3 new orders today!',
-                    style: TextStyle(color: Colors.white, fontSize: Responsive.sp(10), fontWeight: FontWeight.w600),
+                    style: TextStyle(color: Colors.white, fontSize: Responsive.sp(11), fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -84,8 +100,8 @@ class DashboardView extends StatelessWidget {
           ),
           SizedBox(width: Responsive.w(10)),
           Container(
-            width: Responsive.w(48),
-            height: Responsive.w(48),
+            width: Responsive.w(50),
+            height: Responsive.w(50),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.15),
               shape: BoxShape.circle,
@@ -104,28 +120,28 @@ class DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildSummaryCards() {
+  Widget _buildSummaryCards(int crossAxisCount) {
     return GridView.count(
-      crossAxisCount: 2,
+      crossAxisCount: crossAxisCount,
       crossAxisSpacing: Responsive.w(10),
       mainAxisSpacing: Responsive.h(10),
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.5,
       children: [
-        _buildStatCard('Total Sales',   '₹4,520', Icons.trending_up_rounded,  _primary, _surface),
-        _buildStatCard('Pending',       '12',     Icons.hourglass_top_rounded, _primary, _surface),
-        _buildStatCard('Rented Out',    '34',     Icons.checkroom_rounded,     _primary, _surface),
-        _buildStatCard('Customers',     '128',    Icons.people_alt_rounded,    _primary, _surface),
+        _buildStatCard('Total Sales',   '₹4,520', Icons.trending_up_rounded),
+        _buildStatCard('Pending',       '12',     Icons.hourglass_top_rounded),
+        _buildStatCard('Rented Out',    '34',     Icons.checkroom_rounded),
+        _buildStatCard('Customers',     '128',    Icons.people_alt_rounded),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color accent, Color bg) {
+  Widget _buildStatCard(String title, String value, IconData icon) {
     return Container(
-      padding: Responsive.all(10),
+      padding: Responsive.all(12),
       decoration: BoxDecoration(
-        color: bg,
+        color: _surface,
         borderRadius: BorderRadius.circular(Responsive.r(12)),
       ),
       child: Column(
@@ -137,17 +153,24 @@ class DashboardView extends StatelessWidget {
               color: _accent,
               borderRadius: BorderRadius.circular(Responsive.r(8)),
             ),
-            child: Icon(icon, size: Responsive.icon(16), color: _primary),
+            child: Icon(icon, size: Responsive.icon(18), color: _primary),
           ),
           const Spacer(),
-          Text(
-            value,
-            style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, color: accent),
+          // FittedBox: auto-shrink large numbers
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w800, color: _primary),
+            ),
           ),
           SizedBox(height: Responsive.h(2)),
           Text(
             title,
-            style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w600, color: accent.withValues(alpha: 0.7)),
+            style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: _primary.withValues(alpha: 0.7)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -155,27 +178,31 @@ class DashboardView extends StatelessWidget {
   }
 
   Widget _buildQuickActions() {
-    return Row(
+    // Wrap: flows to next line if 3 chips don't fit
+    return Wrap(
+      spacing: Responsive.w(8),
+      runSpacing: Responsive.h(8),
       children: [
-        _buildActionChip('New Order',   Icons.add_shopping_cart_rounded, _primary),
-        SizedBox(width: Responsive.w(8)),
-        _buildActionChip('Add Product', Icons.add_box_outlined,         _primary),
-        SizedBox(width: Responsive.w(8)),
-        _buildActionChip('Scan',        Icons.qr_code_scanner_rounded,  _primary),
+        _buildActionChip('New Order',   Icons.add_shopping_cart_rounded),
+        _buildActionChip('Add Product', Icons.add_box_outlined),
+        _buildActionChip('Scan',        Icons.qr_code_scanner_rounded),
       ],
     );
   }
 
-  Widget _buildActionChip(String label, IconData icon, Color color) {
-    return Expanded(
+  Widget _buildActionChip(String label, IconData icon) {
+    // Each chip takes roughly 1/3 of available width minus spacing
+    final chipWidth = (Responsive.screenWidth - Responsive.w(44)) / 3;
+    return SizedBox(
+      width: chipWidth,
       child: Container(
-        padding: Responsive.symmetric(vertical: 12),
+        padding: Responsive.symmetric(vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(Responsive.r(12)),
           boxShadow: [
             BoxShadow(
-              color: color.withValues(alpha: 0.06),
+              color: _primary.withValues(alpha: 0.06),
               blurRadius: Responsive.r(6),
               offset: Offset(0, Responsive.h(2)),
             ),
@@ -189,13 +216,15 @@ class DashboardView extends StatelessWidget {
                 color: _surface,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: Responsive.icon(18), color: color),
+              child: Icon(icon, size: Responsive.icon(20), color: _primary),
             ),
             SizedBox(height: Responsive.h(6)),
-            Text(
-              label,
-              style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w700, color: color),
-              overflow: TextOverflow.ellipsis,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w700, color: _primary),
+              ),
             ),
           ],
         ),
@@ -206,14 +235,17 @@ class DashboardView extends StatelessWidget {
   Widget _buildSectionTitle(String title) {
     return Row(
       children: [
-        Text(
-          title,
-          style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: _primary),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold, color: _primary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-        const Spacer(),
         Text(
           'See all',
-          style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: _primary),
+          style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: _accent),
         ),
       ],
     );
@@ -221,9 +253,9 @@ class DashboardView extends StatelessWidget {
 
   Widget _buildRecentOrders() {
     final orders = [
-      _OrderData('Anjali Sharma',  'Bridal Lehenga - Rent',    'Pending',   _primary),
-      _OrderData('Priya Nair',     'Wedding Gown - Rent',      'Confirmed', _primary),
-      _OrderData('Meera Thomas',   'Reception Saree - Return', 'Returned',  _primary),
+      _OrderData('Anjali Sharma',  'Bridal Lehenga - Rent',    'Pending'),
+      _OrderData('Priya Nair',     'Wedding Gown - Rent',      'Confirmed'),
+      _OrderData('Meera Thomas',   'Reception Saree - Return', 'Returned'),
     ];
 
     return Column(
@@ -249,29 +281,47 @@ class DashboardView extends StatelessWidget {
                 backgroundColor: _surface,
                 child: Text(
                   order.name[0],
-                  style: TextStyle(fontWeight: FontWeight.bold, color: order.statusColor, fontSize: Responsive.sp(13)),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: _primary, fontSize: Responsive.sp(14)),
                 ),
               ),
               SizedBox(width: Responsive.w(10)),
+              // Expanded: text takes remaining space
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(order.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: Responsive.sp(13), color: _primary)),
+                    Text(
+                      order.name,
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: Responsive.sp(13), color: _primary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     SizedBox(height: Responsive.h(2)),
-                    Text(order.product, style: TextStyle(color: Colors.grey[600], fontSize: Responsive.sp(11))),
+                    Text(
+                      order.product,
+                      style: TextStyle(color: Colors.grey[600], fontSize: Responsive.sp(11)),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
-              Container(
-                padding: Responsive.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _surface,
-                  borderRadius: BorderRadius.circular(Responsive.r(10)),
-                ),
-                child: Text(
-                  order.status,
-                  style: TextStyle(color: order.statusColor, fontSize: Responsive.sp(10), fontWeight: FontWeight.w700),
+              SizedBox(width: Responsive.w(6)),
+              // Flexible badge: shrinks if no space
+              Flexible(
+                flex: 0,
+                child: Container(
+                  padding: Responsive.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _surface,
+                    borderRadius: BorderRadius.circular(Responsive.r(10)),
+                  ),
+                  child: Text(
+                    order.status,
+                    style: TextStyle(color: _primary, fontSize: Responsive.sp(10), fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
@@ -286,6 +336,5 @@ class _OrderData {
   final String name;
   final String product;
   final String status;
-  final Color statusColor;
-  const _OrderData(this.name, this.product, this.status, this.statusColor);
+  const _OrderData(this.name, this.product, this.status);
 }

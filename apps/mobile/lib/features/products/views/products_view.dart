@@ -22,6 +22,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   String _searchQuery = '';
 
   static const _primary = Color(0xFF434343);
+  static const _accent  = Color(0xFFF7C873);
 
   @override
   void initState() {
@@ -97,11 +98,11 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   MaterialPageRoute(builder: (_) => const ProductFormView()),
                 );
               },
-              backgroundColor: const Color(0xFFF7C873),
-              icon: Icon(Icons.add_rounded, size: Responsive.icon(18), color: const Color(0xFF434343)),
+              backgroundColor: _accent,
+              icon: Icon(Icons.add_rounded, size: Responsive.icon(20), color: _primary),
               label: Text(
                 'New Product',
-                style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: const Color(0xFF434343)),
+                style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: _primary),
               ),
               elevation: 3,
             )
@@ -127,10 +128,10 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
           decoration: InputDecoration(
             hintText: 'Search products or SKU...',
             hintStyle: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[500]),
-            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(18), color: _primary),
+            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(20), color: _primary),
             suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.close_rounded, size: Responsive.icon(16), color: Colors.grey[500]),
+                    icon: Icon(Icons.close_rounded, size: Responsive.icon(18), color: Colors.grey[500]),
                     onPressed: () {
                       _searchController.clear();
                       _onSearchChanged('');
@@ -192,12 +193,11 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
           child: Padding(
             padding: Responsive.all(10),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Thumbnail
+                // Thumbnail — fixed but responsive size
                 Container(
-                  width: Responsive.w(70),
-                  height: Responsive.w(70),
+                  width: Responsive.w(68),
+                  height: Responsive.w(68),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFAEBCD),
                     borderRadius: BorderRadius.circular(Responsive.r(10)),
@@ -208,8 +208,8 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                           child: CachedNetworkImage(
                             imageUrl: imageUrl,
                             fit: BoxFit.cover,
-                            width: Responsive.w(70),
-                            height: Responsive.w(70),
+                            width: Responsive.w(68),
+                            height: Responsive.w(68),
                             placeholder: (context, url) => Shimmer.fromColors(
                               baseColor: const Color(0xFFE8E8E8),
                               highlightColor: const Color(0xFFF5F5F5),
@@ -222,19 +222,20 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                 ),
                 SizedBox(width: Responsive.w(10)),
                 
-                // Details
+                // Details — Expanded: takes ALL remaining space
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Row 1: Name + inactive badge
                       Row(
                         children: [
                           Expanded(
                             child: Text(
                               product.name,
                               style: TextStyle(
-                                fontSize: Responsive.sp(13),
+                                fontSize: Responsive.sp(14),
                                 fontWeight: FontWeight.w600,
                                 color: _primary,
                               ),
@@ -252,31 +253,42 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                               ),
                               child: Text(
                                 'Off',
-                                style: TextStyle(fontSize: Responsive.sp(8), fontWeight: FontWeight.bold, color: Colors.grey[600]),
+                                style: TextStyle(fontSize: Responsive.sp(9), fontWeight: FontWeight.bold, color: Colors.grey[600]),
                               ),
                             ),
                         ],
                       ),
+                      // Row 2: SKU
                       if (product.sku != null && product.sku!.isNotEmpty) ...[
-                        SizedBox(height: Responsive.h(2)),
+                        SizedBox(height: Responsive.h(3)),
                         Text(
                           'SKU: ${product.sku}',
                           style: TextStyle(fontSize: Responsive.sp(10), color: Colors.grey[500], fontFamily: 'monospace'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                       SizedBox(height: Responsive.h(6)),
-                      // Bottom Row: Price & Stock
+                      // Row 3: Price & Stock — both can shrink
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            '₹${product.pricePerDay.toStringAsFixed(0)}/day',
-                            style: TextStyle(
-                              fontSize: Responsive.sp(13),
-                              fontWeight: FontWeight.w800,
-                              color: const Color(0xFFF7C873),
+                          // FittedBox: price auto-shrinks if needed
+                          Expanded(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '₹${product.pricePerDay.toStringAsFixed(0)}/day',
+                                style: TextStyle(
+                                  fontSize: Responsive.sp(14),
+                                  fontWeight: FontWeight.w800,
+                                  color: _accent,
+                                ),
+                              ),
                             ),
                           ),
+                          SizedBox(width: Responsive.w(6)),
+                          // Stock badge — Flexible so it shrinks
                           Flexible(
                             child: Container(
                               padding: Responsive.symmetric(horizontal: 6, vertical: 3),
@@ -297,10 +309,11 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                                     child: Text(
                                       stockText,
                                       style: TextStyle(
-                                        fontSize: Responsive.sp(9),
+                                        fontSize: Responsive.sp(10),
                                         fontWeight: FontWeight.w700,
                                         color: stockColor,
                                       ),
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
@@ -323,36 +336,40 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
 
   Widget _buildFallbackImage() {
     return Center(
-      child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(22), color: Colors.grey[400]),
+      child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(24), color: Colors.grey[400]),
     );
   }
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: Responsive.all(18),
-            decoration: BoxDecoration(
-              color: _primary.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
+      child: Padding(
+        padding: Responsive.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: Responsive.all(18),
+              decoration: BoxDecoration(
+                color: _primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.inventory_2_outlined, size: Responsive.icon(36), color: _primary),
             ),
-            child: Icon(Icons.inventory_2_outlined, size: Responsive.icon(36), color: _primary),
-          ),
-          SizedBox(height: Responsive.h(16)),
-          Text(
-            _searchQuery.isEmpty ? 'No Products Found' : 'No matches found',
-            style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          SizedBox(height: Responsive.h(6)),
-          Text(
-            _searchQuery.isEmpty 
-              ? 'Add your first product to start renting'
-              : 'Try a different search term or SKU',
-            style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[500]),
-          ),
-        ],
+            SizedBox(height: Responsive.h(16)),
+            Text(
+              _searchQuery.isEmpty ? 'No Products Found' : 'No matches found',
+              style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+            SizedBox(height: Responsive.h(6)),
+            Text(
+              _searchQuery.isEmpty 
+                ? 'Add your first product to start renting'
+                : 'Try a different search term or SKU',
+              style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[500]),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -368,18 +385,20 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
             SizedBox(height: Responsive.h(12)),
             Text(
               'Failed to Load Products',
-              style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold),
             ),
             SizedBox(height: Responsive.h(6)),
             Text(
               error,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600]),
+              style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600]),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
             SizedBox(height: Responsive.h(16)),
             ElevatedButton.icon(
               onPressed: () => ref.refresh(productsProvider),
-              icon: Icon(Icons.refresh_rounded, size: Responsive.icon(16)),
+              icon: Icon(Icons.refresh_rounded, size: Responsive.icon(18)),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primary,
@@ -417,8 +436,8 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
         child: Row(
           children: [
             Container(
-              width: Responsive.w(70),
-              height: Responsive.w(70),
+              width: Responsive.w(68),
+              height: Responsive.w(68),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(Responsive.r(10)),
@@ -448,16 +467,17 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   ),
                   SizedBox(height: Responsive.h(10)),
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        height: Responsive.h(10),
-                        width: Responsive.w(60),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(Responsive.r(4)),
+                      Expanded(
+                        child: Container(
+                          height: Responsive.h(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(Responsive.r(4)),
+                          ),
                         ),
                       ),
+                      SizedBox(width: Responsive.w(10)),
                       Container(
                         height: Responsive.h(16),
                         width: Responsive.w(60),

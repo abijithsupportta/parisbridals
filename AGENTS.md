@@ -73,6 +73,57 @@ features/<module_name>/
 
 ---
 
+## 🛡️ Flutter Responsive UI — Golden Rules
+
+> **THE GOLDEN RULE: Never give a child a fixed size inside a parent with constrained space.**
+> Always use `Expanded`, `Flexible`, `FittedBox`, or percentage-based sizing so the child
+> *negotiates* with its parent rather than demanding space.
+
+### 1. FittedBox — Auto-Shrink
+- Wrap any widget that could exceed its parent in a `FittedBox` so it **scales down** automatically.
+- Use on titles, price labels, and any text inside a bounded container.
+- Example: `FittedBox(fit: BoxFit.scaleDown, child: Text(...))`.
+
+### 2. Flexible / Expanded — Space Sharing
+- Inside every `Row` or `Column`, at least one child MUST be `Expanded` or `Flexible`.
+- Text-heavy children should always be `Expanded` so they take remaining space.
+- Badges, icons, and fixed-width elements can stay un-wrapped but should be minimal.
+
+### 3. TextOverflow.ellipsis + maxLines
+- Every `Text` widget that could grow unbounded MUST have `maxLines` and `overflow: TextOverflow.ellipsis`.
+- Single-line labels: `maxLines: 1`. Descriptions: `maxLines: 2` or `3`.
+
+### 4. LayoutBuilder — Adaptive Layout
+- Use `LayoutBuilder` when content needs to change shape based on available space.
+- Example: show 2-column grid on small screens, 3-column on wider screens.
+- Access `constraints.maxWidth` to make decisions.
+
+### 5. MediaQuery + Clamped Scale Factors
+- The `Responsive` class already handles this via `_scaleText.clamp(0.8, 1.4)`.
+- Never let scale factors grow unbounded — always clamp.
+- Use comfortable base sizes (sp(13-14) body, sp(16-18) titles) and let the scaler adjust.
+
+### 6. Wrap instead of Row
+- When placing multiple chips, badges, or tags horizontally, use `Wrap` instead of `Row`.
+- `Wrap` automatically flows items to the next line when space runs out.
+- Always set `spacing` and `runSpacing` using `Responsive.w()` and `Responsive.h()`.
+
+### Sizing Guidelines (Base at 375px width)
+| Element              | Recommended sp/w/h | Notes                          |
+|----------------------|---------------------|--------------------------------|
+| Body text            | sp(13)              | Comfortable reading size       |
+| Card titles          | sp(14)              | Slightly larger than body      |
+| Section headers      | sp(15)              | Clear hierarchy                |
+| Page titles          | sp(16-18)           | Prominent but not oversized    |
+| Icons (inline)       | icon(18-20)         | Matches body text height       |
+| Icons (action)       | icon(22-24)         | Tap-friendly                   |
+| Card padding         | all(12)             | Breathable without waste       |
+| List item spacing    | h(8-10)             | Tight but readable             |
+| Thumbnails           | w(64-72)            | Visible without dominating     |
+| Border radii         | r(10-12)            | Modern, consistent curves      |
+
+---
+
 ## Code Quality Standards
 
 1. **No unused imports** — remove them immediately
