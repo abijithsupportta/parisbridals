@@ -58,6 +58,9 @@ interface AppUIState {
   // Search
   globalSearchOpen: boolean;
   globalSearchQuery: string;
+
+  // Branch Switching
+  selectedBranchId: string; // 'all' = all branches
 }
 
 export interface AppStore extends AppUIState {
@@ -116,6 +119,8 @@ const initialState: AppUIState = {
   
   globalSearchOpen: false,
   globalSearchQuery: '',
+
+  selectedBranchId: 'all',
 };
 
 /**
@@ -182,6 +187,10 @@ export interface AppStore {
   openGlobalSearch: () => void;
   closeGlobalSearch: () => void;
   setGlobalSearchQuery: (query: string) => void;
+
+  // Branch Actions
+  selectedBranchId: string;
+  setSelectedBranchId: (branchId: string) => void;
   
   // Reset
   reset: () => void;
@@ -249,6 +258,9 @@ export const useAppStore = create<AppStore>()(
       openGlobalSearch: () => set({ globalSearchOpen: true }),
       closeGlobalSearch: () => set({ globalSearchOpen: false, globalSearchQuery: '' }),
       setGlobalSearchQuery: (query) => set({ globalSearchQuery: query }),
+
+      // Branch Actions
+      setSelectedBranchId: (branchId) => set({ selectedBranchId: branchId }),
       
       // Reset
       reset: () => set(initialState),
@@ -286,6 +298,9 @@ export const useAppSelectors = {
   // Search selectors
   globalSearchOpen: () => useAppStore((state) => state.globalSearchOpen),
   globalSearchQuery: () => useAppStore((state) => state.globalSearchQuery),
+
+  // Branch selectors
+  selectedBranchId: () => useAppStore((state) => state.selectedBranchId),
 };
 
 // Utility functions for common operations

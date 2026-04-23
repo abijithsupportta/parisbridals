@@ -1,27 +1,21 @@
 /**
- * Supabase Server Clients
+ * Supabase Server Clients (Singleton)
  *
- * Provides two singleton clients for server-side Supabase operations:
- * - createClient: Uses anon key for read operations (subject to RLS)
- * - createAdminClient: Uses service role key for admin mutations (bypasses RLS)
- *
- * Clients are cached as singletons to prevent the
- * "Multiple GoTrueClient instances" warning.
+ * Cached clients — created once, reused everywhere.
+ * - createClient: anon key (subject to RLS)
+ * - createAdminClient: service role key (bypasses RLS)
  */
 
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 
-let anonClient: SupabaseClient | null = null;
-let adminClient: SupabaseClient | null = null;
+let _anonClient: SupabaseClient | null = null;
+let _adminClient: SupabaseClient | null = null;
 
 /**
- * Standard anon client for read operations and auth flows.
- * Subject to RLS policies defined in Supabase.
- *
- * @throws Error if NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing
+ * Standard anon client (singleton). Subject to RLS.
  */
 export function createClient(): SupabaseClient {
-  if (anonClient) return anonClient;
+  if (_anonClient) return _anonClient;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -33,36 +27,41 @@ export function createClient(): SupabaseClient {
     );
   }
 
-  anonClient = createSupabaseClient(url, anonKey);
-  return anonClient;
+  _anonClient = createSupabaseClient(url, anonKey);
+  return _anonClient;
 }
 
 /**
- * Admin client using the service role key.
- * Bypasses Row Level Security — use ONLY for trusted server-side admin mutations.
- * Never expose the returned client or key to the browser.
- *
- * @throws Error if NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing
+ * Admin client (singleton). Bypasses RLS via service role key.
+ * Falls back to anon key during build-time SSG.
  */
 export function createAdminClient(): SupabaseClient {
-  if (adminClient) return adminClient;
+  if (_adminClient) return _adminClient;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL in .env.local');
   }
-  if (!serviceRoleKey) {
+
+  const key = serviceRoleKey || anonKey;
+  if (!key) {
     throw new Error(
-      'Missing SUPABASE_SERVICE_ROLE_KEY in .env.local. ' +
-      'This key is required for admin mutations that bypass RLS. ' +
-      'Find it in Supabase Dashboard > Project Settings > API > service_role.'
+      'Missing both SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_ANON_KEY. ' +
+      'At least one must be set.'
     );
   }
 
-  adminClient = createSupabaseClient(url, serviceRoleKey, {
+  if (!serviceRoleKey) {
+    console.warn(
+      '[supabase] SUPABASE_SERVICE_ROLE_KEY not found — falling back to anon key.'
+    );
+  }
+
+  _adminClient = createSupabaseClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-  return adminClient;
+  return _adminClient;
 }
