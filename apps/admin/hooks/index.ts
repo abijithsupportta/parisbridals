@@ -74,3 +74,6 @@ export {
   useUpdateStaff,
   useDeleteStaff,
 } from './useStaff';
+
+// Permission hooks
+export { usePermissions } from './usePermissions';

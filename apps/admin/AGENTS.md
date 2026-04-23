@@ -143,6 +143,25 @@ UI (page component) → hooks (TanStack Query + fetch) → API route (server-sid
 - `staff`: `id`, `store_id`, `branch_id`, `user_id` (→ auth.users), `name`, `email`, `role`, `is_active`
 - Roles: `admin`, `manager`, `staff`
 
+### Role-Based Access Control (RBAC) — `lib/permissions.ts`
+
+| Feature         | Admin | Manager | Staff |
+|----------------|-------|---------|-------|
+| Dashboard      | ✅    | ✅      | ✅    |
+| Products       | ✅    | ✅      | ❌    |
+| Categories     | ✅    | ✅      | ❌    |
+| Orders         | ✅    | ✅      | ✅    |
+| Banners        | ✅    | ✅      | ❌    |
+| Customers      | ✅    | ✅      | ❌    |
+| Branches       | ✅    | ❌      | ❌    |
+| Staff          | ✅    | ❌      | ❌    |
+| Settings       | ✅    | ❌      | ❌    |
+| Switch Branch  | ✅    | ✅      | ❌ (locked to assigned branch) |
+
+- `usePermissions()` hook reads role from app store user
+- Sidebar filters nav items via `routePermissionMap`
+- BranchSwitcher shows locked indicator for staff
+
 ### Staff Auth Integration
 - Staff created via `supabase.auth.admin.createUser()` (email + password, auto-confirmed)
 - `user_id` stored in staff table, links to `auth.users`

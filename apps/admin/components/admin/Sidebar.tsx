@@ -11,13 +11,14 @@ import {
   Settings,
   LogOut,
   ChevronDown,
-  User,
   ImageIcon,
   Building2,
   UserCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
+import { usePermissions } from "@/hooks";
+import { routePermissionMap, type Permission } from "@/lib/permissions";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -36,10 +37,31 @@ export default function Sidebar() {
   const router = useRouter();
   const supabase = createClient();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const { role, can } = usePermissions();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push("/auth/login");
+  };
+
+  // Filter navigation items based on user role
+  const visibleNav = navigation.filter((item) => {
+    const permission = routePermissionMap[item.href] as Permission | undefined;
+    if (!permission) return true; // Show if no permission mapping
+    return can(permission);
+  });
+
+  // Role labels for the user info section
+  const roleLabel: Record<string, string> = {
+    admin: "Shop Admin",
+    manager: "Manager",
+    staff: "Staff",
+  };
+
+  const roleColor: Record<string, string> = {
+    admin: "from-violet-500 to-purple-600",
+    manager: "from-amber-500 to-orange-600",
+    staff: "from-blue-500 to-cyan-600",
   };
 
   return (
@@ -52,7 +74,7 @@ export default function Sidebar() {
       
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-        {navigation.map((item) => {
+        {visibleNav.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
@@ -79,12 +101,12 @@ export default function Sidebar() {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-700/50 hover:bg-slate-700 transition-all duration-200 w-full"
           >
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white font-semibold">
-              A
+            <div className={cn("w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center text-white font-semibold", roleColor[role] || roleColor.admin)}>
+              {role.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0 text-left">
-              <p className="text-sm font-medium text-white truncate">Admin User</p>
-              <p className="text-xs text-slate-400 truncate">admin@parisbridals.com</p>
+              <p className="text-sm font-medium text-white truncate">{roleLabel[role] || "User"}</p>
+              <p className="text-xs text-slate-400 truncate">{role === "admin" ? "admin@parisbridals.com" : `${role}@parisbridals.com`}</p>
             </div>
             <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", showUserMenu && "rotate-180")} />
           </button>

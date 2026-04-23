@@ -1,8 +1,9 @@
 "use client";
 
-import { Building2, ChevronDown, Check } from "lucide-react";
+import { Building2, ChevronDown, Check, Lock } from "lucide-react";
 import { useAppStore } from "@/stores";
 import { useBranches } from "@/hooks";
+import { usePermissions } from "@/hooks";
 import { useState, useRef, useEffect } from "react";
 import type { BranchWithStaffCount } from "@/domain/types/branch";
 
@@ -10,6 +11,7 @@ export default function BranchSwitcher() {
   const { branches } = useBranches();
   const selectedBranchId = useAppStore((s) => s.selectedBranchId);
   const setSelectedBranchId = useAppStore((s) => s.setSelectedBranchId);
+  const { can, isStaff } = usePermissions();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -22,21 +24,33 @@ export default function BranchSwitcher() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const canSwitch = can("switch_branches");
   const selected = branches.find((b: BranchWithStaffCount) => b.id === selectedBranchId);
   const label = selectedBranchId === "all" ? "All Branches" : selected?.name || "All Branches";
+
+  // Staff can't switch — show locked indicator
+  if (isStaff) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm">
+        <Lock className="w-3.5 h-3.5 text-slate-400" />
+        <span className="font-medium text-slate-500">{selected?.name || "My Branch"}</span>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 transition-colors text-sm"
+        onClick={() => canSwitch && setOpen(!open)}
+        disabled={!canSwitch}
+        className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Building2 className="w-4 h-4 text-violet-500" />
         <span className="font-medium text-slate-700 max-w-[150px] truncate">{label}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && (
+      {open && canSwitch && (
         <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 animate-in fade-in slide-in-from-top-2 duration-150">
           <div className="px-3 py-2 border-b border-slate-100">
             <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Switch Branch</p>
