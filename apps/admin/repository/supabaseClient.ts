@@ -53,6 +53,10 @@ export abstract class BaseRepository {
   private _client: ReturnType<typeof createAdminClient> | null = null;
   private _clientComponent: ReturnType<typeof createClientComponent> | null = null;
 
+  // Current user context for audit fields
+  protected currentUserId: string | null = null;
+  protected currentBranchId: string | null = null;
+
   protected get client() {
     if (!this._client) this._client = createAdminClient();
     return this._client;
@@ -61,6 +65,36 @@ export abstract class BaseRepository {
   protected get clientComponent() {
     if (!this._clientComponent) this._clientComponent = createClientComponent();
     return this._clientComponent;
+  }
+
+  /**
+   * Set current user context for audit fields
+   */
+  setUserContext(userId: string | null, branchId: string | null) {
+    this.currentUserId = userId;
+    this.currentBranchId = branchId;
+  }
+
+  /**
+   * Get audit fields for create operations
+   */
+  protected getCreateAuditFields() {
+    return {
+      created_by: this.currentUserId,
+      created_at_branch_id: this.currentBranchId,
+      updated_by: this.currentUserId,
+      updated_at_branch_id: this.currentBranchId,
+    };
+  }
+
+  /**
+   * Get audit fields for update operations
+   */
+  protected getUpdateAuditFields() {
+    return {
+      updated_by: this.currentUserId,
+      updated_at_branch_id: this.currentBranchId,
+    };
   }
 
   /**

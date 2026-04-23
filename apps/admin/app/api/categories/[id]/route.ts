@@ -23,28 +23,27 @@
  * @module app/api/categories/[id]/route
  */
 
-import { NextResponse } from "next/server";
-import {
-  getCategoryById,
-  updateCategory,
-  deleteCategory,
-  canDeleteCategory,
-  type CategoryUpdateInput,
-} from "@/lib/supabase/categories";
+import { NextRequest, NextResponse } from "next/server";
+import { categoryService } from "@/services/categoryService";
+import { apiGuard } from "@/lib/apiGuard";
+import { getAuthUser } from "@/lib/auth";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
 /** GET /api/categories/:id — fetch one category */
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
     const { id } = await params;
-    const category = await getCategoryById(id);
-    if (!category) {
-      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    const result = await categoryService.getCategoryById(id);
+    if (!result.success || !result.data) {
+      return NextResponse.json({ error: result.error?.message || "Category not found" }, { status: 404 });
     }
-    return NextResponse.json({ category });
+    return NextResponse.json({ category: result.data });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -52,41 +51,22 @@ export async function GET(_request: Request, { params }: RouteContext) {
 }
 
 /** PATCH /api/categories/:id — update a category */
-export async function PATCH(request: Request, { params }: RouteContext) {
+export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
+    const authUser = await getAuthUser(request);
+    categoryService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+
     const { id } = await params;
     const body = await request.json();
 
-    // Whitelist only allowed fields to prevent malicious field injection
-    const allowedKeys: (keyof CategoryUpdateInput)[] = [
-      "name",
-      "slug",
-      "description",
-      "image_url",
-      "parent_id",
-      "store_id",
-      "is_global",
-      "is_active",
-      "sort_order",
-    ];
-
-    const input: CategoryUpdateInput = {};
-    for (const key of allowedKeys) {
-      if (key in body) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (input as any)[key] = body[key];
-      }
+    const result = await categoryService.updateCategory(id, body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error?.message }, { status: 400 });
     }
-
-    if (Object.keys(input).length === 0) {
-      return NextResponse.json(
-        { error: "No valid fields provided for update" },
-        { status: 400 }
-      );
-    }
-
-    const category = await updateCategory(id, input);
-    return NextResponse.json({ category });
+    return NextResponse.json({ category: result.data });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -94,24 +74,31 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 /** DELETE /api/categories/:id — delete a category with safety check */
-export async function DELETE(_request: Request, { params }: RouteContext) {
+export async function DELETE(request: NextRequest, { params }: RouteContext) {
   try {
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
+    const authUser = await getAuthUser(request);
+    categoryService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+
     const { id } = await params;
 
-    // Safety check: ensure no linked products and no child categories
-    const check = await canDeleteCategory(id);
-    if (!check.canDelete) {
-      return NextResponse.json(
-        {
-          error: check.reason ?? "Cannot delete this category",
-          productCount: check.productCount,
-          childCount: check.childCount,
-        },
-        { status: 409 }
-      );
+    const result = await categoryService.deleteCategory(id);
+    if (!result.success) {
+      const error = result.error as any;
+      if (error.code === 'CANNOT_DELETE') {
+        return NextResponse.json(
+          {
+            error: error.message,
+            productCount: error.details?.productCount || 0,
+            childCount: error.details?.childCount || 0,
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
-
-    await deleteCategory(id);
     return NextResponse.json({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

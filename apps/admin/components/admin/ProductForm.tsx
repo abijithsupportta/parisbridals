@@ -20,9 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type Category } from "@/lib/supabase/categories";
+import { type Category } from "@/domain/types/category";
 import { useRouter } from "next/navigation";
 import { AlertCircle, RefreshCw, Download } from "lucide-react";
+import { useAppStore } from "@/stores";
+import { useCreateProduct, useUpdateProduct } from "@/hooks";
 
 const DEFAULT_STORE_ID = "00000000-0000-0000-0000-000000000001";
 
@@ -49,10 +51,28 @@ export default function ProductForm({
 }: ProductFormProps) {
   const router = useRouter();
   const isEdit = !!product;
+  const { showError, showSuccess } = useAppStore();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+  const [userRole, setUserRole] = useState<string>("staff");
+  const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
+
+  // Fetch current user role
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.role) {
+          setUserRole(data.role);
+        }
+      })
+      .catch(() => {
+        setUserRole("staff");
+      });
+  }, []);
 
   // Extract existing image URLs from product
   const existingImages = (product?.images || []).map((img: any) =>
@@ -77,6 +97,13 @@ export default function ProductForm({
     is_active: product?.is_active ?? true,
     is_featured: product?.is_featured ?? false,
   });
+
+  // Set default branch_id to "all" for admin/super admin in create mode
+  useEffect(() => {
+    if (!isEdit && (userRole === 'admin' || userRole === 'super_admin')) {
+      setFormData((prev) => ({ ...prev, branch_id: 'all' }));
+    }
+  }, [isEdit, userRole]);
 
   const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
 
@@ -168,32 +195,35 @@ export default function ProductForm({
         description: formData.description || undefined,
       };
 
-      const endpoint =
-        isEdit && product ? `/api/products/${product.id}` : `/api/products`;
-      const method = isEdit ? "PATCH" : "POST";
+      let result: any;
+      if (isEdit && product) {
+        result = await updateProduct.mutateAsync({ id: product.id, data: payload });
+      } else {
+        result = await createProduct.mutateAsync(payload);
+      }
 
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const data = await res
-          .json()
-          .catch(() => ({ message: res.statusText }));
-        throw new Error(
-          data.message || data.error || `Request failed (${res.status})`
-        );
+      if (!result.success) {
+        // Map error codes to user-friendly messages
+        let errorMessage = result.error?.message || 'Request failed';
+        
+        if (result.error?.code === 'SLUG_EXISTS') {
+          errorMessage = 'A product with this slug already exists. Please change the product name or slug.';
+        } else if (result.error?.code === 'VALIDATION_ERROR') {
+          errorMessage = 'Please check all required fields and try again.';
+        } else if (result.error?.code === 'INVALID_CATEGORY') {
+          errorMessage = 'Invalid category selected.';
+        }
+        
+        showError(errorMessage);
+        return;
       }
 
       router.push("/dashboard/products");
-      router.refresh();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "An unexpected error occurred";
       console.error("Error saving product:", err);
-      setError(message);
+      showError(message);
     } finally {
       setLoading(false);
     }
@@ -440,6 +470,9 @@ export default function ProductForm({
                   }
                   className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
                 >
+                  {(userRole === 'admin' || userRole === 'super_admin') && !isEdit && (
+                    <option value="all">All Branches</option>
+                  )}
                   <option value="">Select branch</option>
                   {branches
                     .filter((b) => b.is_active !== false)
@@ -449,6 +482,11 @@ export default function ProductForm({
                       </option>
                     ))}
                 </select>
+                {(userRole === 'admin' || userRole === 'super_admin') && formData.branch_id === 'all' && (
+                  <p className="text-xs text-slate-500">
+                    Product will be available at all branches
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -604,7 +642,8 @@ export default function ProductForm({
             <Button
               type="submit"
               disabled={loading}
-              className="flex-1 h-12 text-base shadow-lg shadow-primary/25"
+              variant="gradient"
+              className="flex-1 h-12 text-base"
             >
               {loading
                 ? "Saving..."

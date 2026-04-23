@@ -138,6 +138,7 @@ export interface User {
 }
 
 export enum UserRole {
+  SUPER_ADMIN = 'super_admin',
   ADMIN = 'admin',
   MANAGER = 'manager',
   STAFF = 'staff',
@@ -191,6 +192,11 @@ export interface Order {
   notes?: string;
   created_at: string;
   updated_at?: string;
+  // Audit fields
+  readonly created_by: string | null;
+  readonly created_at_branch_id: string | null;
+  readonly updated_by: string | null;
+  readonly updated_at_branch_id: string | null;
 }
 
 export interface OrderItem {
@@ -218,6 +224,11 @@ export interface Customer {
   address?: Address;
   notes?: string;
   created_at: string;
+  // Audit fields
+  readonly created_by: string | null;
+  readonly created_at_branch_id: string | null;
+  readonly updated_by: string | null;
+  readonly updated_at_branch_id: string | null;
 }
 
 // Analytics Types

@@ -16,33 +16,35 @@
  * @module app/api/categories/[id]/children/route
  */
 
-import { NextResponse } from "next/server";
-import {
-  getCategoryById,
-  getCategoryChildren,
-  getCategories,
-  getCategoryLevel,
-} from "@/lib/supabase/categories";
+import { NextRequest, NextResponse } from "next/server";
+import { categoryService } from "@/services/categoryService";
+import { apiGuard } from "@/lib/apiGuard";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
     const { id } = await params;
-    const parent = await getCategoryById(id);
-    if (!parent) {
+    const parentResult = await categoryService.getCategoryById(id);
+    if (!parentResult.success || !parentResult.data) {
       return NextResponse.json({ error: "Category not found" }, { status: 404 });
     }
 
-    const [children, all] = await Promise.all([
-      getCategoryChildren(id),
-      getCategories(),
-    ]);
-    const level = getCategoryLevel(parent, all);
+    const childrenResult = await categoryService.getCategoryChildren(id);
+    if (!childrenResult.success) {
+      return NextResponse.json({ error: childrenResult.error?.message }, { status: 500 });
+    }
 
-    return NextResponse.json({ parent, children, level });
+    return NextResponse.json({ 
+      parent: parentResult.data, 
+      children: childrenResult.data || [],
+      level: parentResult.data.level 
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

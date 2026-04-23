@@ -31,13 +31,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  getCategoryById,
-  getCategoryChildren,
-  getCategories,
-  getCategoryLevel,
-  type Category,
-} from "@/lib/supabase/categories";
+import { categoryService } from "@/services";
+import { type Category } from "@/domain";
 import CategoryTreeActions from "@/components/admin/CategoryTreeActions";
 
 /** Thumbnail/fallback image renderer. */
@@ -83,17 +78,18 @@ interface PageProps {
 export default async function CategoryDetailPage({ params }: PageProps) {
   const { id } = await params;
 
-  const [category, allCategories] = await Promise.all([
-    getCategoryById(id),
-    getCategories(),
-  ]);
-
-  if (!category) {
+  const categoryResult = await categoryService.getCategoryById(id);
+  if (!categoryResult.success || !categoryResult.data) {
     notFound();
   }
 
-  const level = getCategoryLevel(category, allCategories);
-  const children = await getCategoryChildren(id);
+  const category = categoryResult.data;
+  const allCategoriesResult = await categoryService.getAllCategories();
+  const allCategories = allCategoriesResult.success ? allCategoriesResult.data || [] : [];
+  
+  const childrenResult = await categoryService.getCategoryChildren(id);
+  const children = childrenResult.success ? childrenResult.data || [] : [];
+  
   const parent: Category | null = category.parent_id
     ? allCategories.find((c) => c.id === category.parent_id) ?? null
     : null;
@@ -101,6 +97,8 @@ export default async function CategoryDetailPage({ params }: PageProps) {
     parent?.parent_id
       ? allCategories.find((c) => c.id === parent.parent_id) ?? null
       : null;
+
+  const level = category.level;
 
   // Determine child creation affordance based on current level
   const canCreateChild = level !== "variant";

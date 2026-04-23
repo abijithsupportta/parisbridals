@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, Edit, AlertTriangle, X, Eye } from "lucide-react";
-import { type Category } from "@/lib/supabase/categories";
+import { type Category } from "@/domain/types/category";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 

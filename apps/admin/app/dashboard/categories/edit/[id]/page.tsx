@@ -1,16 +1,18 @@
 import { notFound } from "next/navigation";
-import { getCategoryById, getCategories } from "@/lib/supabase/categories";
+import { categoryService } from "@/services";
 import CategoryForm from "@/components/admin/CategoryForm";
 
 export default async function EditCategoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const category = await getCategoryById(id);
+  const categoryResult = await categoryService.getCategoryById(id);
 
-  if (!category) {
+  if (!categoryResult.success || !categoryResult.data) {
     notFound();
   }
 
-  const allCategories = await getCategories();
+  const category = categoryResult.data;
+  const allCategoriesResult = await categoryService.getAllCategories();
+  const allCategories = allCategoriesResult.success ? allCategoriesResult.data || [] : [];
 
   return (
     <div className="space-y-6">

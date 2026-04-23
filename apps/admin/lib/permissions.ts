@@ -3,8 +3,9 @@
  *
  * Defines what each role can access in the admin panel.
  *
- * - Admin: Full access to everything
- * - Manager: Products, categories, orders, banners, dashboard. Can switch branches.
+ * - Super Admin: Full access to everything, can create Admin accounts
+ * - Admin: Full access to everything across all branches
+ * - Manager: Products, categories, orders, dashboard. Locked to assigned branch (no branch switching)
  * - Staff: Orders only. Locked to their branch.
  *
  * @module lib/permissions
@@ -22,16 +23,21 @@ export type Permission =
   | 'orders'
   | 'customers'
   | 'settings'
-  | 'switch_branches';
+  | 'switch_branches'
+  | 'create_admin';
 
 const rolePermissions: Record<StaffRole, Permission[]> = {
+  super_admin: [
+    'dashboard', 'products', 'categories', 'branches', 'staff',
+    'banners', 'orders', 'customers', 'settings', 'switch_branches', 'create_admin',
+  ],
   admin: [
     'dashboard', 'products', 'categories', 'branches', 'staff',
     'banners', 'orders', 'customers', 'settings', 'switch_branches',
   ],
   manager: [
     'dashboard', 'products', 'categories',
-    'banners', 'orders', 'customers', 'switch_branches',
+    'banners', 'orders', 'customers',
   ],
   staff: [
     'dashboard', 'orders',

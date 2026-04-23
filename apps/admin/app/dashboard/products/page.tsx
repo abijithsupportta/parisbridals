@@ -11,17 +11,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Filter, MoreHorizontal, Trash2, Edit, Eye, Download, Package } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, Trash2, Edit, Eye, Download, Package, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Modal from "@/components/admin/Modal";
 import { 
   useProducts, 
-  useProductSearch, 
   useDeleteProduct,
-  useProductForm,
-  useProductSelection,
   useBulkProductOperation
 } from "@/hooks";
 import { useProductStore, useAppStore } from "@/stores";
@@ -45,26 +43,23 @@ export default function ProductsPage() {
     limit: 20
   });
 
-  const { searchResults } = useProductSearch(searchQuery, searchQuery.length > 2);
   const deleteProduct = useDeleteProduct();
-  const { openCreate, openEdit, isEditing, currentProduct } = useProductForm();
   const { 
     selectedProducts, 
-    selectedCount, 
-    selectProduct, 
-    selectAll, 
-    clear, 
-    isSelected 
-  } = useProductSelection();
-  const { 
-    openCreateModal, 
+    toggleProductSelection,
+    selectAll,
+    clearSelection,
+    isProductSelected,
+    openCreateModal,
+    openEditModal,
+    openDeleteModal,
     closeCreateModal,
     closeEditModal,
-    openDeleteModal, 
-    isDeleteModalOpen, 
+    closeDeleteModal,
+    isDeleteModalOpen,
     isCreateModalOpen,
     isEditModalOpen,
-    currentProduct: deleteTarget 
+    currentProduct
   } = useProductStore();
   const { showSuccess, showError } = useAppStore();
   
@@ -75,17 +70,32 @@ export default function ProductsPage() {
   };
 
   const handleEdit = (product: any) => {
-    openEdit(product);
+    openEditModal(product);
   };
 
   const handleDelete = (product: any) => {
     openDeleteModal(product);
-    // Set delete target in store
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!currentProduct) return;
+    
+    try {
+      const result: any = await deleteProduct.mutateAsync(currentProduct.id);
+      if (result.success) {
+        showSuccess('Product deleted successfully');
+        closeDeleteModal();
+      } else {
+        showError('Failed to delete product', result.error?.message);
+      }
+    } catch (error) {
+      showError('Failed to delete product', 'An unexpected error occurred');
+    }
   };
 
   const handleSelectAll = () => {
-    if (selectedCount === products.length) {
-      clear();
+    if (selectedProducts.length === products.length) {
+      clearSelection();
     } else {
       const productIds = products.map(p => p.id);
       selectAll(productIds);
@@ -93,9 +103,9 @@ export default function ProductsPage() {
   };
 
   const handleBulkDelete = async () => {
-    if (selectedCount === 0) return;
+    if (selectedProducts.length === 0) return;
     
-    if (!confirm(`Are you sure you want to delete ${selectedCount} product(s)? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete ${selectedProducts.length} product(s)? This action cannot be undone.`)) {
       return;
     }
     
@@ -106,10 +116,10 @@ export default function ProductsPage() {
       });
       
       if (result.success) {
-        showSuccess('Bulk Delete Success', `${selectedCount} product(s) deleted successfully`);
-        clear();
+        showSuccess('Bulk Delete Success', `${selectedProducts.length} product(s) deleted successfully`);
+        clearSelection();
       } else {
-        showError('Bulk Delete Error', result.error?.message || 'Failed to delete products');
+        showError('Bulk Delete Error', 'Failed to delete products');
       }
     } catch (error) {
       showError('Bulk Delete Error', 'An unexpected error occurred while deleting products');
@@ -146,7 +156,7 @@ export default function ProductsPage() {
   };
 
   const handleBulkActivate = async () => {
-    if (selectedCount === 0) return;
+    if (selectedProducts.length === 0) return;
     
     try {
       const result = await bulkOperation.performBulkOperation({
@@ -156,9 +166,9 @@ export default function ProductsPage() {
       
       if (result.success) {
         showSuccess('Bulk Activate Successful', `${result.data?.successful?.length || 0} product(s) activated successfully`);
-        clear();
+        clearSelection();
       } else {
-        showError('Bulk Activate Failed', result.error?.message || 'Failed to activate products');
+        showError('Bulk Activate Failed', 'Failed to activate products');
       }
     } catch (error) {
       showError('Bulk Activate Error', 'An unexpected error occurred while activating products');
@@ -166,7 +176,7 @@ export default function ProductsPage() {
   };
 
   const handleBulkDeactivate = async () => {
-    if (selectedCount === 0) return;
+    if (selectedProducts.length === 0) return;
     
     try {
       const result = await bulkOperation.performBulkOperation({
@@ -176,9 +186,9 @@ export default function ProductsPage() {
       
       if (result.success) {
         showSuccess('Bulk Deactivate Successful', `${result.data?.successful?.length || 0} product(s) deactivated successfully`);
-        clear();
+        clearSelection();
       } else {
-        showError('Bulk Deactivate Failed', result.error?.message || 'Failed to deactivate products');
+        showError('Bulk Deactivate Failed', 'Failed to deactivate products');
       }
     } catch (error) {
       showError('Bulk Deactivate Error', 'An unexpected error occurred while deactivating products');
@@ -196,7 +206,7 @@ export default function ProductsPage() {
           </p>
         </div>
         <Link href="/dashboard/products/create">
-          <Button className="shadow-lg shadow-primary/25">
+          <Button variant="gradient">
             <Plus className="w-4 h-4 mr-2" />
             Add Product
           </Button>
@@ -228,10 +238,10 @@ export default function ProductsPage() {
           </div>
 
           {/* Bulk Actions */}
-          {selectedCount > 0 && (
+          {selectedProducts.length > 0 && (
             <div className="mt-4 flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
               <span className="text-sm text-blue-700">
-                {selectedCount} product{selectedCount !== 1 ? 's' : ''} selected
+                {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
               </span>
               <div className="flex gap-2 ml-auto">
                 <Button 
@@ -268,7 +278,7 @@ export default function ProductsPage() {
                   <Trash2 className="w-4 h-4 mr-1" />
                   Delete
                 </Button>
-                <Button size="sm" variant="ghost" onClick={clear}>
+                <Button size="sm" variant="ghost" onClick={clearSelection}>
                   Clear
                 </Button>
               </div>
@@ -301,7 +311,7 @@ export default function ProductsPage() {
                   <th className="text-left p-4 font-semibold text-slate-700">
                     <input
                       type="checkbox"
-                      checked={selectedCount === products.length}
+                      checked={selectedProducts.length === products.length}
                       onChange={handleSelectAll}
                       className="rounded border-slate-300"
                     />
@@ -320,14 +330,14 @@ export default function ProductsPage() {
                   <tr 
                     key={product.id} 
                     className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${
-                      isSelected(product.id) ? 'bg-blue-50' : ''
+                      isProductSelected(product.id) ? 'bg-blue-50' : ''
                     }`}
                   >
                     <td className="p-4">
                       <input
                         type="checkbox"
-                        checked={isSelected(product.id)}
-                        onChange={() => selectProduct(product.id)}
+                        checked={isProductSelected(product.id)}
+                        onChange={() => toggleProductSelection(product.id)}
                         className="rounded border-slate-300"
                       />
                     </td>
@@ -448,6 +458,48 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        title="Delete Product"
+        maxWidth="max-w-md"
+      >
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                Delete "{currentProduct?.name || 'this product'}"?
+              </h3>
+              <p className="text-sm text-slate-600 mb-4">
+                This action cannot be undone. The product will be permanently removed from your inventory.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={closeDeleteModal}
+                  disabled={deleteProduct.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                  disabled={deleteProduct.isPending}
+                >
+                  {deleteProduct.isPending ? 'Deleting...' : 'Delete Product'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

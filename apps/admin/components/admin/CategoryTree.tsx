@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { type Category } from "@/lib/supabase/categories";
+import { type Category } from "@/domain/types/category";
 import CategoryTreeActions from "@/components/admin/CategoryTreeActions";
 
 /** Thumbnail or fallback icon for a category row. */

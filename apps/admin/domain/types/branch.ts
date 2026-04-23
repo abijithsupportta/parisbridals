@@ -17,6 +17,11 @@ export interface Branch {
   is_active: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  // Audit fields
+  readonly created_by: string | null;
+  readonly created_at_branch_id: string | null;
+  readonly updated_by: string | null;
+  readonly updated_at_branch_id: string | null;
 }
 
 export interface BranchWithStaffCount extends Branch {
@@ -24,7 +29,7 @@ export interface BranchWithStaffCount extends Branch {
 }
 
 // ─── Staff Entity ────────────────────────────────────────────────────
-export type StaffRole = 'admin' | 'manager' | 'staff';
+export type StaffRole = 'super_admin' | 'admin' | 'manager' | 'staff';
 
 export interface Staff {
   readonly id: string;
@@ -38,6 +43,11 @@ export interface Staff {
   is_active: boolean;
   readonly created_at: string;
   readonly updated_at: string;
+  // Audit fields
+  readonly created_by: string | null;
+  readonly created_at_branch_id: string | null;
+  readonly updated_by: string | null;
+  readonly updated_at_branch_id: string | null;
 }
 
 export interface StaffWithBranch extends Staff {

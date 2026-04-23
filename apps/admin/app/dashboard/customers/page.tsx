@@ -2,10 +2,12 @@ import { Search, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { getCustomers, type Customer } from "@/lib/supabase/queries";
+import { customerService } from "@/services";
+import { type Customer } from "@/domain";
 
 export default async function CustomersPage() {
-  const customers = await getCustomers();
+  const customersResult = await customerService.getAllCustomers();
+  const customers = customersResult.success ? customersResult.data || [] : [];
 
   return (
     <div className="space-y-8">
@@ -52,7 +54,7 @@ export default async function CustomersPage() {
                     <td className="p-4 font-semibold text-slate-900">{customer.name}</td>
                     <td className="p-4 text-slate-700">{customer.email || 'N/A'}</td>
                     <td className="p-4 text-slate-700">{customer.phone}</td>
-                    <td className="p-4 text-slate-700">{customer.address || 'N/A'}</td>
+                    <td className="p-4 text-slate-700">{typeof customer.address === 'string' ? customer.address : 'N/A'}</td>
                     <td className="p-4">
                       <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                         <MoreHorizontal className="w-4 h-4 text-slate-400" />

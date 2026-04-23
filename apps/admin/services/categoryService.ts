@@ -25,6 +25,19 @@ import {
 import { generateSlug } from '@/lib/shared-utils';
 
 export class CategoryService {
+  // Current user context for audit fields
+  private currentUserId: string | null = null;
+  private currentBranchId: string | null = null;
+
+  /**
+   * Set current user context for audit fields
+   */
+  setUserContext(userId: string | null, branchId: string | null) {
+    this.currentUserId = userId;
+    this.currentBranchId = branchId;
+    categoryRepository.setUserContext(userId, branchId);
+  }
+
   /**
    * Get all categories
    */
@@ -42,36 +55,46 @@ export class CategoryService {
       return result;
     }
     
-    // TODO: Build hierarchy tree
+    // Build hierarchy tree from flat list
+    const hierarchy = this.buildHierarchyTree(result.data);
+    
     return {
       success: true,
-      data: result.data, // For now, return flat list
+      data: hierarchy,
       error: null,
     };
+  }
+
+  /**
+   * Build hierarchy tree from flat category list
+   */
+  private buildHierarchyTree(categories: Category[]): Category[] {
+    const categoryMap = new Map<string, Category & { children?: Category[] }>();
+    const rootCategories: (Category & { children?: Category[] })[] = [];
+
+    // First pass: create map and identify roots
+    categories.forEach(cat => {
+      categoryMap.set(cat.id, { ...cat, children: [] });
+    });
+
+    // Second pass: build tree structure
+    categories.forEach(cat => {
+      if (cat.parent_id && categoryMap.has(cat.parent_id)) {
+        const parent = categoryMap.get(cat.parent_id)!;
+        parent.children!.push(categoryMap.get(cat.id)!);
+      } else {
+        rootCategories.push(categoryMap.get(cat.id)!);
+      }
+    });
+
+    return rootCategories;
   }
 
   /**
    * Get category by ID with relations
    */
   async getCategoryById(id: string): Promise<RepositoryResult<CategoryWithRelations>> {
-    const result = await categoryRepository.findById(id);
-    
-    if (!result.success || !result.data) {
-      return result;
-    }
-    
-    // Convert to CategoryWithRelations
-    const categoryWithRelations: CategoryWithRelations = {
-      ...result.data,
-      level: CategoryLevel.MAIN, // TODO: Calculate actual level
-      path: result.data.name, // TODO: Calculate actual path
-    };
-    
-    return {
-      success: true,
-      data: categoryWithRelations,
-      error: null,
-    };
+    return await categoryRepository.findById(id);
   }
 
   /**
@@ -157,23 +180,7 @@ export class CategoryService {
 
     // Return category with relations
     const categoryResult = await categoryRepository.findById(createResult.data.id);
-    
-    if (!categoryResult.success || !categoryResult.data) {
-      return categoryResult;
-    }
-    
-    // Convert to CategoryWithRelations
-    const categoryWithRelations: CategoryWithRelations = {
-      ...categoryResult.data,
-      level: CategoryLevel.MAIN, // TODO: Calculate actual level
-      path: categoryResult.data.name, // TODO: Calculate actual path
-    };
-    
-    return {
-      success: true,
-      data: categoryWithRelations,
-      error: null,
-    };
+    return categoryResult;
   }
 
   /**
@@ -295,23 +302,7 @@ export class CategoryService {
 
     // Return updated category with relations
     const categoryResult = await categoryRepository.findById(id);
-    
-    if (!categoryResult.success || !categoryResult.data) {
-      return categoryResult;
-    }
-    
-    // Convert to CategoryWithRelations
-    const categoryWithRelations: CategoryWithRelations = {
-      ...categoryResult.data,
-      level: CategoryLevel.MAIN, // TODO: Calculate actual level
-      path: categoryResult.data.name, // TODO: Calculate actual path
-    };
-    
-    return {
-      success: true,
-      data: categoryWithRelations,
-      error: null,
-    };
+    return categoryResult;
   }
 
   /**

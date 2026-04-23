@@ -54,7 +54,7 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
       .select('id, role, branch_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     // If staff record found, use that role
     if (staff) {

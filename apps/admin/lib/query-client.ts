@@ -108,6 +108,14 @@ export const queryKeys = {
   // Banner queries
   banners: ['banners'] as const,
   banner: (id: string) => ['banners', id] as const,
+  
+  // Payment queries
+  payments: ['payments'] as const,
+  payment: (id: string) => ['payments', id] as const,
+  orderPayments: (orderId: string) => ['payments', 'order', orderId] as const,
+  
+  // Settings queries
+  settings: ['settings'] as const,
 } as const;
 
 /**
@@ -143,6 +151,47 @@ export const queryUtils = {
   invalidateCategories: () => {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.categories,
+    });
+  },
+  
+  /**
+   * Invalidate all payment-related queries
+   */
+  invalidatePayments: () => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.payments,
+    });
+  },
+  
+  /**
+   * Invalidate a specific payment
+   */
+  invalidatePayment: (id: string) => {
+    return Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.payment(id),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.payments,
+      }),
+    ]);
+  },
+  
+  /**
+   * Invalidate order payments
+   */
+  invalidateOrderPayments: (orderId: string) => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.orderPayments(orderId),
+    });
+  },
+  
+  /**
+   * Invalidate all settings-related queries
+   */
+  invalidateSettings: () => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.settings,
     });
   },
   

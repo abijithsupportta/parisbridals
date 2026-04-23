@@ -9,7 +9,7 @@
 import { BaseRepository, RepositoryResult } from './supabaseClient';
 import { Branch, BranchWithStaffCount, CreateBranchDTO, UpdateBranchDTO } from '@/domain/types/branch';
 
-class BranchRepository extends BaseRepository {
+export class BranchRepository extends BaseRepository {
   private readonly tableName = 'branches';
 
   async findAll(storeId: string): Promise<RepositoryResult<Branch[]>> {
@@ -24,19 +24,41 @@ class BranchRepository extends BaseRepository {
   }
 
   async findAllWithStaffCount(storeId: string): Promise<RepositoryResult<BranchWithStaffCount[]>> {
-    const { data, error } = await this.client
+    // Use count query instead of embed to avoid ambiguous relationship error
+    const { data: branches, error } = await this.client
       .from(this.tableName)
-      .select('*, staff(count)')
+      .select('*')
       .eq('store_id', storeId)
       .order('is_main', { ascending: false })
       .order('name');
 
     if (error) return this.handleResponse<BranchWithStaffCount[]>({ data: null, error });
 
-    const mapped = (data || []).map((b: any) => ({
+    // Get staff count for each branch
+    const branchIds = (branches || []).map((b: any) => b.id);
+    const { data: staffCounts, error: countError } = await this.client
+      .from('staff')
+      .select('branch_id')
+      .in('branch_id', branchIds);
+
+    if (countError) {
+      // If count fails, return branches with 0 count
+      const mapped = (branches || []).map((b: any) => ({
+        ...b,
+        staff_count: 0,
+      }));
+      return { data: mapped, error: null, success: true };
+    }
+
+    // Count staff per branch
+    const countMap = (staffCounts || []).reduce((acc: Record<string, number>, s: any) => {
+      acc[s.branch_id] = (acc[s.branch_id] || 0) + 1;
+      return acc;
+    }, {});
+
+    const mapped = (branches || []).map((b: any) => ({
       ...b,
-      staff_count: b.staff?.[0]?.count ?? 0,
-      staff: undefined,
+      staff_count: countMap[b.id] || 0,
     }));
 
     return { data: mapped, error: null, success: true };
@@ -55,7 +77,7 @@ class BranchRepository extends BaseRepository {
   async create(data: CreateBranchDTO): Promise<RepositoryResult<Branch>> {
     const { data: branch, error } = await this.client
       .from(this.tableName)
-      .insert(data)
+      .insert({ ...data, ...this.getCreateAuditFields() })
       .select()
       .single();
 
@@ -65,7 +87,7 @@ class BranchRepository extends BaseRepository {
   async update(id: string, data: UpdateBranchDTO): Promise<RepositoryResult<Branch>> {
     const { data: branch, error } = await this.client
       .from(this.tableName)
-      .update({ ...data, updated_at: new Date().toISOString() })
+      .update({ ...data, updated_at: new Date().toISOString(), ...this.getUpdateAuditFields() })
       .eq('id', id)
       .select()
       .single();

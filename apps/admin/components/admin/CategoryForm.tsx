@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { type Category } from "@/lib/supabase/categories";
+import { type Category } from "@/domain/types/category";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
 
@@ -74,9 +74,8 @@ export default function CategoryForm({
     image_url: category?.image_url || "",
     sort_order: category?.sort_order || 0,
     is_active: category?.is_active ?? true,
-    is_global: category?.is_global ?? false,
+    is_global: category?.is_global ?? true,
     parent_id: (category?.parent_id ?? defaultParentId ?? null) as string | null,
-    store_id: category?.store_id || null as string | null,
   });
 
   /**
@@ -355,7 +354,7 @@ export default function CategoryForm({
           </div>
 
           <div className="flex gap-4 pt-6 border-t border-slate-200">
-            <Button type="submit" disabled={loading} className="flex-1 h-12 text-base shadow-lg shadow-primary/25">
+            <Button type="submit" disabled={loading} variant="gradient" className="flex-1 h-12 text-base">
               {loading ? "Saving..." : isEdit ? "Update Category" : "Create Category"}
             </Button>
             <Button

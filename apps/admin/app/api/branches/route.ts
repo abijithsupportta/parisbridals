@@ -1,12 +1,13 @@
 /**
  * Branches API Route
  * GET  /api/branches — list all branches (all authenticated users can read)
- * POST /api/branches — create a new branch (admin only)
+ * POST /api/branches — create a new branch (super_admin and admin only)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { branchService } from '@/services/branchService';
 import { apiGuard, adminOnly } from '@/lib/apiGuard';
+import { getAuthUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,9 +34,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Admin only — managers and staff cannot create branches
+    // Super Admin and Admin only — managers and staff cannot create branches
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
+
+    // Get authenticated user for audit fields
+    const authUser = await getAuthUser(request);
+    
+    // Set user context in service
+    branchService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
 
     const body = await request.json();
     const result = await branchService.createBranch(body);
