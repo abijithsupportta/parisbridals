@@ -36,8 +36,10 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   bool get isEditing => widget.category != null;
 
-  static const _primary = Color(0xFF434343);
-  static const _rose = Color(0xFFFF6B8A);
+  static const _primary = Color(0xFF434343); // Charcoal
+  static const _accent  = Color(0xFFF7C873); // Golden
+  static const _surface = Color(0xFFFAEBCD); // Almond
+  static const _bg      = Color(0xFFF8F8F8); // Off-white
 
   final _imagePicker = ImagePicker();
   final _uploadRepo = UploadRepository();
@@ -216,9 +218,9 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
     final allCategoriesAsync = ref.watch(categoriesProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAEBCD),
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: Text(isEditing ? 'Edit Category' : 'New Category', style: TextStyle(fontSize: Responsive.sp(16))),
+        title: Text(isEditing ? 'Edit Category' : 'New Category', style: TextStyle(fontSize: Responsive.sp(18))),
       ),
       body: Form(
         key: _formKey,
@@ -362,9 +364,9 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                       icon: Icon(Icons.delete_outline, size: Responsive.icon(16)),
                       label: Text('Remove', style: TextStyle(fontSize: Responsive.sp(12))),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _rose,
-                        side: BorderSide(color: _rose.withValues(alpha: 0.3)),
-                        padding: Responsive.symmetric(vertical: 10),
+                        foregroundColor: const Color(0xFFFF6B8A),
+                        side: BorderSide(color: const Color(0xFFFF6B8A).withValues(alpha: 0.3)),
+                        padding: Responsive.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(8))),
                       ),
                     ),
@@ -437,7 +439,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   // ── Shared Form Widgets ──
   Widget _buildLabel(String text) {
-    return Text(text, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.black87));
+    return Text(text, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w700, color: Colors.black87));
   }
 
   Widget _buildTextField(TextEditingController controller, String hint,
@@ -447,15 +449,15 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
       validator: validator,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: TextStyle(fontSize: Responsive.sp(13)),
+      style: TextStyle(fontSize: Responsive.sp(15)),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey),
+        hintStyle: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey),
         filled: true, fillColor: Colors.white,
-        contentPadding: Responsive.symmetric(horizontal: 14, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide(color: _primary, width: 1.5)),
+        contentPadding: Responsive.symmetric(horizontal: 16, vertical: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: BorderSide(color: _primary, width: 2)),
       ),
     );
   }
@@ -477,11 +479,11 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         child: DropdownButton<String?>(
           isExpanded: true,
           value: _parentId,
-          hint: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey)),
-          style: TextStyle(fontSize: Responsive.sp(13), color: Colors.black),
+          hint: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey)),
+          style: TextStyle(fontSize: Responsive.sp(15), color: Colors.black),
           items: [
             DropdownMenuItem<String?>(value: null,
-              child: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(13)))),
+              child: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(15)))),
             ...selectableCategories.map((c) {
               String prefix = '';
               if (c.parentId != null) {
@@ -493,7 +495,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                 }
               }
               return DropdownMenuItem<String?>(value: c.id,
-                child: Text('$prefix${c.name}', style: TextStyle(fontSize: Responsive.sp(13))));
+                child: Text('$prefix${c.name}', style: TextStyle(fontSize: Responsive.sp(15))));
             }),
           ],
           onChanged: (val) => setState(() => _parentId = val),

@@ -18,11 +18,10 @@ class CategoriesView extends ConsumerStatefulWidget {
 class _CategoriesViewState extends ConsumerState<CategoriesView> {
   String _searchQuery = '';
 
-  static const _primary = Color(0xFF434343);
-  static const _teal   = Color(0xFF26C6DA);
-  static const _rose   = Color(0xFFFF6B8A);
-  static const _amber  = Color(0xFFFFAB40);
-  static const _bg     = Color(0xFFFAEBCD);
+  static const _primary = Color(0xFF434343); // Charcoal
+  static const _accent  = Color(0xFFF7C873); // Golden
+  static const _surface = Color(0xFFFAEBCD); // Almond
+  static const _bg      = Color(0xFFF8F8F8); // Off-white
 
   @override
   Widget build(BuildContext context) {
@@ -49,10 +48,10 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
                     MaterialPageRoute(builder: (_) => const CategoryFormView()),
                   ).then((_) => ref.invalidate(categoriesProvider));
                 },
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-                icon: Icon(Icons.add, size: Responsive.icon(20)),
-                label: Text('Add', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600)),
+                backgroundColor: _accent,
+                foregroundColor: _primary,
+                icon: Icon(Icons.add, size: Responsive.icon(24)),
+                label: Text('Add Category', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold)),
               ),
             ),
         ],
@@ -112,19 +111,19 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
             ),
             child: TextField(
               onChanged: (val) => setState(() => _searchQuery = val),
-              style: TextStyle(fontSize: Responsive.sp(13)),
+              style: TextStyle(fontSize: Responsive.sp(15)),
               decoration: InputDecoration(
                 hintText: 'Search categories...',
-                hintStyle: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[400]),
-                prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(20), color: _primary),
+                hintStyle: TextStyle(fontSize: Responsive.sp(15), color: Colors.grey[400]),
+                prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(24), color: _primary),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.close_rounded, size: Responsive.icon(18), color: Colors.grey),
+                        icon: Icon(Icons.close_rounded, size: Responsive.icon(22), color: Colors.grey),
                         onPressed: () => setState(() => _searchQuery = ''),
                       )
                     : null,
                 border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
-                contentPadding: Responsive.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: Responsive.symmetric(horizontal: 18, vertical: 16),
               ),
             ),
           ),
@@ -137,9 +136,9 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
             children: [
               _buildMiniStat('Total', '${categories.length}', _primary),
               SizedBox(width: Responsive.w(8)),
-              _buildMiniStat('Main', '${allMainCats.length}', _teal),
+              _buildMiniStat('Main', '${allMainCats.length}', _primary),
               SizedBox(width: Responsive.w(8)),
-              _buildMiniStat('Active', '${categories.where((c) => c.isActive).length}', _amber),
+              _buildMiniStat('Active', '${categories.where((c) => c.isActive).length}', _primary),
             ],
           ),
         ),
@@ -186,14 +185,14 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
       child: Container(
         padding: Responsive.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(Responsive.r(10)),
+          color: _surface,
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
         ),
         child: Column(
           children: [
-            Text(value, style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w800, color: color)),
-            SizedBox(height: Responsive.h(1)),
-            Text(label, style: TextStyle(fontSize: Responsive.sp(9), fontWeight: FontWeight.w500, color: color.withValues(alpha: 0.7))),
+            Text(value, style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w800, color: _primary)),
+            SizedBox(height: Responsive.h(2)),
+            Text(label, style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: _primary.withValues(alpha: 0.7))),
           ],
         ),
       ),
@@ -212,21 +211,21 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
       child: Theme(
         data: ThemeData(dividerColor: Colors.transparent),
         child: ExpansionTile(
-          tilePadding: Responsive.symmetric(horizontal: 14, vertical: 2),
-          childrenPadding: Responsive.only(left: 14, right: 14, bottom: 10),
-          leading: _buildCategoryImage(main, _primary, size: 42),
-          title: Text(main.name, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w700)),
+          tilePadding: Responsive.symmetric(horizontal: 16, vertical: 8),
+          childrenPadding: Responsive.only(left: 16, right: 16, bottom: 16),
+          leading: _buildCategoryImage(main, size: 56),
+          title: Text(main.name, style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, color: _primary)),
           subtitle: Row(
             children: [
               _buildStatusDot(main.isActive),
-              SizedBox(width: Responsive.w(4)),
-              Text(main.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(10), color: Colors.grey)),
+              SizedBox(width: Responsive.w(6)),
+              Text(main.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600], fontWeight: FontWeight.w500)),
               if (subs.isNotEmpty) ...[
-                SizedBox(width: Responsive.w(8)),
+                SizedBox(width: Responsive.w(10)),
                 Container(
-                  padding: Responsive.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(color: _teal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(Responsive.r(8))),
-                  child: Text('${subs.length} sub', style: TextStyle(fontSize: Responsive.sp(9), fontWeight: FontWeight.w600, color: _teal)),
+                  padding: Responsive.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(Responsive.r(8))),
+                  child: Text('${subs.length} sub', style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: _primary)),
                 ),
               ],
             ],
@@ -238,18 +237,18 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
                 GestureDetector(
                   onTap: () => _navigateToDetail(context, main),
                   child: Padding(
-                    padding: Responsive.all(4),
-                    child: Icon(Icons.edit_outlined, size: Responsive.icon(16), color: _primary.withValues(alpha: 0.5)),
+                    padding: Responsive.all(8),
+                    child: Icon(Icons.edit_outlined, size: Responsive.icon(22), color: _primary),
                   ),
                 ),
-              Icon(Icons.keyboard_arrow_down_rounded, size: Responsive.icon(22), color: Colors.grey[400]),
+              Icon(Icons.keyboard_arrow_down_rounded, size: Responsive.icon(28), color: Colors.grey[400]),
             ],
           ),
           children: subs.isEmpty
               ? [
                   Container(
-                    padding: Responsive.symmetric(vertical: 12),
-                    child: Text('No sub-categories yet', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[400])),
+                    padding: Responsive.symmetric(vertical: 16),
+                    child: Text('No sub-categories yet', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[500])),
                   ),
                 ]
               : subs.map((sub) {
@@ -266,38 +265,38 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
     return GestureDetector(
       onTap: () => _navigateToDetail(context, sub),
       child: Container(
-        margin: Responsive.only(bottom: 8),
+        margin: Responsive.only(bottom: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8F8F8),
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-          border: Border.all(color: _teal.withValues(alpha: 0.1)),
+          color: _bg,
+          borderRadius: BorderRadius.circular(Responsive.r(14)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
         ),
         child: Column(
           children: [
             // Sub header
             Padding(
-              padding: Responsive.all(10),
+              padding: Responsive.all(12),
               child: Row(
                 children: [
-                  _buildCategoryImage(sub, _teal, size: 36),
-                  SizedBox(width: Responsive.w(10)),
+                  _buildCategoryImage(sub, size: 48),
+                  SizedBox(width: Responsive.w(14)),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(sub.name, style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600)),
-                        SizedBox(height: Responsive.h(2)),
+                        Text(sub.name, style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w700, color: _primary)),
+                        SizedBox(height: Responsive.h(4)),
                         Row(
                           children: [
                             _buildStatusDot(sub.isActive),
-                            SizedBox(width: Responsive.w(4)),
-                            Text(sub.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(9), color: Colors.grey)),
+                            SizedBox(width: Responsive.w(6)),
+                            Text(sub.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600], fontWeight: FontWeight.w500)),
                             if (variants.isNotEmpty) ...[
-                              SizedBox(width: Responsive.w(6)),
+                              SizedBox(width: Responsive.w(8)),
                               Container(
-                                padding: Responsive.symmetric(horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(color: _rose.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(Responsive.r(6))),
-                                child: Text('${variants.length} variant', style: TextStyle(fontSize: Responsive.sp(8), fontWeight: FontWeight.w600, color: _rose)),
+                                padding: Responsive.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(Responsive.r(8))),
+                                child: Text('${variants.length} variant', style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: _primary)),
                               ),
                             ],
                           ],
@@ -308,7 +307,10 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
                   if (canManage)
                     GestureDetector(
                       onTap: () => _navigateToDetail(context, sub),
-                      child: Icon(Icons.chevron_right_rounded, size: Responsive.icon(20), color: Colors.grey[400]),
+                      child: Padding(
+                        padding: Responsive.all(8.0),
+                        child: Icon(Icons.edit_outlined, size: Responsive.icon(22), color: _primary),
+                      ),
                     ),
                 ],
               ),
@@ -346,17 +348,17 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
     return GestureDetector(
       onTap: () => _navigateToDetail(context, variant),
       child: Padding(
-        padding: Responsive.symmetric(horizontal: 10, vertical: 8),
+        padding: Responsive.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            _buildCategoryImage(variant, _rose, size: 28),
-            SizedBox(width: Responsive.w(10)),
+            _buildCategoryImage(variant, size: 40),
+            SizedBox(width: Responsive.w(14)),
             Expanded(
-              child: Text(variant.name, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w500)),
+              child: Text(variant.name, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w600, color: _primary)),
             ),
             _buildStatusDot(variant.isActive),
-            SizedBox(width: Responsive.w(6)),
-            Icon(Icons.chevron_right_rounded, size: Responsive.icon(16), color: Colors.grey[300]),
+            SizedBox(width: Responsive.w(8)),
+            Icon(Icons.edit_outlined, size: Responsive.icon(20), color: _primary),
           ],
         ),
       ),
@@ -364,26 +366,26 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
   }
 
   // ── Category Image ──
-  Widget _buildCategoryImage(Category cat, Color color, {double size = 40}) {
+  Widget _buildCategoryImage(Category cat, {double size = 40}) {
     final s = Responsive.w(size);
     if (cat.imageUrl != null && cat.imageUrl!.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(Responsive.r(size * 0.25)),
         child: Image.network(cat.imageUrl!, width: s, height: s, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildIconAvatar(color, s)),
+          errorBuilder: (_, __, ___) => _buildIconAvatar(s)),
       );
     }
-    return _buildIconAvatar(color, s);
+    return _buildIconAvatar(s);
   }
 
-  Widget _buildIconAvatar(Color color, double size) {
+  Widget _buildIconAvatar(double size) {
     return Container(
       width: size, height: size,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: _surface,
         borderRadius: BorderRadius.circular(Responsive.r(size * 0.25)),
       ),
-      child: Icon(Icons.folder_rounded, size: size * 0.45, color: color),
+      child: Icon(Icons.folder_rounded, size: size * 0.45, color: _primary),
     );
   }
 

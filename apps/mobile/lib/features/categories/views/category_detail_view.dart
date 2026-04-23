@@ -19,9 +19,10 @@ class CategoryDetailView extends ConsumerStatefulWidget {
 class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
   late Category _category;
 
-  static const _primary = Color(0xFF434343);
-  static const _teal   = Color(0xFF26C6DA);
-  static const _rose   = Color(0xFFFF6B8A);
+  static const _primary = Color(0xFF434343); // Charcoal
+  static const _accent  = Color(0xFFF7C873); // Golden
+  static const _surface = Color(0xFFFAEBCD); // Almond
+  static const _bg      = Color(0xFFF8F8F8); // Off-white
 
   @override
   void initState() {
@@ -34,9 +35,9 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
     final canManage = ref.watch(canManageProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAEBCD),
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: Text('Category Details', style: TextStyle(fontSize: Responsive.sp(16))),
+        title: Text('Category Details', style: TextStyle(fontSize: Responsive.sp(18))),
         actions: [
           if (canManage) ...[
             IconButton(
@@ -45,7 +46,7 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
             ),
             IconButton(
               onPressed: () => _confirmDelete(context),
-              icon: Icon(Icons.delete_outline, size: Responsive.icon(20), color: _rose),
+              icon: Icon(Icons.delete_outline, size: Responsive.icon(22), color: const Color(0xFFFF6B8A)),
             ),
           ],
         ],
@@ -81,15 +82,15 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
         final parent = all.where((c) => c.id == _category.parentId).firstOrNull;
         if (parent != null && parent.parentId != null) {
           levelLabel = 'Variant';
-          levelColor = _rose;
+          levelColor = _primary;
         } else {
           levelLabel = 'Sub Category';
-          levelColor = _teal;
+          levelColor = _primary;
         }
       });
       if (levelLabel == 'Main Category') {
         levelLabel = 'Sub Category';
-        levelColor = _teal;
+        levelColor = _primary;
       }
     }
 
@@ -125,27 +126,27 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
               Row(
                 children: [
                   Container(
-                    padding: Responsive.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: levelColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(Responsive.r(20))),
-                    child: Text(levelLabel, style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w700, color: levelColor)),
+                    padding: Responsive.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: _accent, borderRadius: BorderRadius.circular(Responsive.r(20))),
+                    child: Text(levelLabel, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w800, color: _primary)),
                   ),
                   const Spacer(),
                   Container(
-                    padding: Responsive.symmetric(horizontal: 10, vertical: 4),
+                    padding: Responsive.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: (_category.isActive ? const Color(0xFF4CAF50) : Colors.grey).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(Responsive.r(20)),
                     ),
                     child: Text(_category.isActive ? 'Active' : 'Inactive',
-                      style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w700,
+                      style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w800,
                         color: _category.isActive ? const Color(0xFF4CAF50) : Colors.grey)),
                   ),
                 ],
               ),
-              SizedBox(height: Responsive.h(12)),
-              Text(_category.name, style: TextStyle(fontSize: Responsive.sp(20), fontWeight: FontWeight.bold)),
-              SizedBox(height: Responsive.h(4)),
-              Text(_category.slug, style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey, fontStyle: FontStyle.italic)),
+              SizedBox(height: Responsive.h(16)),
+              Text(_category.name, style: TextStyle(fontSize: Responsive.sp(24), fontWeight: FontWeight.bold, color: _primary)),
+              SizedBox(height: Responsive.h(6)),
+              Text(_category.slug, style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey[500], fontStyle: FontStyle.italic)),
             ],
           ),
         ),
@@ -159,9 +160,9 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Description', style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.grey)),
-                SizedBox(height: Responsive.h(6)),
-                Text(_category.description!, style: TextStyle(fontSize: Responsive.sp(13), height: 1.5)),
+                Text('Description', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w700, color: Colors.grey)),
+                SizedBox(height: Responsive.h(8)),
+                Text(_category.description!, style: TextStyle(fontSize: Responsive.sp(15), height: 1.5, color: _primary)),
               ],
             ),
           ),
@@ -195,13 +196,13 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _navigateToEdit(),
-                  icon: Icon(Icons.edit, size: Responsive.icon(16)),
-                  label: Text('Edit', style: TextStyle(fontSize: Responsive.sp(13))),
+                  icon: Icon(Icons.edit, size: Responsive.icon(20)),
+                  label: Text('Edit Category', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _primary,
-                    side: BorderSide(color: _primary),
-                    padding: Responsive.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
+                    side: const BorderSide(color: _primary, width: 2),
+                    padding: Responsive.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
                   ),
                 ),
               ),
@@ -209,13 +210,13 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _confirmDelete(context),
-                  icon: Icon(Icons.delete_outline, size: Responsive.icon(16)),
-                  label: Text('Delete', style: TextStyle(fontSize: Responsive.sp(13))),
+                  icon: Icon(Icons.delete_outline, size: Responsive.icon(20)),
+                  label: Text('Delete', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _rose,
-                    side: BorderSide(color: _rose),
-                    padding: Responsive.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
+                    foregroundColor: const Color(0xFFFF6B8A),
+                    side: const BorderSide(color: Color(0xFFFF6B8A), width: 2),
+                    padding: Responsive.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
                   ),
                 ),
               ),
@@ -230,11 +231,11 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
   Widget _buildInfoRow(String label, String value, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: Responsive.icon(16), color: Colors.grey),
-        SizedBox(width: Responsive.w(10)),
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey)),
+        Icon(icon, size: Responsive.icon(20), color: Colors.grey[500]),
+        SizedBox(width: Responsive.w(12)),
+        Text(label, style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey[600], fontWeight: FontWeight.w500)),
         const Spacer(),
-        Text(value, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600)),
+        Text(value, style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w700, color: _primary)),
       ],
     );
   }
