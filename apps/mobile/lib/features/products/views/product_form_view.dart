@@ -101,6 +101,51 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return timestamp.substring(timestamp.length - 8); // Simple 8-digit numeric barcode
   }
 
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete Product', style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold)),
+        content: Text(
+          'Are you sure you want to delete "${widget.product?.name}"? This action cannot be undone.',
+          style: TextStyle(fontSize: Responsive.sp(13)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[600])),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx); // Close dialog
+              _handleDelete();
+            },
+            child: Text('Delete', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: const Color(0xFFFF6B8A))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDelete() async {
+    final product = widget.product;
+    if (product == null) return;
+
+    Navigator.pop(context); // Close form
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Deleting product...', style: TextStyle(fontSize: Responsive.sp(13))),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    try {
+      await ref.read(productsProvider.notifier).deleteProduct(product.id);
+    } catch (e) {
+      debugPrint('Delete failed: $e');
+    }
+  }
+
   void _handleSave() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -186,7 +231,9 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         'barcode': barcode,
         'price_per_day': double.tryParse(priceText) ?? 0,
         'quantity': qty,
-        'available_quantity': qty,
+        // Only set available_quantity on CREATE, not on edit
+        // (editing should not reset available stock)
+        if (existingProduct == null) 'available_quantity': qty,
         'low_stock_threshold': int.tryParse(lowStockText) ?? 10,
         'track_inventory': trackInv,
         'is_active': active,
@@ -224,6 +271,12 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         titleSpacing: 0,
         title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold, color: Colors.white)),
         actions: [
+          if (widget.product != null)
+            IconButton(
+              onPressed: () => _confirmDelete(context),
+              icon: Icon(Icons.delete_outline, size: Responsive.icon(20), color: const Color(0xFFFF6B8A)),
+              tooltip: 'Delete Product',
+            ),
           TextButton.icon(
             onPressed: _handleSave,
             icon: Icon(Icons.check_rounded, size: Responsive.icon(18), color: const Color(0xFFF7C873)),
