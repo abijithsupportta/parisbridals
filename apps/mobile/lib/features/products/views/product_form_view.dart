@@ -37,6 +37,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   bool _isActive = true;
   bool _isFeatured = false;
   bool _trackInventory = true;
+  bool _isSaving = false;
   
   // Images
   final List<dynamic> _images = []; // Can be String (URL) or XFile (local)
@@ -80,19 +81,30 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    final picker = ImagePicker();
-    final List<XFile> pickedFiles = [];
-    
-    if (source == ImageSource.gallery) {
-      final files = await picker.pickMultiImage(imageQuality: 70);
-      pickedFiles.addAll(files);
-    } else {
-      final file = await picker.pickImage(source: source, imageQuality: 70);
-      if (file != null) pickedFiles.add(file);
-    }
+    try {
+      final picker = ImagePicker();
+      final List<XFile> pickedFiles = [];
+      
+      if (source == ImageSource.gallery) {
+        final files = await picker.pickMultiImage(imageQuality: 70);
+        pickedFiles.addAll(files);
+      } else {
+        final file = await picker.pickImage(source: source, imageQuality: 70);
+        if (file != null) pickedFiles.add(file);
+      }
 
-    if (pickedFiles.isNotEmpty) {
-      setState(() => _images.addAll(pickedFiles));
+      // Guard: widget may be disposed if Android killed activity during camera
+      if (!mounted) return;
+
+      if (pickedFiles.isNotEmpty) {
+        setState(() => _images.addAll(pickedFiles));
+      }
+    } catch (e) {
+      debugPrint('Image pick failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e', style: TextStyle(fontSize: Responsive.sp(12)))),
+      );
     }
   }
 
@@ -146,61 +158,18 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     }
   }
 
-  void _handleSave() {
+  void _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
-    // Immediately pop the screen to provide "instant" feeling
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Saving product in background...', style: TextStyle(fontSize: Responsive.sp(14))),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    // Show loading indicator on the form itself (DON'T pop yet)
+    setState(() => _isSaving = true);
 
-    // Run the heavy work in the background without blocking the UI
-    _processBackgroundSave(
-      images: List.from(_images),
-      name: _nameController.text.trim(),
-      description: _descriptionController.text.trim(),
-      sku: _skuController.text.trim(),
-      barcode: _barcodeController.text.trim(),
-      priceText: _priceController.text,
-      qtyText: _quantityController.text,
-      lowStockText: _lowStockController.text,
-      catId: _selectedCategoryId,
-      subCatId: _selectedSubcategoryId,
-      varId: _selectedVariantId,
-      trackInv: _trackInventory,
-      active: _isActive,
-      feat: _isFeatured,
-      existingProduct: widget.product,
-    );
-  }
-
-  Future<void> _processBackgroundSave({
-    required List<dynamic> images,
-    required String name,
-    required String description,
-    required String sku,
-    required String barcode,
-    required String priceText,
-    required String qtyText,
-    required String lowStockText,
-    required String? catId,
-    required String? subCatId,
-    required String? varId,
-    required bool trackInv,
-    required bool active,
-    required bool feat,
-    required Product? existingProduct,
-  }) async {
     try {
       // 1. Upload new local images first
       final List<Map<String, dynamic>> finalImages = [];
       int sortOrder = 0;
 
-      for (var img in images) {
+      for (var img in _images) {
         if (img is XFile) {
           final repo = UploadRepository();
           final url = await repo.uploadFile(File(img.path), folder: 'products');
@@ -220,41 +189,61 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       }
 
       // 2. Prepare payload
+      final name = _nameController.text.trim();
       final String slug = name.toLowerCase().replaceAll(' ', '-').replaceAll(RegExp(r'[^a-z0-9\-]'), '');
-      final int qty = int.tryParse(qtyText) ?? 0;
+      final int qty = int.tryParse(_quantityController.text) ?? 0;
 
       final payload = {
         'name': name,
-        'slug': existingProduct?.slug ?? slug,
-        'description': description,
-        'sku': sku,
-        'barcode': barcode,
-        'price_per_day': double.tryParse(priceText) ?? 0,
+        'slug': widget.product?.slug ?? slug,
+        'description': _descriptionController.text.trim(),
+        'sku': _skuController.text.trim(),
+        'barcode': _barcodeController.text.trim(),
+        'price_per_day': double.tryParse(_priceController.text) ?? 0,
         'quantity': qty,
         // Only set available_quantity on CREATE, not on edit
-        // (editing should not reset available stock)
-        if (existingProduct == null) 'available_quantity': qty,
-        'low_stock_threshold': int.tryParse(lowStockText) ?? 10,
-        'track_inventory': trackInv,
-        'is_active': active,
-        'is_featured': feat,
-        'category_id': catId,
-        'subcategory_id': subCatId,
-        'subvariant_id': varId,
+        if (widget.product == null) 'available_quantity': qty,
+        'low_stock_threshold': int.tryParse(_lowStockController.text) ?? 10,
+        'track_inventory': _trackInventory,
+        'is_active': _isActive,
+        'is_featured': _isFeatured,
+        'category_id': _selectedCategoryId,
+        'subcategory_id': _selectedSubcategoryId,
+        'subvariant_id': _selectedVariantId,
         'store_id': '00000000-0000-0000-0000-000000000001',
         'images': finalImages,
       };
 
-      if (existingProduct != null) {
-        await ref.read(productsProvider.notifier).updateProduct(existingProduct.id, payload);
+      // 3. Save via provider (ref is still valid because we haven't popped)
+      if (widget.product != null) {
+        await ref.read(productsProvider.notifier).updateProduct(widget.product!.id, payload);
       } else {
         await ref.read(productsProvider.notifier).addProduct(payload);
       }
-      
-      // We don't show a success toast here because the user might be doing something else,
-      // but the list will automatically update via the provider.
+
+      // 4. NOW pop after save is complete and provider is updated
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.product != null ? 'Product updated!' : 'Product added!',
+            style: TextStyle(fontSize: Responsive.sp(13)),
+          ),
+          backgroundColor: const Color(0xFF2ECC71),
+          duration: const Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
-      debugPrint('Background save failed: $e');
+      debugPrint('Save failed: $e');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Save failed: $e', style: TextStyle(fontSize: Responsive.sp(12))),
+          backgroundColor: const Color(0xFFFF6B8A),
+        ),
+      );
     }
   }
 
@@ -271,21 +260,25 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         titleSpacing: 0,
         title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold, color: Colors.white)),
         actions: [
-          if (widget.product != null)
+          if (widget.product != null && !_isSaving)
             IconButton(
               onPressed: () => _confirmDelete(context),
               icon: Icon(Icons.delete_outline, size: Responsive.icon(20), color: const Color(0xFFFF6B8A)),
               tooltip: 'Delete Product',
             ),
           TextButton.icon(
-            onPressed: _handleSave,
-            icon: Icon(Icons.check_rounded, size: Responsive.icon(18), color: const Color(0xFFF7C873)),
-            label: Text('Save', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: const Color(0xFFF7C873))),
+            onPressed: _isSaving ? null : _handleSave,
+            icon: _isSaving
+                ? SizedBox(width: Responsive.icon(16), height: Responsive.icon(16), child: const CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFF7C873)))
+                : Icon(Icons.check_rounded, size: Responsive.icon(18), color: const Color(0xFFF7C873)),
+            label: Text(_isSaving ? 'Saving...' : 'Save', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: const Color(0xFFF7C873))),
           ),
           SizedBox(width: Responsive.w(4)),
         ],
       ),
-      body: Form(
+      body: Stack(
+        children: [
+          Form(
         key: _formKey,
         child: SingleChildScrollView(
           padding: Responsive.all(14),
@@ -322,6 +315,30 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             ],
           ),
         ),
+      ),
+          // Loading overlay
+          if (_isSaving)
+            Container(
+              color: Colors.black.withValues(alpha: 0.3),
+              child: Center(
+                child: Container(
+                  padding: Responsive.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(Responsive.r(16)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(color: Color(0xFF434343)),
+                      SizedBox(height: Responsive.h(16)),
+                      Text('Saving product...', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
