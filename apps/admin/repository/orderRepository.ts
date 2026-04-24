@@ -232,7 +232,6 @@ export class OrderRepository extends BaseRepository {
           product_id: item.product_id,
           quantity: item.quantity,
           price_per_day: item.price_per_day,
-          total_price: item.price_per_day * item.quantity,
           subtotal: item.price_per_day * item.quantity,
         }))
       )
