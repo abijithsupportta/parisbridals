@@ -12,7 +12,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -59,10 +59,23 @@ interface BranchInvRow {
 
 export default function ProductsPage() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounce search input by 300ms
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(searchInput);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchInput]);
 
   const { products, isLoading } = useProducts({
-    query: searchQuery,
+    query: debouncedQuery,
     limit: 100,
   });
 
@@ -331,8 +344,8 @@ export default function ProductsPage() {
               type="text"
               placeholder="Search products by name, SKU, or barcode..."
               className="pl-9 border-slate-200 focus:border-slate-900"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
 
@@ -404,11 +417,11 @@ export default function ProductsPage() {
             <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-slate-900 mb-1">No Products Found</h3>
             <p className="text-sm text-slate-500 max-w-sm mx-auto">
-              {searchQuery
-                ? `No products matched your search for "${searchQuery}".`
+              {searchInput
+                ? `No products matched your search for "${searchInput}".`
                 : `There are no products stocked at ${currentBranchName || "this branch"}.`}
             </p>
-            {!searchQuery && (
+            {!searchInput && (
               <Button className="mt-6 bg-slate-900 text-white hover:bg-slate-800" onClick={() => router.push("/dashboard/products/create")}>
                 Add New Product
               </Button>

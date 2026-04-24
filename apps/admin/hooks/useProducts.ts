@@ -46,7 +46,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
  */
 export function useProducts(params: ProductSearchParams = {}) {
   const query = useQuery({
-    queryKey: productKeys.all,
+    queryKey: [...productKeys.all, params],
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       Object.entries(params).forEach(([key, value]) => {
