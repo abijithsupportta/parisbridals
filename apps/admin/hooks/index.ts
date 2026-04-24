@@ -105,6 +105,8 @@ export {
 export {
   useGSTPercentage,
   useUpdateGSTPercentage,
+  useIsGSTEnabled,
+  useUpdateIsGSTEnabled,
   useInvoicePrefix,
   usePaymentTerms,
   useAuthorizedSignature,

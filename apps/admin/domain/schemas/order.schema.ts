@@ -21,6 +21,10 @@ export const CreateOrderSchema = z.object({
   delivery_address: z.string().max(1000).optional(),
   pickup_address: z.string().max(1000).optional(),
   notes: z.string().max(2000).optional(),
+  deposit_collected: z.boolean().optional(),
+  security_deposit: z.number().nonnegative().optional(),
+  deposit_collected_at: z.string().datetime().optional(),
+  deposit_payment_method: z.nativeEnum(PaymentMethod).optional(),
 }).refine((data) => {
   const start = new Date(data.rental_start_date);
   const end = new Date(data.rental_end_date);

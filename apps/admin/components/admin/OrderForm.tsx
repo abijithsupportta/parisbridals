@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useCustomers, useProducts, useCreateOrder, useUpdateOrder, useCreateCustomer } from "@/hooks";
+import { useCustomers, useProducts, useCreateOrder, useUpdateOrder, useCreateCustomer, useGSTPercentage, useIsGSTEnabled } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
 import { PaymentMethod } from "@/domain/types/order";
@@ -29,6 +29,13 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   const { createOrder, isPending: isCreating } = useCreateOrder();
   const { updateOrder, isPending: isUpdating } = useUpdateOrder();
   const { createCustomer, isPending: isCreatingCustomer } = useCreateCustomer();
+  
+  // Settings
+  const { data: gstResult } = useGSTPercentage();
+  const { data: isGstEnabledResult } = useIsGSTEnabled();
+  
+  const gstPercentage = (gstResult?.success && gstResult.data !== null) ? gstResult.data : 18;
+  const isGstEnabled = (isGstEnabledResult?.success && isGstEnabledResult.data !== null) ? isGstEnabledResult.data : false;
 
   // Data Fetching for comboboxes
   const [customerSearch, setCustomerSearch] = useState("");
@@ -100,10 +107,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     cartItems.forEach((item) => {
       subtotal += item.price_per_day * item.quantity;
     });
-    const gstAmount = subtotal * 0.18;
+    const gstAmount = isGstEnabled ? subtotal * (gstPercentage / 100) : 0;
     const grandTotal = subtotal + gstAmount;
     return { subtotal, gstAmount, grandTotal };
-  }, [cartItems]);
+  }, [cartItems, isGstEnabled, gstPercentage]);
 
   // Handlers
   const addToCart = (product: any) => {
@@ -591,11 +598,13 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 <span>Subtotal</span>
                 <span className="font-medium">{formatCurrency(cartTotals.subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm text-slate-600 pb-3 border-b border-slate-200">
-                <span>GST (18%)</span>
-                <span className="font-medium">{formatCurrency(cartTotals.gstAmount)}</span>
-              </div>
-              <div className="flex justify-between items-end pt-1">
+              {isGstEnabled && (
+                <div className="flex justify-between text-sm text-slate-600 pb-3 border-b border-slate-200">
+                  <span>GST ({gstPercentage}%)</span>
+                  <span className="font-medium">{formatCurrency(cartTotals.gstAmount)}</span>
+                </div>
+              )}
+              <div className={`flex justify-between items-end pt-1 ${!isGstEnabled ? 'pt-3 border-t border-slate-200' : ''}`}>
                 <div>
                   <div className="text-sm font-semibold text-slate-900">Grand Total</div>
                 </div>

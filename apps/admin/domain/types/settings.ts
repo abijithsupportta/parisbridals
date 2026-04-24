@@ -9,6 +9,7 @@
 // Setting Key Enum
 export enum SettingKey {
   GST_PERCENTAGE = 'gst_percentage',
+  IS_GST_ENABLED = 'is_gst_enabled',
 }
 
 // Setting Entity

@@ -151,9 +151,14 @@ export class OrderService {
       }
     }
 
-    // Get GST percentage from settings
-    const gstResult = await settingsService.getGSTPercentage();
-    const gstPercentage = gstResult.success ? gstResult.data || 0 : 0;
+    // Get GST settings
+    const [gstResult, isGstEnabledResult] = await Promise.all([
+      settingsService.getGSTPercentage(),
+      settingsService.getIsGSTEnabled()
+    ]);
+    
+    const isGstEnabled = isGstEnabledResult.success && isGstEnabledResult.data;
+    const gstPercentage = (isGstEnabled && gstResult.success) ? gstResult.data || 0 : 0;
 
     return await orderRepository.create(data, gstPercentage);
   }

@@ -30,7 +30,11 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    let errorMessage = body.error || `Request failed (${res.status})`;
+    if (body.details) {
+      errorMessage += `: ${JSON.stringify(body.details)}`;
+    }
+    throw new Error(errorMessage);
   }
   return res.json();
 }

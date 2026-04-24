@@ -93,6 +93,40 @@ export class SettingsService {
   }
 
   /**
+   * Check if GST is enabled for the store
+   */
+  async getIsGSTEnabled(): Promise<RepositoryResult<boolean>> {
+    const result = await settingsRepository.findByStoreAndKey(this.storeId, SettingKey.IS_GST_ENABLED);
+    
+    if (!result.success || !result.data) {
+      // Default to false (disabled) if not set
+      return {
+        data: false,
+        error: null,
+        success: true,
+      };
+    }
+
+    return {
+      data: result.data.value === 'true',
+      error: null,
+      success: true,
+    };
+  }
+
+  /**
+   * Enable or disable GST for the store
+   */
+  async setIsGSTEnabled(isEnabled: boolean): Promise<RepositoryResult<Setting>> {
+    return await settingsRepository.upsert(
+      this.storeId,
+      SettingKey.IS_GST_ENABLED,
+      isEnabled ? 'true' : 'false',
+      this.currentUserId
+    );
+  }
+
+  /**
    * Get all settings for the store
    */
   async getAllSettings(): Promise<RepositoryResult<Setting[]>> {

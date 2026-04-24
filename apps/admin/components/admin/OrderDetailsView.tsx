@@ -299,6 +299,16 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 <h3 className="text-sm font-semibold text-slate-900">Settlement</h3>
               </div>
               <div className="p-5 space-y-3">
+                <div className="flex justify-between text-sm py-2">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span className="font-medium text-slate-900">{formatCurrency(order.subtotal)}</span>
+                </div>
+                {order.gst_amount > 0 && (
+                  <div className="flex justify-between text-sm py-2 border-b border-slate-100">
+                    <span className="text-slate-500">GST</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(order.gst_amount)}</span>
+                  </div>
+                )}
                 {calculatedDamage > 0 && (
                   <div className="flex justify-between text-sm text-slate-600">
                     <span>Damage Fees</span>
