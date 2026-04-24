@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Edit, Trash2, Package, Tag, Box, AlertTriangle, Store,
-  XCircle, Barcode, Image as ImageIcon, Clock, IndianRupee
+  XCircle, Barcode, Image as ImageIcon, Clock, IndianRupee,
+  MoreVertical, CheckCircle2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Modal from "@/components/admin/Modal";
 import { useProduct, useDeleteProduct } from "@/hooks";
@@ -128,21 +129,21 @@ export default function ProductDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500" />
+      <div className="flex h-full items-center justify-center p-6 min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900" />
       </div>
     );
   }
 
   if (!product) {
     return (
-      <div className="p-6">
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
           <Package className="mb-4 h-12 w-12 text-slate-300" />
-          <h3 className="mb-2 text-lg font-medium text-slate-900">Product Not Found</h3>
-          <p className="mb-4 text-sm text-slate-500">This product may have been deleted or the URL is incorrect.</p>
-          <Button onClick={() => router.push("/dashboard/products")}>
-            Back to Products
+          <h3 className="mb-2 text-lg font-semibold text-slate-900">Product Not Found</h3>
+          <p className="mb-6 text-sm text-slate-500 max-w-sm">The product you are looking for does not exist or has been removed from the system.</p>
+          <Button variant="outline" onClick={() => router.push("/dashboard/products")}>
+            Return to Products
           </Button>
         </div>
       </div>
@@ -156,30 +157,35 @@ export default function ProductDetailPage() {
   const stockPct = totalQty > 0 ? (rentedQty / totalQty) * 100 : 0;
 
   return (
-    <div className="space-y-6">
-
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <button
+    <div className="space-y-6 pb-12">
+      {/* ── Page Header ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => router.push("/dashboard/products")}
-            className="w-9 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+            className="w-9 h-9 mt-0.5 shrink-0 border-slate-200 text-slate-500 hover:text-slate-900 bg-white"
           >
-            <ArrowLeft className="h-4 w-4 text-slate-600" />
-          </button>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold text-slate-900">{product.name}</h1>
-              <Badge className={product.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">{product.name}</h1>
+              <Badge variant="secondary" className={`px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${product.is_active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
                 {product.is_active ? "Active" : "Inactive"}
               </Badge>
               {product.is_featured && (
-                <Badge className="bg-purple-100 text-purple-700">Featured</Badge>
+                <Badge variant="outline" className="px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider border-purple-200 text-purple-700 bg-purple-50">
+                  Featured
+                </Badge>
               )}
             </div>
-            <p className="text-slate-500 mt-0.5 text-sm">
-              {product.category?.name || "Uncategorized"} · {product.sku || "No SKU"}
-            </p>
+            <div className="flex items-center gap-2 mt-1.5 text-sm text-slate-500">
+              <span className="font-medium text-slate-700">{product.category?.name || "Uncategorized"}</span>
+              <span className="text-slate-300">•</span>
+              <span className="font-mono text-xs">{product.sku || "No SKU"}</span>
+            </div>
           </div>
         </div>
 
@@ -189,173 +195,174 @@ export default function ProductDetailPage() {
               variant="outline"
               size="sm"
               onClick={() => downloadBarcode(product.barcode!, product.name)}
-              className="gap-1.5"
+              className="gap-2 border-slate-200 text-slate-600 hover:text-slate-900 bg-white"
             >
               <Barcode className="h-4 w-4" />
-              <span className="hidden sm:inline">Barcode</span>
+              <span className="hidden sm:inline">Print Barcode</span>
             </Button>
           )}
-          <Button size="sm" onClick={() => router.push(`/dashboard/products/${product.id}/edit`)} className="gap-1.5">
+          <Button 
+            size="sm" 
+            onClick={() => router.push(`/dashboard/products/${product.id}/edit`)} 
+            className="gap-2 bg-slate-900 text-white hover:bg-slate-800"
+          >
             <Edit className="h-4 w-4" />
-            Edit
+            Edit Product
           </Button>
           <Button
-            variant="destructive"
-            size="sm"
+            variant="outline"
+            size="icon"
             onClick={() => openDeleteModal(product)}
-            className="gap-1.5"
+            className="w-9 h-9 border-slate-200 text-red-600 hover:bg-red-50 hover:border-red-200 hover:text-red-700 bg-white"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* ── Stats Row ───────────────────────────────────────────────── */}
+      {/* ── Key Metrics (Clean, professional look) ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Lifetime Revenue"
           value={isLoadingAnalytics ? null : formatCurrency(analytics?.totalRevenue || 0)}
-          icon={<IndianRupee className="w-5 h-5 text-emerald-500" />}
-          tint="emerald"
+          subtext="Total earnings to date"
         />
         <StatCard
           label="Active Rentals"
           value={isLoadingAnalytics ? null : String(analytics?.activeOrders || 0)}
-          icon={<Clock className="w-5 h-5 text-violet-500" />}
-          tint="violet"
-          dot={!!analytics?.activeOrders}
+          subtext="Currently with customers"
+          highlight={!!analytics?.activeOrders}
         />
         <StatCard
-          label="Times Rented"
+          label="Total Rents"
           value={isLoadingAnalytics ? null : String(analytics?.totalUnitsRented || 0)}
-          icon={<Package className="w-5 h-5 text-amber-500" />}
-          tint="amber"
+          subtext="Historical rental count"
         />
         <StatCard
-          label="Available"
+          label="Available Inventory"
           value={isLoadingAnalytics ? null : `${availQty} / ${totalQty}`}
-          icon={<Box className="w-5 h-5 text-red-500" />}
-          tint={availQty === 0 ? "red" : "emerald"}
-          progressBar={{ pct: stockPct, danger: availQty === 0 }}
+          subtext={availQty === 0 ? "Out of stock" : "Ready for rent"}
+          alert={availQty === 0}
         />
       </div>
 
-      {/* ── Main Content Grid ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* ── Main Layout ───────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-        {/* Left: Product info + Orders */}
+        {/* LEFT COLUMN: Main Info & History */}
         <div className="lg:col-span-2 space-y-6">
+          
+          {/* Detailed Info Card */}
+          <Card className="shadow-sm border-slate-200 overflow-hidden bg-white">
+            <div className="flex flex-col md:flex-row">
+              {/* Product Image Panel */}
+              <div className="md:w-64 bg-slate-50 border-b md:border-b-0 md:border-r border-slate-200 p-6 flex flex-col items-center justify-center min-h-[250px]">
+                {primaryImage ? (
+                  <div className="relative w-full aspect-square rounded-lg overflow-hidden border border-slate-200 shadow-sm bg-white">
+                    <Image src={primaryImage} alt={product.name} fill className="object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-full aspect-square rounded-lg border border-dashed border-slate-300 bg-white flex flex-col items-center justify-center text-slate-400">
+                    <ImageIcon className="h-10 w-10 mb-2 opacity-50" />
+                    <span className="text-xs font-medium uppercase tracking-wider">No Image</span>
+                  </div>
+                )}
+              </div>
 
-          {/* Product Card */}
-          <Card className="border-0 shadow-lg">
-            <CardContent className="p-0">
-              <div className="flex flex-col sm:flex-row">
-                {/* Image */}
-                <div className="sm:w-56 shrink-0 bg-slate-50 flex items-center justify-center p-6 border-b sm:border-b-0 sm:border-r border-slate-100">
-                  {primaryImage ? (
-                    <div className="relative w-full aspect-square rounded-xl overflow-hidden">
-                      <Image src={primaryImage} alt={product.name} fill className="object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center">
-                      <ImageIcon className="h-10 w-10 text-violet-400" />
-                    </div>
-                  )}
+              {/* Core Details Panel */}
+              <div className="flex-1 p-6 flex flex-col">
+                <div className="mb-6">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Rental Pricing</h3>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-bold tracking-tight text-slate-900">{formatCurrency(product.price_per_day)}</span>
+                    <span className="text-sm font-medium text-slate-500">/ day</span>
+                  </div>
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 p-6 space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Rental Price</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1">
-                      {formatCurrency(product.price_per_day)}
-                      <span className="text-sm font-normal text-slate-400 ml-1">/day</span>
-                    </p>
-                  </div>
+                <div className="h-px w-full bg-slate-100 mb-6" />
 
-                  {product.description && (
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Description</p>
-                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                        {product.description}
-                      </p>
-                    </div>
+                <div className="flex-1">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Product Description</h3>
+                  {product.description ? (
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {product.description}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-slate-400 italic">No description provided for this item.</p>
                   )}
                 </div>
               </div>
-            </CardContent>
+            </div>
           </Card>
 
-          {/* Orders Table */}
-          <Card className="border-0 shadow-lg overflow-hidden">
-            <CardHeader className="border-b border-slate-100 pb-4">
-              <CardTitle className="text-lg text-slate-900 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-slate-400" />
-                Recent Orders
-              </CardTitle>
+          {/* Recent Orders Table */}
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-200 py-4 px-6 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">Rental History</CardTitle>
+                <CardDescription className="text-sm mt-1">Recent orders containing this product</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" className="text-slate-500 hover:text-slate-900" onClick={() => router.push(`/dashboard/orders?product_id=${product.id}`)}>
+                View All
+              </Button>
             </CardHeader>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                    <th className="text-left px-4 py-3">Date</th>
-                    <th className="text-left px-4 py-3">Customer</th>
-                    <th className="text-left px-4 py-3">Period</th>
-                    <th className="text-left px-4 py-3">Branch</th>
-                    <th className="text-left px-4 py-3">Status</th>
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50/50 text-slate-500">
+                  <tr>
+                    <th className="px-6 py-3 font-medium border-b border-slate-200">Date</th>
+                    <th className="px-6 py-3 font-medium border-b border-slate-200">Customer</th>
+                    <th className="px-6 py-3 font-medium border-b border-slate-200">Rental Period</th>
+                    <th className="px-6 py-3 font-medium border-b border-slate-200">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isLoadingAnalytics ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center">
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-violet-500 mx-auto" />
+                      <td colSpan={4} className="px-6 py-12 text-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900 mx-auto" />
                       </td>
                     </tr>
                   ) : orderItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">
-                        No orders yet for this product.
+                      <td colSpan={4} className="px-6 py-12 text-center">
+                        <p className="text-slate-500 font-medium">No rental history</p>
+                        <p className="text-xs text-slate-400 mt-1">This product hasn't been rented yet.</p>
                       </td>
                     </tr>
                   ) : (
-                    orderItems.slice(0, 10).map((item) => {
+                    orderItems.slice(0, 5).map((item) => {
                       const order = item.order;
                       if (!order) return null;
 
-                      const statusMap: Record<string, string> = {
-                        pending: "bg-amber-100 text-amber-700",
-                        confirmed: "bg-blue-100 text-blue-700",
-                        ongoing: "bg-emerald-100 text-emerald-700",
-                        returned: "bg-slate-100 text-slate-700",
-                        cancelled: "bg-red-100 text-red-700",
+                      const getStatusBadge = (status: string) => {
+                        const s = status.toLowerCase();
+                        if (s === 'completed' || s === 'returned') return <Badge variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-100">Returned</Badge>;
+                        if (s === 'ongoing') return <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50">Ongoing</Badge>;
+                        if (s === 'cancelled') return <Badge variant="secondary" className="bg-red-50 text-red-700 border-red-200 hover:bg-red-50">Cancelled</Badge>;
+                        return <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50 capitalize">{status}</Badge>;
                       };
 
                       return (
                         <tr
                           key={item.id}
-                          className="hover:bg-violet-50/30 transition-colors cursor-pointer"
+                          className="hover:bg-slate-50 transition-colors cursor-pointer group"
                           onClick={() => router.push(`/dashboard/orders/${order.id}`)}
                         >
-                          <td className="px-4 py-3 whitespace-nowrap text-slate-800 font-medium">
-                            {new Date(order.created_at).toLocaleDateString()}
+                          <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                            {new Date(order.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="font-medium text-slate-900">{order.customer?.name || "Unknown"}</div>
+                          <td className="px-6 py-4">
+                            <div className="font-medium text-slate-900">{order.customer?.name || "Unknown Customer"}</div>
                             {order.customer?.phone && (
-                              <div className="text-xs text-slate-400">{order.customer.phone}</div>
+                              <div className="text-xs text-slate-500 mt-0.5">{order.customer.phone}</div>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
-                            {new Date(order.rental_start_date).toLocaleDateString()} – {new Date(order.rental_end_date).toLocaleDateString()}
+                          <td className="px-6 py-4 text-slate-600 whitespace-nowrap">
+                            {new Date(order.rental_start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — {new Date(order.rental_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </td>
-                          <td className="px-4 py-3 text-slate-600">
-                            {order.branch?.name || "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge className={statusMap[order.status.toLowerCase()] || "bg-slate-100 text-slate-700"}>
-                              {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                            </Badge>
+                          <td className="px-6 py-4">
+                            {getStatusBadge(order.status)}
                           </td>
                         </tr>
                       );
@@ -363,78 +370,94 @@ export default function ProductDetailPage() {
                   )}
                 </tbody>
               </table>
-              {orderItems.length > 10 && (
-                <div className="p-3 border-t border-slate-100 text-center">
-                  <Button variant="link" size="sm" onClick={() => router.push(`/dashboard/orders?product_id=${product.id}`)}>
-                    View all {orderItems.length} orders →
-                  </Button>
-                </div>
-              )}
             </div>
           </Card>
         </div>
 
-        {/* Right sidebar */}
+        {/* RIGHT COLUMN: Sidebar */}
         <div className="space-y-6">
 
-          {/* Branch Inventory */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <Store className="w-4 h-4" /> Branch Inventory
-              </CardTitle>
+          {/* Technical Identifiers */}
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-200 py-4 px-5">
+              <CardTitle className="text-sm font-semibold text-slate-900">Product Identifiers</CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
-              {isLoadingInventory ? (
-                <div className="flex justify-center p-4">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-violet-500" />
+            <CardContent className="p-0">
+              <dl className="divide-y divide-slate-100 text-sm">
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <dt className="text-slate-500 font-medium">SKU</dt>
+                  <dd className="font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200 text-xs">{product.sku || "N/A"}</dd>
                 </div>
-              ) : branchInventory.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">No branch stock assigned.</p>
-              ) : (
-                <div className="space-y-3">
-                  {branchInventory.map((inv) => {
-                    const isOut = inv.available_quantity === 0;
-                    const isLow = !isOut && inv.available_quantity <= inv.low_stock_threshold;
-                    return (
-                      <div key={inv.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900 text-sm truncate">{inv.branch?.name || "Unknown"}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {isOut && <XCircle className="h-3 w-3 text-red-500 shrink-0" />}
-                            {isLow && <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />}
-                            <span className="text-xs text-slate-400">Threshold: {inv.low_stock_threshold}</span>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className={`text-lg font-bold ${isOut ? 'text-red-600' : 'text-slate-900'}`}>
-                            {inv.available_quantity}
-                          </span>
-                          <span className="text-sm text-slate-400 font-normal"> / {inv.quantity}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <dt className="text-slate-500 font-medium">Barcode</dt>
+                  <dd className="font-mono text-slate-900 bg-slate-50 px-2 py-1 rounded border border-slate-200 text-xs">{product.barcode || "N/A"}</dd>
                 </div>
-              )}
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <dt className="text-slate-500 font-medium">System ID</dt>
+                  <dd className="font-mono text-slate-400 text-xs truncate max-w-[120px]" title={product.id}>{product.id.substring(0, 8)}...</dd>
+                </div>
+              </dl>
             </CardContent>
           </Card>
 
-          {/* Identifiers */}
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="border-b border-slate-100 pb-3">
-              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <Tag className="w-4 h-4" /> Identifiers
-              </CardTitle>
+          {/* Branch Inventory Breakdown */}
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-200 py-4 px-5 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-slate-900">Branch Stock</CardTitle>
+              <Store className="w-4 h-4 text-slate-400" />
             </CardHeader>
-            <CardContent className="pt-4 space-y-3">
-              <InfoRow label="SKU" value={product.sku || "—"} mono />
-              <InfoRow label="Barcode" value={product.barcode || "—"} mono />
-              <InfoRow label="Slug" value={product.slug || "—"} mono />
-              <div>
-                <p className="text-xs text-slate-400 mb-1">Database ID</p>
-                <p className="font-mono text-xs text-slate-400 break-all select-all">{product.id}</p>
-              </div>
+            <CardContent className="p-0">
+              {isLoadingInventory ? (
+                <div className="flex justify-center p-6">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-900" />
+                </div>
+              ) : branchInventory.length === 0 ? (
+                <div className="p-6 text-center">
+                  <p className="text-sm text-slate-500">No stock allocated to any branch.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {branchInventory.map((inv) => {
+                    const isOut = inv.available_quantity === 0;
+                    const isLow = !isOut && inv.available_quantity <= inv.low_stock_threshold;
+                    
+                    return (
+                      <li key={inv.id} className="p-5 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-slate-900 text-sm">{inv.branch?.name || "Unknown Branch"}</span>
+                          <div className="flex items-baseline gap-1">
+                            <span className={`text-lg font-bold tracking-tight ${isOut ? 'text-red-600' : 'text-slate-900'}`}>
+                              {inv.available_quantity}
+                            </span>
+                            <span className="text-xs text-slate-500 font-medium">/ {inv.quantity}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Visual stock bar */}
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all ${isOut ? 'bg-red-500' : isLow ? 'bg-amber-500' : 'bg-slate-900'}`}
+                            style={{ width: `${inv.quantity > 0 ? (inv.available_quantity / inv.quantity) * 100 : 0}%` }}
+                          />
+                        </div>
+                        
+                        {/* Status text */}
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-xs text-slate-500">
+                            Threshold: {inv.low_stock_threshold}
+                          </span>
+                          {(isOut || isLow) && (
+                            <span className={`text-xs font-medium flex items-center gap-1 ${isOut ? 'text-red-600' : 'text-amber-600'}`}>
+                              {isOut ? <XCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                              {isOut ? "Out of stock" : "Low stock"}
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -442,12 +465,20 @@ export default function ProductDetailPage() {
 
       {/* ── Delete Modal ────────────────────────────────────────────── */}
       <Modal open={isDeleteModalOpen} onClose={closeDeleteModal} title="Delete Product">
-        <div className="p-5">
-          <p className="text-sm text-slate-600">
-            Are you sure you want to delete <strong>{currentProduct?.name}</strong>? This action cannot be undone.
-          </p>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="outline" onClick={closeDeleteModal}>Cancel</Button>
+        <div className="p-6">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 mb-1">Confirm Deletion</h4>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Are you sure you want to permanently delete <span className="font-semibold text-slate-900">{currentProduct?.name}</span>? This action cannot be undone and will remove all associated data.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button variant="outline" onClick={closeDeleteModal} className="border-slate-200">Cancel</Button>
             <Button variant="destructive" onClick={handleDelete} disabled={deleteProduct.isPending}>
               {deleteProduct.isPending ? "Deleting..." : "Delete Product"}
             </Button>
@@ -458,74 +489,48 @@ export default function ProductDetailPage() {
   );
 }
 
-/* ── Stat Card (matches product list page design) ──────────────────── */
+/* ── Minimalist Professional Stat Card ──────────────────── */
 function StatCard({
   label,
   value,
-  icon,
-  tint,
-  dot,
-  progressBar,
+  subtext,
+  highlight,
+  alert
 }: {
   label: string;
   value: string | null;
-  icon: React.ReactNode;
-  tint: "violet" | "emerald" | "amber" | "red";
-  dot?: boolean;
-  progressBar?: { pct: number; danger: boolean };
+  subtext?: string;
+  highlight?: boolean;
+  alert?: boolean;
 }) {
-  const tints: Record<typeof tint, string> = {
-    violet: "from-violet-50 to-purple-50 border-violet-100",
-    emerald: "from-emerald-50 to-green-50 border-emerald-100",
-    amber: "from-amber-50 to-orange-50 border-amber-100",
-    red: "from-red-50 to-rose-50 border-red-100",
-  };
-
   return (
-    <Card className={`border bg-gradient-to-br ${tints[tint]} shadow-none`}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
-          <div className="w-10 h-10 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
-            {icon}
-          </div>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          {value === null ? (
-            <div className="h-7 w-20 bg-white/50 animate-pulse rounded" />
-          ) : (
-            <p className="text-2xl font-bold text-slate-900">{value}</p>
-          )}
-          {dot && (
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+    <Card className="shadow-sm border-slate-200 bg-white overflow-hidden">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
+          {highlight && (
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
           )}
+          {alert && (
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          )}
         </div>
-        {progressBar && (
-          <div className="mt-3 h-1.5 w-full bg-white/60 rounded-full overflow-hidden flex">
-            <div
-              className="h-full bg-blue-500 rounded-full"
-              style={{ width: `${progressBar.pct}%` }}
-            />
-            <div
-              className={`h-full rounded-full ${progressBar.danger ? "bg-red-400" : "bg-emerald-400"}`}
-              style={{ width: `${100 - progressBar.pct}%` }}
-            />
-          </div>
-        )}
+        <div className="space-y-1">
+          {value === null ? (
+            <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" />
+          ) : (
+            <p className={`text-2xl font-bold tracking-tight ${alert ? "text-red-600" : "text-slate-900"}`}>
+              {value}
+            </p>
+          )}
+          {subtext && (
+            <p className="text-xs font-medium text-slate-500">{subtext}</p>
+          )}
+        </div>
       </CardContent>
     </Card>
-  );
-}
-
-/* ── Small info row for sidebar ────────────────────────────────────── */
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-slate-500">{label}</span>
-      <span className={`text-sm font-medium text-slate-800 ${mono ? "font-mono" : ""}`}>{value}</span>
-    </div>
   );
 }
