@@ -44,6 +44,7 @@ import {
   downloadBarcode,
   downloadMultipleBarcodes,
 } from "@/lib/barcode";
+import { type Product, type ProductWithRelations } from "@/domain";
 import Image from "next/image";
 
 interface BranchInvRow {
@@ -134,7 +135,7 @@ export default function ProductsPage() {
   const visibleProducts = useMemo(() => {
     if (!selectedBranchId) return products;
     if (isLoadingInventory) return [];
-    return products.filter((p: { id: string }) => {
+    return products.filter((p) => {
       const rows = inventoryByProduct[p.id] || [];
       return rows.some((r) => r.branch_id === selectedBranchId);
     });
@@ -176,7 +177,7 @@ export default function ProductsPage() {
     if (selectedProducts.length === visibleProducts.length) {
       clearSelection();
     } else {
-      selectAll(visibleProducts.map((p: { id: string }) => p.id));
+      selectAll(visibleProducts.map((p) => p.id));
     }
   };
 
@@ -214,7 +215,7 @@ export default function ProductsPage() {
 
   const handleBulkDownloadBarcodes = async () => {
     const list = visibleProducts.filter(
-      (p: { id: string; barcode?: string }) => selectedProducts.includes(p.id) && p.barcode
+      (p) => selectedProducts.includes(p.id) && p.barcode
     );
     if (list.length === 0) {
       showError("No Barcodes", "No selected products have barcodes assigned.");
@@ -222,7 +223,7 @@ export default function ProductsPage() {
     }
     try {
       await downloadMultipleBarcodes(
-        list.map((p: { barcode: string; name: string }) => ({ barcode: p.barcode, name: p.name }))
+        list.map((p) => ({ barcode: p.barcode!, name: p.name }))
       );
       showSuccess("Success", `Downloaded ${list.length} barcodes`);
     } catch {
@@ -433,7 +434,7 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {visibleProducts.map((product: { id: string; name: string; sku?: string; slug?: string; category?: { name: string }; price_per_day: number; images?: {url?: string}[] | string[]; is_active: boolean; barcode?: string; }) => {
+                {visibleProducts.map((product) => {
                   const stock = getStockAtBranch(product.id);
                   const primaryImage = Array.isArray(product.images) && product.images.length > 0
                     ? typeof product.images[0] === "string"
@@ -484,7 +485,7 @@ export default function ProductsPage() {
 
                       <td className="px-4 py-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
-                          {product.category?.name || "Uncategorized"}
+                          {(product as ProductWithRelations).category?.name || "Uncategorized"}
                         </span>
                       </td>
 
@@ -545,7 +546,7 @@ export default function ProductsPage() {
                               variant="ghost"
                               size="icon"
                               className="w-8 h-8 text-slate-400 hover:text-slate-900"
-                              onClick={() => downloadBarcode(product.barcode, product.name)}
+                              onClick={() => product.barcode ? downloadBarcode(product.barcode, product.name) : undefined}
                             >
                               <Download className="w-4 h-4" />
                             </Button>
@@ -554,7 +555,7 @@ export default function ProductsPage() {
                             variant="ghost"
                             size="icon"
                             className="w-8 h-8 text-red-400 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => openDeleteModal(product)}
+                            onClick={() => openDeleteModal(product as Product)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>

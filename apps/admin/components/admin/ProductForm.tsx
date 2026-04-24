@@ -20,6 +20,7 @@ import { FileUpload } from "@/components/ui/file-upload";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/domain/types/category";
+import { type Product, type CreateProductDTO, type UpdateProductDTO } from "@/domain/types/product";
 import { useAppStore } from "@/stores";
 import { useCreateProduct, useUpdateProduct } from "@/hooks";
 
@@ -40,7 +41,7 @@ interface BranchStockEntry {
 }
 
 interface ProductFormProps {
-  product?: Record<string, unknown>;
+  product?: Product;
   categories?: Category[];
   branches?: Branch[];
 }
@@ -61,22 +62,22 @@ export default function ProductForm({
   const [error, setError] = useState("");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-  const existingImages = (product?.images || []).map((img: { url?: string } | string) =>
+  const existingImages: string[] = (product?.images || []).map((img) =>
     typeof img === "string" ? img : img.url
-  );
+  ).filter(Boolean) as string[];
   const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
 
   // Core form fields (shared across all branches)
   const [formData, setFormData] = useState({
-    name: product?.name || "",
-    slug: product?.slug || "",
-    sku: product?.sku || "",
-    barcode: product?.barcode || "",
-    description: product?.description || "",
-    category_id: product?.category_id || "",
-    subcategory_id: product?.subcategory_id || "",
-    subvariant_id: product?.subvariant_id || "",
-    price_per_day: product?.price_per_day || 0,
+    name: product?.name ?? "",
+    slug: product?.slug ?? "",
+    sku: product?.sku ?? "",
+    barcode: product?.barcode ?? "",
+    description: product?.description ?? "",
+    category_id: product?.category_id ?? "",
+    subcategory_id: product?.subcategory_id ?? "",
+    subvariant_id: product?.subvariant_id ?? "",
+    price_per_day: product?.price_per_day ?? 0,
     is_active: product?.is_active ?? true,
   });
 
@@ -230,34 +231,37 @@ export default function ProductForm({
         sort_order: index,
       }));
 
-      const payload: Record<string, unknown> = {
-        ...formData,
+      const basePayload = {
+        name: formData.name,
+        slug: formData.slug,
         images,
         store_id: DEFAULT_STORE_ID,
-        category_id: formData.category_id || null,
-        subcategory_id: formData.subcategory_id || null,
-        subvariant_id: formData.subvariant_id || null,
-        // Branch-specific: no top-level branch_id; stock lives in branch_inventory.
-        branch_id: null,
-        security_deposit: 0, // not used
-        is_featured: false, // not used
-        track_inventory: true, // always tracked
-        low_stock_threshold: 0, // not used at product level
-        quantity: totalBranchQuantity, // auto-summed across branches
+        category_id: formData.category_id || undefined,
+        subcategory_id: formData.subcategory_id || undefined,
+        subvariant_id: formData.subvariant_id || undefined,
+        branch_id: undefined,
+        security_deposit: 0,
+        is_featured: false,
+        track_inventory: true,
+        low_stock_threshold: 0,
+        price_per_day: formData.price_per_day,
+        quantity: totalBranchQuantity,
         available_quantity: totalBranchQuantity,
+        is_active: formData.is_active,
         sku: formData.sku || undefined,
         barcode: formData.barcode || undefined,
         description: formData.description || undefined,
       };
 
       let productId: string;
-      let result: { success?: boolean; data?: { id?: string }; error?: { message?: string; code?: string } };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let result: any;
       if (isEdit && product) {
-        result = await updateProduct.mutateAsync({ id: product.id, data: payload }) as typeof result;
+        result = await updateProduct.mutateAsync({ id: product.id, data: basePayload as UpdateProductDTO });
         productId = product.id;
       } else {
-        result = await createProduct.mutateAsync(payload) as typeof result;
-        productId = result?.data?.id as string;
+        result = await createProduct.mutateAsync(basePayload as CreateProductDTO);
+        productId = result?.data?.id;
       }
 
       if (!result?.success) {
