@@ -124,7 +124,11 @@ export async function POST(request: NextRequest) {
     const authUser = await getAuthUser(request);
     
     // Set user context in service
-    productService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+    productService.setUserContext(
+      authUser?.staff_id || null, 
+      authUser?.branch_id || null, 
+      authUser?.store_id || null
+    );
 
     const body = await request.json();
     

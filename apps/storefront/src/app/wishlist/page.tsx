@@ -5,9 +5,7 @@ import Header from "@/components/home/Header";
 import Footer from "@/components/home/Footer";
 import { getParisBridalsStore } from "@/lib/actions/store";
 import { Button } from "@/components/ui/button";
-import { Heart, Trash2, ShoppingBag } from "lucide-react";
-import { buildWishlistMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
-import Image from "next/image";
+import { Heart, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 interface WishlistItem {
@@ -41,15 +39,7 @@ export default function WishlistPage() {
     const updated = wishlistItems.filter((item) => item.id !== id);
     setWishlistItems(updated);
     localStorage.setItem("paris_wishlist", JSON.stringify(updated));
-  };
-
-  const bookViaWhatsApp = () => {
-    const items = wishlistItems.map((item) => ({
-      name: item.name,
-      price: item.price_per_day,
-    }));
-    const message = buildWishlistMessage(items);
-    window.open(buildWhatsAppUrl(message), "_blank");
+    window.dispatchEvent(new CustomEvent("paris_wishlist_updated", { detail: updated.length }));
   };
 
   if (!mounted) return null;
@@ -61,10 +51,10 @@ export default function WishlistPage() {
       <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-[1600px] mx-auto">
           <div className="text-center mb-12">
-            <div className="section-eyebrow justify-center">Saved Treasures</div>
-            <h1 className="text-4xl sm:text-5xl font-serif text-heading mb-4">Your Wishlist</h1>
+            <div className="section-eyebrow justify-center">Your Collection</div>
+            <h1 className="text-4xl sm:text-5xl font-serif text-heading mb-4">Saved Treasures</h1>
             <p className="text-body font-light">
-              {wishlistItems.length} {wishlistItems.length === 1 ? "item" : "items"} saved
+              {wishlistItems.length} {wishlistItems.length === 1 ? "piece" : "pieces"} in your wishlist
             </p>
           </div>
 
@@ -75,7 +65,7 @@ export default function WishlistPage() {
               </div>
               <h2 className="text-2xl font-serif text-heading mb-4">Your wishlist is empty</h2>
               <p className="text-body mb-8 max-w-md mx-auto">
-                Save your favourite pieces by clicking the heart icon on any product.
+                Save your favorite pieces here to view them later or add them to your enquiry cart.
               </p>
               <Link href="/collections">
                 <Button className="shimmer-btn px-8 py-4 rounded-full text-xs uppercase tracking-widest font-bold">
@@ -84,63 +74,42 @@ export default function WishlistPage() {
               </Link>
             </div>
           ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
-                {wishlistItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-white rounded-3xl overflow-hidden shadow-sm border border-[var(--border-silk)] group hover:shadow-silk transition-all duration-500"
-                  >
-                    <div className="relative aspect-square">
-                      {item.images?.[0] && (
-                        <Image
-                          src={item.images[0]}
-                          alt={item.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                      )}
-                      <button
-                        onClick={() => removeFromWishlist(item.id)}
-                        className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-rosegold hover:bg-rosegold hover:text-white transition-all shadow-sm"
-                        aria-label="Remove from wishlist"
-                      >
-                        <Trash2 size={16} strokeWidth={1.5} />
-                      </button>
-                    </div>
-                    <div className="p-5">
-                      <h3 className="font-serif text-heading text-lg mb-2 line-clamp-2">{item.name}</h3>
-                      <p className="text-body text-sm mb-3">₹{item.price_per_day.toLocaleString("en-IN")}/day</p>
-                      <Link href={`/product/${item.id}`}>
-                        <Button variant="outline" className="w-full py-3 rounded-full text-xs uppercase tracking-widest font-bold border-rosegold text-rosegold hover:bg-rosegold hover:text-white transition-all">
-                          View Details
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-12">
+              {wishlistItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white rounded-3xl overflow-hidden shadow-sm border border-[var(--border-silk)] group hover:shadow-silk transition-all duration-500"
+                >
+                  <div className="relative aspect-square">
+                    {item.images?.[0] && (
+                      <img
+                        src={item.images[0]}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    )}
+                    <button
+                      onClick={() => removeFromWishlist(item.id)}
+                      className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-rosegold hover:bg-rosegold hover:text-white transition-all shadow-sm"
+                      aria-label="Remove from wishlist"
+                    >
+                      <Trash2 size={16} strokeWidth={1.5} />
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    <h3 className="font-serif text-heading text-lg mb-2 line-clamp-2">{item.name}</h3>
+                    <p className="text-body text-sm mb-3">₹{item.price_per_day.toLocaleString("en-IN")}/day</p>
+                    <div className="flex gap-2">
+                       <Link href={`/product/${item.id}`} className="flex-1">
+                        <Button variant="outline" className="w-full py-3 rounded-full text-[10px] uppercase tracking-widest font-bold border-rosegold text-rosegold hover:bg-rosegold hover:text-white transition-all">
+                          View
                         </Button>
                       </Link>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-[var(--border-silk)] lg:hidden">
-                <Button
-                  onClick={bookViaWhatsApp}
-                  className="w-full shimmer-btn py-4 rounded-full text-sm uppercase tracking-widest font-bold flex items-center justify-center gap-3"
-                >
-                  <ShoppingBag size={20} strokeWidth={1.5} />
-                  Book via WhatsApp
-                </Button>
-              </div>
-
-              <div className="hidden lg:flex justify-center">
-                <Button
-                  onClick={bookViaWhatsApp}
-                  className="shimmer-btn px-12 py-5 rounded-full text-sm uppercase tracking-widest font-bold flex items-center gap-3"
-                >
-                  <ShoppingBag size={20} strokeWidth={1.5} />
-                  Book All via WhatsApp
-                </Button>
-              </div>
-            </>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </section>

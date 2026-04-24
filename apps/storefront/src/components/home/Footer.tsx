@@ -41,7 +41,7 @@ export default function Footer({ store }: FooterProps) {
             <ul className="space-y-2 sm:space-y-3">
               {["Necklaces", "Rings", "Earrings", "Sets", "Bangles"].map((item) => (
                 <li key={item}>
-                  <Link href={`/collections?category=${item.toLowerCase()}`} className="text-sm text-body font-light hover:text-rosegold transition-colors">
+                  <Link href={`/collections`} className="text-sm text-body font-light hover:text-rosegold transition-colors">
                     {item}
                   </Link>
                 </li>

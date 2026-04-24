@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddButton from "@/components/admin/AddButton";
-import { useBanners, useDeleteBanner, useReorderBanners } from "@/hooks";
+import { DeleteConfirmation } from "@/components/ui/delete-confirmation";
+import { useBanners, useDeleteBanner, useReorderBanners, useRemainingSlots } from "@/hooks";
 import { useRouter } from "next/navigation";
 import { useState, useMemo, useCallback } from "react";
-import { type Banner } from "@/domain";
+import { type Banner, BannerType, BannerPosition, BANNER_TYPE_LIMITS } from "@/domain";
 import {
   DndContext,
   closestCenter,
@@ -30,15 +31,35 @@ import { CSS } from '@dnd-kit/utilities';
 export default function BannersPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: banners, isLoading } = useBanners();
+  const [activeTab, setActiveTab] = useState<BannerType>(BannerType.HERO);
+  const { data: banners, isLoading } = useBanners({ banner_type: activeTab });
+  const { data: remainingSlots } = useRemainingSlots();
   const deleteBanner = useDeleteBanner();
   const reorderBanners = useReorderBanners();
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; banner: Banner | null }>({
+    open: false,
+    banner: null,
+  });
 
-  // Sort by priority (highest first)
+  // Sort by position (for hero) or priority
   const sortedBanners = useMemo(() => {
     if (!banners) return [];
-    return [...banners].sort((a, b) => (b.priority || 0) - (a.priority || 0));
-  }, [banners]);
+    return [...banners].sort((a, b) => {
+      // For hero banners, sort by position
+      if (activeTab === BannerType.HERO) {
+        const posA = a.position ? parseInt(a.position) : 999;
+        const posB = b.position ? parseInt(b.position) : 999;
+        return posA - posB;
+      }
+      // For split, sort left then right
+      if (activeTab === BannerType.SPLIT) {
+        if (a.position === BannerPosition.LEFT) return -1;
+        if (b.position === BannerPosition.LEFT) return 1;
+      }
+      // For editorial and others, sort by priority
+      return (b.priority || 0) - (a.priority || 0);
+    });
+  }, [banners, activeTab]);
 
   const filtered = useMemo(() => {
     if (!searchQuery) return sortedBanners;
@@ -50,9 +71,15 @@ export default function BannersPage() {
   }, [sortedBanners, searchQuery]);
 
   const handleDelete = useCallback((banner: Banner) => {
-    if (!confirm(`Delete "${banner.title || 'this banner'}"? This cannot be undone.`)) return;
-    deleteBanner.mutate(banner.id);
-  }, [deleteBanner]);
+    setDeleteDialog({ open: true, banner });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (deleteDialog.banner) {
+      await deleteBanner.mutateAsync(deleteDialog.banner.id);
+      setDeleteDialog({ open: false, banner: null });
+    }
+  }, [deleteDialog.banner, deleteBanner]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -64,21 +91,28 @@ export default function BannersPage() {
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (over && active.id !== over.id) {
+    if (over && active.id !== over.id && activeTab === BannerType.HERO) {
       const oldIndex = filtered.findIndex((b) => b.id === active.id);
       const newIndex = filtered.findIndex((b) => b.id === over.id);
 
       const reordered = arrayMove(filtered, oldIndex, newIndex);
-      
-      // Update priorities based on new order
+
+      // Update positions based on new order (1-based)
       const updates = reordered.map((banner, index) => ({
         id: banner.id,
-        priority: reordered.length - index, // Higher index = higher priority
+        position: (index + 1).toString(),
       }));
 
       reorderBanners.mutate(updates);
     }
-  }, [filtered, reorderBanners]);
+  }, [filtered, activeTab, reorderBanners]);
+
+  const canAddBanner = (type: BannerType) => {
+    if (remainingSlots && remainingSlots[type] !== undefined) {
+      return remainingSlots[type] > 0;
+    }
+    return true;
+  };
 
   return (
     <div className="space-y-8">
@@ -86,12 +120,33 @@ export default function BannersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Banners</h1>
-          <p className="text-slate-500 mt-1">Manage hero banners and promotional images ({banners?.length || 0} total)</p>
+          <p className="text-slate-500 mt-1">Manage promotional banners ({banners?.length || 0} total)</p>
         </div>
-        <AddButton 
-          label="Add Banner" 
-          onClick={() => router.push("/dashboard/banners/create")} 
+        <AddButton
+          label="Add Banner"
+          onClick={() => router.push("/dashboard/banners/create")}
+          disabled={!canAddBanner(activeTab)}
         />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-slate-200">
+        {Object.values(BannerType).map((type) => (
+          <button
+            key={type}
+            onClick={() => setActiveTab(type)}
+            className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
+              activeTab === type
+                ? 'text-primary border-primary'
+                : 'text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <span className="capitalize">{type}</span>
+            <span className="ml-2 text-xs">
+              {remainingSlots ? `${BANNER_TYPE_LIMITS[type] - remainingSlots[type]}/${BANNER_TYPE_LIMITS[type]}` : ''}
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* Search */}
@@ -134,6 +189,12 @@ export default function BannersPage() {
                     <th className="text-left p-4 font-semibold text-slate-700 w-12"></th>
                     <th className="text-left p-4 font-semibold text-slate-700">Preview</th>
                     <th className="text-left p-4 font-semibold text-slate-700">Title</th>
+                    {activeTab === BannerType.HERO && (
+                      <th className="text-left p-4 font-semibold text-slate-700">Position</th>
+                    )}
+                    {activeTab === BannerType.SPLIT && (
+                      <th className="text-left p-4 font-semibold text-slate-700">Side</th>
+                    )}
                     <th className="text-left p-4 font-semibold text-slate-700">Schedule</th>
                     <th className="text-left p-4 font-semibold text-slate-700">Status</th>
                     <th className="text-left p-4 font-semibold text-slate-700">Actions</th>
@@ -145,9 +206,11 @@ export default function BannersPage() {
                 >
                   <tbody>
                     {filtered.map((banner: Banner) => (
-                      <SortableBannerRow 
-                        key={banner.id} 
+                      <SortableBannerRow
+                        key={banner.id}
                         banner={banner}
+                        activeTab={activeTab}
+                        isDraggable={activeTab === BannerType.HERO}
                         onEdit={() => router.push(`/dashboard/banners/edit/${banner.id}`)}
                         onDelete={() => handleDelete(banner)}
                       />
@@ -159,12 +222,23 @@ export default function BannersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmation
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ open: false, banner: null })}
+        onConfirm={handleConfirmDelete}
+        entityName={deleteDialog.banner?.title || 'this banner'}
+        entityType="banner"
+      />
     </div>
   );
 }
 
-const SortableBannerRow = ({ banner, onEdit, onDelete }: { 
-  banner: Banner; 
+const SortableBannerRow = ({ banner, activeTab, isDraggable, onEdit, onDelete }: {
+  banner: Banner;
+  activeTab: BannerType;
+  isDraggable: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) => {
@@ -175,7 +249,7 @@ const SortableBannerRow = ({ banner, onEdit, onDelete }: {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: banner.id });
+  } = useSortable({ id: banner.id, disabled: !isDraggable });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -184,24 +258,26 @@ const SortableBannerRow = ({ banner, onEdit, onDelete }: {
   };
 
   return (
-    <tr 
-      ref={setNodeRef} 
+    <tr
+      ref={setNodeRef}
       style={style}
       className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
     >
       <td className="p-4">
-        <button
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing p-1 hover:bg-slate-100 rounded"
-        >
-          <GripVertical className="w-4 h-4 text-slate-400" />
-        </button>
+        {isDraggable && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 hover:bg-slate-100 rounded"
+          >
+            <GripVertical className="w-4 h-4 text-slate-400" />
+          </button>
+        )}
       </td>
       <td className="p-4">
         <div className="w-20 h-12 rounded-lg overflow-hidden bg-slate-100">
-          <img 
-            src={banner.web_image_url} 
+          <img
+            src={banner.web_image_url}
             alt={banner.alt_text || banner.title || 'Banner'}
             className="w-full h-full object-cover"
           />
@@ -213,6 +289,23 @@ const SortableBannerRow = ({ banner, onEdit, onDelete }: {
           {banner.subtitle && <p className="text-sm text-slate-500">{banner.subtitle}</p>}
         </div>
       </td>
+      {activeTab === BannerType.HERO && (
+        <td className="p-4">
+          <Badge variant="outline" className="text-slate-700">
+            #{banner.position || '-'}
+          </Badge>
+        </td>
+      )}
+      {activeTab === BannerType.SPLIT && (
+        <td className="p-4">
+          <Badge className={banner.position === BannerPosition.LEFT
+            ? "bg-blue-100 text-blue-700"
+            : "bg-purple-100 text-purple-700"
+          }>
+            {banner.position === BannerPosition.LEFT ? 'Left' : 'Right'}
+          </Badge>
+        </td>
+      )}
       <td className="p-4">
         {banner.start_date || banner.end_date ? (
           <div className="flex items-center gap-1.5 text-sm text-slate-600">
@@ -228,8 +321,8 @@ const SortableBannerRow = ({ banner, onEdit, onDelete }: {
         )}
       </td>
       <td className="p-4">
-        <Badge className={banner.is_active 
-          ? "bg-emerald-100 text-emerald-700" 
+        <Badge className={banner.is_active
+          ? "bg-emerald-100 text-emerald-700"
           : "bg-gray-100 text-gray-700"
         }>
           {banner.is_active ? 'Active' : 'Inactive'}
@@ -237,15 +330,15 @@ const SortableBannerRow = ({ banner, onEdit, onDelete }: {
       </td>
       <td className="p-4">
         <div className="flex gap-1">
-          <button 
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors" 
+          <button
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
             onClick={onEdit}
             title="Edit"
           >
             <Edit className="w-4 h-4 text-slate-400" />
           </button>
-          <button 
-            className="p-2 hover:bg-red-50 rounded-lg transition-colors" 
+          <button
+            className="p-2 hover:bg-red-50 rounded-lg transition-colors"
             onClick={onDelete}
             title="Delete"
           >

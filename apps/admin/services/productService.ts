@@ -29,16 +29,17 @@ import { CreateProductSchema, UpdateProductSchema } from '@/domain';
 import { generateSlug } from '@/lib/shared-utils';
 
 export class ProductService {
-  // Current user context for audit fields
   private currentUserId: string | null = null;
+  private currentStoreId: string | null = null;
   private currentBranchId: string | null = null;
-
+ 
   /**
-   * Set current user context for audit fields
+   * Set current user context for audit fields and multi-tenancy
    */
-  setUserContext(userId: string | null, branchId: string | null) {
+  setUserContext(userId: string | null, branchId: string | null, storeId: string | null = null) {
     this.currentUserId = userId;
     this.currentBranchId = branchId;
+    this.currentStoreId = storeId;
     productRepository.setUserContext(userId, branchId);
   }
 
@@ -146,7 +147,7 @@ export class ProductService {
     // If admin/super admin selected "all branches", create inventory entries for all branches
     if ((userRole === 'admin' || userRole === 'super_admin') && data.branch_id === 'all') {
       const { branchRepository } = await import('@/repository');
-      const branchesResult = await branchRepository.findAllWithStaffCount('00000000-0000-0000-0000-000000000001');
+      const branchesResult = await branchRepository.findAllWithStaffCount(this.currentStoreId || '');
       
       if (branchesResult.success && branchesResult.data) {
         const adminClient = (await import('@/lib/supabase/server')).createAdminClient();

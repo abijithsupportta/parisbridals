@@ -58,7 +58,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const result = await bannerService.updateBanner(id, body);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      const statusCode = result.error?.code === 'LIMIT_EXCEEDED' || result.error?.code === 'POSITION_TAKEN' ? 409 : 400;
+      return NextResponse.json({ error: result.error?.message }, { status: statusCode });
     }
     return NextResponse.json({ banner: result.data });
   } catch (err) {

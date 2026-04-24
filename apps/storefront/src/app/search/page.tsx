@@ -16,7 +16,7 @@ export default async function SearchPage() {
 
   return (
     <main className="min-h-screen bg-silk">
-      <Header store={store} />
+      <Header store={store} categories={categories} />
       
       <div className="lg:hidden">
         <SearchClient 

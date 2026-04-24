@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, Heart, X } from "lucide-react";
+import { Search, ShoppingBag, Heart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Store, Category } from "@/lib/supabase/queries";
 import { cn } from "@/lib/utils";
@@ -17,28 +17,46 @@ interface HeaderProps {
 
 export default function Header({ store, categories }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+  const [wishlistCount, setWishlistCount] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 80);
+    const handleScroll = () => {
+      const scrolled = window.scrollY > 40;
+      if (scrolled !== isScrolled) setIsScrolled(scrolled);
+    };
+
+    const loadCounts = () => {
+      const cart = JSON.parse(localStorage.getItem("paris_cart") || "[]");
+      const wish = JSON.parse(localStorage.getItem("paris_wishlist") || "[]");
+      setCartCount(cart.length);
+      setWishlistCount(wish.length);
+    };
+
     window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    loadCounts();
+
+    const handleCartUpdate = (e: any) => setCartCount(e.detail);
+    const handleWishUpdate = (e: any) => setWishlistCount(e.detail);
+
+    window.addEventListener("paris_cart_updated", handleCartUpdate);
+    window.addEventListener("paris_wishlist_updated", handleWishUpdate);
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("paris_cart_updated", handleCartUpdate);
+      window.removeEventListener("paris_wishlist_updated", handleWishUpdate);
+    };
+  }, [isScrolled]);
 
   const storeName = store?.name || "Paris Bridals";
-  const logoUrl = store?.logo_url || "/paris-bridals-logo.jpeg";
+  const logoUrl = store?.logo_url || "/logo_paris.svg";
 
-  const displayCategories = categories?.length ? categories : [
-    { id: "1", name: "Bridal Sets", slug: "bridal-sets", image_url: "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=400" },
-    { id: "2", name: "Necklaces", slug: "necklaces", image_url: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400" },
-    { id: "3", name: "Earrings", slug: "earrings", image_url: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=400" },
-    { id: "4", name: "Bangles", slug: "bangles", image_url: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=400" },
-    { id: "5", name: "Rings", slug: "rings", image_url: "https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400" },
-  ];
+  const displayCategories = categories?.filter(c => !c.parent_id) || [];
 
   const navLinks = [
     { label: "Collections", href: "/collections" },
-    { label: "Bridal", href: "/collections?category=bridal" },
     { label: "About", href: "/about" },
   ];
 
@@ -46,8 +64,8 @@ export default function Header({ store, categories }: HeaderProps) {
     <>
       <nav
         className={cn(
-          "sticky top-0 z-50 transition-all duration-700 border-b bg-white",
-          isScrolled ? "py-2 border-[var(--border-silk)] shadow-silk" : "py-4 border-transparent"
+          "sticky top-0 z-50 transition-all duration-300 border-b bg-white",
+          isScrolled ? "py-2 border-[var(--border-silk)] shadow-sm" : "py-4 border-transparent"
         )}
       >
         <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12">
@@ -88,14 +106,23 @@ export default function Header({ store, categories }: HeaderProps) {
             <div className="flex items-center flex-1 justify-end gap-2 sm:gap-4 shrink-0">
               {/* Desktop Search Bar */}
               <div className="hidden md:block flex-1 max-w-[400px]">
-                <ActionSearchBar />
+                <ActionSearchBar storeId={store?.id} />
               </div>
 
               {/* Mobile Search Bar */}
               <div className="md:hidden flex-1">
-                <form onSubmit={(e) => { e.preventDefault(); }} className="relative">
+                <form 
+                  onSubmit={(e) => { 
+                    e.preventDefault(); 
+                    const formData = new FormData(e.currentTarget);
+                    const q = formData.get('q');
+                    if (q) router.push(`/collections?q=${encodeURIComponent(q.toString())}`);
+                  }} 
+                  className="relative"
+                >
                   <input
                     type="text"
+                    name="q"
                     placeholder="Search..."
                     className="w-full h-9 pl-9 pr-4 rounded-full border border-[var(--border-silk)] bg-white/50 backdrop-blur-md text-xs focus:outline-none focus:ring-2 focus:ring-rosegold/5 focus:border-rosegold transition-all"
                   />
@@ -106,10 +133,27 @@ export default function Header({ store, categories }: HeaderProps) {
               <div className="flex items-center gap-1 hidden sm:flex">
                 <Link
                   href="/wishlist"
-                  className="hidden sm:flex p-2.5 text-body hover:text-rosegold transition-all hover:bg-rosegold/5 rounded-full"
-                  aria-label="Favorites"
+                  className="hidden sm:flex p-2.5 text-body hover:text-rosegold transition-all hover:bg-rosegold/5 rounded-full relative"
+                  aria-label="Wishlist"
                 >
                   <Heart size={20} strokeWidth={1.5} />
+                  {wishlistCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 bg-rosegold text-white text-[9px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full border border-white">
+                      {wishlistCount}
+                    </span>
+                  )}
+                </Link>
+                <Link
+                  href="/cart"
+                  className="hidden sm:flex p-2.5 text-body hover:text-rosegold transition-all hover:bg-rosegold/5 rounded-full relative"
+                  aria-label="Enquiry Cart"
+                >
+                  <ShoppingBag size={20} strokeWidth={1.5} />
+                  {cartCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 bg-heading text-white text-[9px] font-bold min-w-[14px] h-[14px] flex items-center justify-center rounded-full border border-white">
+                      {cartCount}
+                    </span>
+                  )}
                 </Link>
               </div>
             </div>
@@ -117,61 +161,67 @@ export default function Header({ store, categories }: HeaderProps) {
         </div>
 
         {/* Category Bar */}
-        <div className="border-t border-[var(--border-silk)] mt-2">
-          <div className="w-full sm:px-6 lg:px-12 lg:max-w-[1600px] lg:mx-auto">
-            <div className="flex items-center overflow-x-auto gap-4 sm:gap-6 py-3 hide-scrollbar md:justify-center">
-              {/* "For You" Circle */}
-              <Link
-                href="/collections?filter=for-you"
-                className={cn(
-                  "flex items-center gap-2 shrink-0 transition-all duration-300 ml-4",
-                  isScrolled ? "px-4 py-2 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col"
-                )}
-              >
-                {!isScrolled ? (
-                  <>
-                    <div className="relative size-12 sm:size-14 rounded-full flex items-center justify-center bg-rosegold text-white shadow-lg shadow-rosegold/30 border-2 border-white transition-transform group-active:scale-95 group-hover:shadow-rosegold/50">
-                      <span className="text-[8px] uppercase font-bold tracking-widest text-center leading-tight">For<br/>You</span>
-                    </div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-rosegold leading-none transition-all">Discovery</span>
-                  </>
-                ) : (
-                  <span className="text-xs font-bold uppercase tracking-widest text-rosegold">For You</span>
-                )}
-              </Link>
-
-              {displayCategories.map((category, index) => (
+        {displayCategories.length > 0 && (
+          <div className="border-t border-[var(--border-silk)] mt-2">
+            <div className="w-full sm:px-6 lg:px-12 lg:max-w-[1600px] lg:mx-auto">
+              <div className="flex items-center overflow-x-auto gap-4 sm:gap-6 py-3 hide-scrollbar md:justify-center">
+                {/* "For You" Circle */}
                 <Link
-                  key={category.id || index}
-                  href={`/collections?category=${category.slug}`}
+                  href="/collections"
                   className={cn(
-                    "flex items-center snap-start group shrink-0 transition-all duration-300",
-                    isScrolled ? "px-4 py-2 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col gap-2"
+                    "flex items-center gap-2 shrink-0 transition-all duration-300 ml-4 luxury-link",
+                    isScrolled ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col h-20 justify-center"
                   )}
                 >
                   {!isScrolled ? (
                     <>
-                      <div className="relative size-12 sm:size-14 rounded-full overflow-hidden bg-white border border-[var(--border-silk)] shadow-sm group-hover:border-rosegold transition-all group-active:scale-95">
-                        <img
-                          src={category.image_url || "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=400"}
-                          alt={category.name}
-                          className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110"
-                        />
+                      <div className="relative size-12 sm:size-14 rounded-full flex items-center justify-center bg-rosegold text-white shadow-lg shadow-rosegold/30 border-2 border-white transition-transform group-active:scale-95 group-hover:shadow-rosegold/50">
+                        <span className="text-[8px] uppercase font-bold tracking-widest text-center leading-tight">For<br/>You</span>
                       </div>
-                      <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-body group-hover:text-rosegold transition-all leading-none truncate max-w-[70px]">
-                        {category.name.split(' ')[0]}
-                      </span>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-rosegold leading-none transition-all">Discovery</span>
                     </>
                   ) : (
-                    <span className="text-xs font-bold uppercase tracking-widest text-body group-hover:text-rosegold transition-all">
-                      {category.name.split(' ')[0]}
-                    </span>
+                    <span className="text-xs font-bold uppercase tracking-widest text-rosegold">For You</span>
                   )}
                 </Link>
-              ))}
+
+                {displayCategories.map((category, index) => (
+                  <Link
+                    key={category.id || index}
+                    href={`/collections?category_id=${category.id}`}
+                    className={cn(
+                      "flex items-center snap-start group shrink-0 transition-all duration-300 luxury-link",
+                      isScrolled ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col gap-2 h-20 justify-center"
+                    )}
+                  >
+                    {!isScrolled ? (
+                      <>
+                        <div className="relative size-12 sm:size-14 rounded-full overflow-hidden bg-white border border-[var(--border-silk)] shadow-sm group-hover:border-rosegold transition-all group-active:scale-95">
+                          {category.image_url && category.image_url.trim() !== "" ? (
+                            <img
+                              src={category.image_url}
+                              alt={category.name}
+                              className="w-full h-full object-cover transition-all duration-500 group-hover:scale-110"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-silk text-rosegold/30 text-lg">💎</div>
+                          )}
+                        </div>
+                        <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-body group-hover:text-rosegold transition-all leading-none truncate max-w-[70px]">
+                          {category.name.split(' ')[0]}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-xs font-bold uppercase tracking-widest text-body group-hover:text-rosegold transition-all">
+                        {category.name.split(' ')[0]}
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </nav>
     </>
   );

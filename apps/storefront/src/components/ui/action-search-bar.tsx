@@ -1,9 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Search, Send, X, Package, Sparkles, Tag, Heart, Truck, BookOpen } from "lucide-react";
+import { Search, Send, X, Package, Sparkles, Tag, Heart, Truck, BookOpen, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+
+interface ProductSuggestion {
+  id: string;
+  name: string;
+  category_name?: string;
+}
 
 interface SearchAction {
   id: string;
@@ -14,6 +21,10 @@ interface SearchAction {
   color: string;
 }
 
+interface ActionSearchBarProps {
+  storeId?: string;
+}
+
 const QUICK_ACTIONS: SearchAction[] = [
   {
     id: "products",
@@ -22,14 +33,6 @@ const QUICK_ACTIONS: SearchAction[] = [
     description: "Browse our entire catalog",
     href: "/collections",
     color: "text-sky-500"
-  },
-  {
-    id: "bridal",
-    label: "Bridal Sets",
-    icon: <Sparkles className="w-5 h-5" />,
-    description: "Complete bridal ensembles",
-    href: "/collections?category=bridal-sets",
-    color: "text-purple-500"
   },
   {
     id: "new",
@@ -48,44 +51,70 @@ const QUICK_ACTIONS: SearchAction[] = [
     color: "text-red-500"
   },
   {
-    id: "track",
-    label: "Track Order",
-    icon: <Truck className="w-5 h-5" />,
-    description: "Check delivery status",
-    href: "/track-order",
-    color: "text-green-500"
-  },
-  {
-    id: "blog",
-    label: "Bridal Guide",
-    icon: <BookOpen className="w-5 h-5" />,
-    description: "Styling tips & trends",
-    href: "/blog",
-    color: "text-blue-500"
+    id: "cart",
+    label: "Enquiry Cart",
+    icon: <ShoppingBag className="w-5 h-5" />,
+    description: "Your selection for enquiry",
+    href: "/cart",
+    color: "text-emerald-500"
   },
 ];
 
-export default function ActionSearchBar() {
+export default function ActionSearchBar({ storeId }: ActionSearchBarProps) {
   const [query, setQuery] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [filteredActions, setFilteredActions] = useState<SearchAction[]>(QUICK_ACTIONS);
+  const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const supabase = createClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Debounce filter
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (query) {
-        const filtered = QUICK_ACTIONS.filter(action =>
-          action.label.toLowerCase().includes(query.toLowerCase())
-        );
-        setFilteredActions(filtered);
-      } else {
-        setFilteredActions(QUICK_ACTIONS);
+    if (!query.trim()) {
+      setFilteredActions(QUICK_ACTIONS);
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      // Filter actions
+      const filtered = QUICK_ACTIONS.filter(action =>
+        action.label.toLowerCase().includes(query.toLowerCase())
+      );
+      setFilteredActions(filtered);
+
+      // Fetch product suggestions
+      setIsLoading(true);
+      try {
+        let queryBuilder = supabase
+          .from("products")
+          .select("id, name, category:category_id(name)")
+          .ilike("name", `%${query}%`)
+          .limit(5);
+        
+        if (storeId) {
+          queryBuilder = queryBuilder.eq("store_id", storeId);
+        }
+
+        const { data, error } = await queryBuilder;
+
+        if (!error && data) {
+          setSuggestions(data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            category_name: p.category?.name
+          })));
+        }
+      } catch (err) {
+        console.error("Search suggestion error:", err);
+      } finally {
+        setIsLoading(false);
       }
-    }, 200);
+    }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -157,33 +186,65 @@ export default function ActionSearchBar() {
         </form>
 
         {/* Quick Actions Dropdown */}
-        {isDropdownOpen && (
-          <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[var(--border-silk)] p-3 z-50 animate-in slide-in-from-top-2 fade-in duration-200">
-            <div className="space-y-1">
-              {filteredActions.map((action, index) => (
-                <button
-                  key={action.id}
-                  onClick={() => handleActionClick(action)}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-silk transition-all duration-200 text-left group",
-                    "animate-in slide-in-from-top-1 fade-in duration-200",
-                    "delay-[calc(var(--index)*50ms)]"
-                  )}
-                  style={{ "--index": index } as React.CSSProperties}
-                >
-                  <div className={cn("p-2 rounded-lg bg-silk-dark/30 group-hover:bg-white transition-colors", action.color)}>
-                    {action.icon}
+        {isDropdownOpen && (query || filteredActions.length > 0) && (
+          <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-[var(--border-silk)] p-3 z-50 animate-in slide-in-from-top-2 fade-in duration-200 min-w-[400px]">
+            <div className="space-y-4">
+              {/* Product Suggestions */}
+              {suggestions.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-caption mb-2 ml-2">Suggested Products</div>
+                  <div className="space-y-1">
+                    {suggestions.map((product) => (
+                      <button
+                        key={product.id}
+                        onClick={() => {
+                          router.push(`/product/${product.id}`);
+                          setIsDropdownOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-2 rounded-xl hover:bg-silk transition-all duration-200 text-left group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Package size={14} className="text-muted-foreground group-hover:text-rosegold" />
+                          <span className="text-sm text-heading group-hover:text-rosegold transition-colors">{product.name}</span>
+                        </div>
+                        {product.category_name && (
+                          <span className="text-[10px] text-caption uppercase tracking-wider">{product.category_name}</span>
+                        )}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-heading group-hover:text-rosegold transition-colors">
-                      {action.label}
-                    </div>
-                    {action.description && (
-                      <div className="text-xs text-muted-foreground">{action.description}</div>
-                    )}
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              {filteredActions.length > 0 && (
+                <div>
+                  {suggestions.length > 0 && <div className="border-t border-[var(--border-silk)] my-3" />}
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-caption mb-2 ml-2">Quick Actions</div>
+                  <div className="space-y-1">
+                    {filteredActions.map((action, index) => (
+                      <button
+                        key={action.id}
+                        onClick={() => handleActionClick(action)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-silk transition-all duration-200 text-left group",
+                        )}
+                      >
+                        <div className={cn("p-1.5 rounded-lg bg-silk-dark/30 group-hover:bg-white transition-colors", action.color)}>
+                          {action.icon}
+                        </div>
+                        <div className="text-sm font-medium text-heading group-hover:text-rosegold transition-colors">
+                          {action.label}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                </button>
-              ))}
+                </div>
+              )}
+              
+              {!isLoading && suggestions.length === 0 && filteredActions.length === 0 && query && (
+                <div className="p-4 text-center text-sm text-caption italic">No matches found for "{query}"</div>
+              )}
             </div>
           </div>
         )}
@@ -241,13 +302,44 @@ export default function ActionSearchBar() {
                 )}
               </form>
 
+              {/* Search Suggestions */}
+              {query.trim() && suggestions.length > 0 && (
+                <div className="mb-8">
+                  <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-4">
+                    Product Matches
+                  </div>
+                  <div className="space-y-2">
+                    {suggestions.map((product) => (
+                      <button
+                        key={product.id}
+                        onClick={() => {
+                          router.push(`/product/${product.id}`);
+                          setIsMobileOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-4 rounded-xl bg-silk-dark/30 hover:bg-rosegold/10 transition-all active:scale-[0.98] text-left"
+                      >
+                        <div className="flex items-center gap-4">
+                          <Package size={18} className="text-rosegold" />
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium text-heading line-clamp-1">{product.name}</span>
+                            {product.category_name && (
+                              <span className="text-[10px] text-caption uppercase tracking-wider">{product.category_name}</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Quick Actions */}
               <div className="space-y-4 pb-10">
                 <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-muted-foreground mb-4">
                   Quick Actions
                 </div>
                 <div className="space-y-2">
-                  {QUICK_ACTIONS.map((action) => (
+                  {filteredActions.map((action) => (
                     <button
                       key={action.id}
                       onClick={() => {

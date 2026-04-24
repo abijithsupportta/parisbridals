@@ -1,33 +1,13 @@
 import Link from 'next/link';
-import { Banner } from '@/lib/supabase/queries';
+import { Banner, getBannerLink } from '@/lib/supabase/queries';
 
 interface SplitPromoBannersProps {
   banners: Banner[];
 }
 
-const FALLBACK_BANNERS: Partial<Banner>[] = [
-  {
-    id: 'fallback-1',
-    web_image_url: '/banners/herorail-festive-prod-desktop-banner.webp',
-    title: 'Festive Collection',
-    subtitle: 'Timeless Elegance',
-    call_to_action: 'View Collection',
-    redirect_url: '/collections/festive'
-  },
-  {
-    id: 'fallback-2',
-    web_image_url: '/banners/herorail-gifting-banner-desktop.webp',
-    title: 'Luxe Gifting',
-    subtitle: 'The Art of Giving',
-    call_to_action: 'Shop Now',
-    redirect_url: '/collections/gifts'
-  }
-];
-
 export default function SplitPromoBanners({ banners }: SplitPromoBannersProps) {
-  // Combine backend banners with fallbacks to always have 2
-  // We prioritize backend banners
-  const displayBanners = [...banners, ...FALLBACK_BANNERS].slice(0, 2);
+  // Use banners from DB — take first 2
+  const displayBanners = banners.slice(0, 2);
 
   if (displayBanners.length === 0) return null;
 
@@ -61,7 +41,7 @@ export default function SplitPromoBanners({ banners }: SplitPromoBannersProps) {
                 {hasContent && (
                   <div className="absolute inset-0 flex flex-col justify-end px-6 pb-8 sm:px-8 sm:pb-8 md:px-10 md:pb-8 lg:px-12">
                     <div className="text-white relative z-10">
-                      {(hasCTA || banner.redirect_url) && (
+                      {(hasCTA || getBannerLink(banner)) && (
                         <div className="animate-fadeInUp">
                           <div className="inline-block px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 lg:px-8 lg:py-3.5 rounded-full text-[9px] sm:text-[10px] md:text-xs lg:text-sm font-medium tracking-wide bg-white/20 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 transition-all">
                             {banner.call_to_action || 'Explore'}
@@ -76,13 +56,16 @@ export default function SplitPromoBanners({ banners }: SplitPromoBannersProps) {
 
             return (
               <div key={banner.id || index}>
-                {banner.redirect_url ? (
-                  <Link href={banner.redirect_url} className="block">
-                    {BannerInner}
-                  </Link>
-                ) : (
-                  BannerInner
-                )}
+                {(() => {
+                  const link = getBannerLink(banner);
+                  return link ? (
+                    <Link href={link} className="block">
+                      {BannerInner}
+                    </Link>
+                  ) : (
+                    BannerInner
+                  );
+                })()}
               </div>
             );
           })}

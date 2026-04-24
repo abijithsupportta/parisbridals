@@ -139,6 +139,10 @@ export type {
 
 export {
   BannerRedirectType,
+  BannerType,
+  BannerPosition,
+  BANNER_TYPE_LIMITS,
+  validateBannerPosition,
 } from './banner';
 
 // Inventory types
