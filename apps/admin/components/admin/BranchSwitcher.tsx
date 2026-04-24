@@ -24,9 +24,20 @@ export default function BranchSwitcher() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Auto-select the first (or main) branch if no valid branch is selected.
+  // "all" is no longer a valid option.
+  useEffect(() => {
+    if (branches.length === 0) return;
+    const valid = branches.find((b: BranchWithStaffCount) => b.id === selectedBranchId);
+    if (!valid) {
+      const main = branches.find((b: BranchWithStaffCount) => b.is_main) || branches[0];
+      setSelectedBranchId(main.id);
+    }
+  }, [branches, selectedBranchId, setSelectedBranchId]);
+
   const canSwitch = can("switch_branches");
   const selected = branches.find((b: BranchWithStaffCount) => b.id === selectedBranchId);
-  const label = selectedBranchId === "all" ? "All Branches" : selected?.name || "All Branches";
+  const label = selected?.name || "Select Branch";
 
   // Staff can't switch — show locked indicator
   if (isStaff) {
@@ -55,23 +66,6 @@ export default function BranchSwitcher() {
           <div className="px-3 py-2 border-b border-slate-100">
             <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Switch Branch</p>
           </div>
-
-          {/* All Branches option */}
-          <button
-            onClick={() => { setSelectedBranchId("all"); setOpen(false); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm transition-colors ${
-              selectedBranchId === "all" ? "bg-violet-50 text-violet-700" : "text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center shrink-0">
-              <Building2 className="w-3.5 h-3.5 text-violet-500" />
-            </div>
-            <span className="font-medium flex-1 text-left">All Branches</span>
-            {selectedBranchId === "all" && <Check className="w-4 h-4 text-violet-500" />}
-          </button>
-
-          {/* Divider */}
-          {branches.length > 0 && <div className="border-t border-slate-100 my-1" />}
 
           {/* Individual branches */}
           {branches.map((branch: BranchWithStaffCount) => (

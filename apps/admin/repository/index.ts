@@ -21,7 +21,7 @@ export { CategoryRepository, categoryRepository } from './categoryRepository';
 export { UploadRepository, uploadRepository } from './uploadRepository';
 export { BranchRepository, branchRepository } from './branchRepository';
 export { StaffRepository, staffRepository } from './staffRepository';
-export { ProductInventoryRepository, inventoryRepository } from './inventoryRepository';
+export { BranchInventoryRepository, branchInventoryRepository } from './branchInventoryRepository';
 export { BannerRepository, bannerRepository } from './bannerRepository';
 export { customerRepository, type CreateCustomerDTO, type UpdateCustomerDTO, type CustomerSearchParams } from './customerRepository';
 export { orderRepository } from './orderRepository';

@@ -21,7 +21,7 @@ export default async function CreateProductPage() {
   const branches = branchesResult.success ? branchesResult.data || [] : [];
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 p-8">
+    <div className="min-h-[calc(100vh-4rem)] p-6 md:p-8">
       <div className="max-w-6xl mx-auto">
         <ProductForm categories={categories} branches={branches} />
       </div>
