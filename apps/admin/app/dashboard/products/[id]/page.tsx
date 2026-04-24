@@ -269,10 +269,9 @@ export default function ProductDetailPage() {
               {/* Core Details Panel */}
               <div className="flex-1 p-6 flex flex-col">
                 <div className="mb-6">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Rental Pricing</h3>
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Rent Price</h3>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold tracking-tight text-slate-900">{formatCurrency(product.price_per_day)}</span>
-                    <span className="text-sm font-medium text-slate-500">/ day</span>
                   </div>
                 </div>
 

@@ -4,7 +4,7 @@ import { OrderStatus, ConditionRating, DeliveryMethod, PaymentMethod } from "../
 const orderItemSchema = z.object({
   product_id: z.string().uuid("Invalid product ID"),
   quantity: z.number().int().positive("Quantity must be a positive integer"),
-  price_per_day: z.number().nonnegative("Price per day cannot be negative"),
+  price_per_day: z.number().nonnegative("Rent price cannot be negative"),
 });
 
 export const CreateOrderSchema = z.object({

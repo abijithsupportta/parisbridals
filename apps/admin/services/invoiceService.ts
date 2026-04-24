@@ -169,7 +169,7 @@ export class InvoiceService {
 
     autoTable(doc, {
       startY: yPosition,
-      head: [['Item ID', 'Qty', 'Price/Day', 'Total']],
+      head: [['Item ID', 'Qty', 'Rent Price', 'Total']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [66, 66, 66] },

@@ -509,7 +509,6 @@ export default function ProductsPage() {
 
                       <td className="px-4 py-4">
                         <span className="font-semibold text-slate-900">{formatCurrency(product.price_per_day)}</span>
-                        <span className="text-xs text-slate-500 ml-1">/day</span>
                       </td>
 
                       <td className="px-4 py-4">

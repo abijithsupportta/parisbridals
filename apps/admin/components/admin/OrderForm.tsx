@@ -94,16 +94,16 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return Math.max(1, diffDays);
   }, [startDate, endDate]);
 
-  // Cart Calculations
+  // Cart Calculations — flat rent price, NOT per-day
   const cartTotals = useMemo(() => {
     let subtotal = 0;
     cartItems.forEach((item) => {
-      subtotal += item.price_per_day * item.quantity * rentalDays;
+      subtotal += item.price_per_day * item.quantity;
     });
     const gstAmount = subtotal * 0.18;
     const grandTotal = subtotal + gstAmount;
     return { subtotal, gstAmount, grandTotal };
-  }, [cartItems, rentalDays]);
+  }, [cartItems]);
 
   // Handlers
   const addToCart = (product: any) => {
@@ -510,7 +510,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-slate-900 text-sm truncate">{p.name}</div>
                                 <div className="text-xs text-slate-500 flex gap-2 mt-0.5">
-                                  <span>{formatCurrency(p.price_per_day)}/day</span>
+                                  <span>{formatCurrency(p.price_per_day)}</span>
                                   <span className={p.available_quantity > 0 ? "text-emerald-600" : "text-red-500 font-bold"}>
                                     {p.available_quantity} in stock
                                   </span>
@@ -554,7 +554,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                           </div>
                           <div className="flex-1 min-w-0">
                             <h5 className="font-medium text-slate-900 text-sm truncate">{item.product.name}</h5>
-                            <span className="text-xs text-slate-500">{formatCurrency(item.price_per_day)} / day</span>
+                            <span className="text-xs text-slate-500">{formatCurrency(item.price_per_day)}</span>
                           </div>
                           <button
                             type="button"
@@ -575,7 +575,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                             </button>
                           </div>
                           <div className="text-sm font-bold text-slate-900">
-                            {formatCurrency(item.price_per_day * item.quantity * rentalDays)}
+                            {formatCurrency(item.price_per_day * item.quantity)}
                           </div>
                         </div>
                       </li>
@@ -588,7 +588,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
             {/* Totals */}
             <div className="bg-slate-50 border-t border-slate-200 p-5 space-y-3">
               <div className="flex justify-between text-sm text-slate-600">
-                <span>Subtotal ({rentalDays} days)</span>
+                <span>Subtotal</span>
                 <span className="font-medium">{formatCurrency(cartTotals.subtotal)}</span>
               </div>
               <div className="flex justify-between text-sm text-slate-600 pb-3 border-b border-slate-200">

@@ -218,7 +218,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                       </div>
                       <div className="flex-1">
                         <h4 className="font-semibold text-slate-900">{product?.name || `Product #${item.product_id?.slice(0, 6).toUpperCase()}`}</h4>
-                        <p className="text-xs text-slate-500">Qty: {item.quantity} · {formatCurrency(item.price_per_day)}/day</p>
+                        <p className="text-xs text-slate-500">Qty: {item.quantity} · {formatCurrency(item.price_per_day)}</p>
                       </div>
 
                       {isReturnable ? (

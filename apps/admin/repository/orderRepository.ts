@@ -160,13 +160,12 @@ export class OrderRepository extends BaseRepository {
    * Create a new order with items
    */
   async create(data: CreateOrderDTO, gstPercentage: number = 0): Promise<RepositoryResult<OrderWithRelations>> {
-    // Calculate rental days
+    // Parse rental dates (tracked for scheduling, NOT for pricing)
     const startDate = new Date(data.rental_start_date);
     const endDate = new Date(data.rental_end_date);
-    const days = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-    // Calculate subtotal (sum of item prices × days)
-    const subtotal = data.items.reduce((sum, item) => sum + (item.price_per_day * item.quantity * days), 0);
+    // Calculate subtotal — flat rent price × quantity (no per-day multiplication)
+    const subtotal = data.items.reduce((sum, item) => sum + (item.price_per_day * item.quantity), 0);
     
     // Calculate GST amount
     const gstAmount = subtotal * (gstPercentage / 100);
@@ -207,7 +206,7 @@ export class OrderRepository extends BaseRepository {
 
     const order = orderResponse.data;
 
-    // Create order items
+    // Create order items — flat rent price, no per-day multiplication
     const itemsResponse = await this.client
       .from(this.orderItemsTable)
       .insert(
@@ -216,8 +215,8 @@ export class OrderRepository extends BaseRepository {
           product_id: item.product_id,
           quantity: item.quantity,
           price_per_day: item.price_per_day,
-          total_price: item.price_per_day * item.quantity * days,
-          subtotal: item.price_per_day * item.quantity * days,
+          total_price: item.price_per_day * item.quantity,
+          subtotal: item.price_per_day * item.quantity,
         }))
       )
       .select();

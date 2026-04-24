@@ -143,7 +143,7 @@ export class OrderService {
         return {
           data: null,
           error: {
-            message: 'Price per day must be a positive number',
+            message: 'Rent price must be a positive number',
             code: 'VALIDATION_ERROR'
           } as any,
           success: false,
