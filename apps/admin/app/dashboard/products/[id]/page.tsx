@@ -2,10 +2,11 @@
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Edit, Trash2, Package, Tag, Box, ToggleLeft } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Package, Tag, Box, ToggleLeft, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Modal from "@/components/admin/Modal";
 import { useProduct, useDeleteProduct } from "@/hooks";
 import { useProductStore, useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
@@ -24,14 +25,27 @@ export default function ProductDetailPage() {
     closeEditModal,
     isCreateModalOpen,
     closeCreateModal,
+    isDeleteModalOpen,
+    openDeleteModal,
+    closeDeleteModal,
   } = useProductStore();
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this product? This cannot be undone.")) return;
+  const handleDelete = () => {
+    if (product) {
+      openDeleteModal(product);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
     try {
-      await deleteProduct.mutateAsync(productId);
-      showSuccess("Deleted", "Product deleted successfully");
-      router.push("/dashboard/products");
+      const result: any = await deleteProduct.mutateAsync(productId);
+      if (result.success) {
+        showSuccess("Deleted", "Product deleted successfully");
+        closeDeleteModal();
+        router.push("/dashboard/products");
+      } else {
+        showError("Error", result.error?.message || "Failed to delete product");
+      }
     } catch {
       showError("Error", "Failed to delete product");
     }
@@ -230,6 +244,48 @@ export default function ProductDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        open={isDeleteModalOpen}
+        onClose={closeDeleteModal}
+        title="Delete Product"
+        maxWidth="max-w-md"
+      >
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="flex-shrink-0">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                Delete "{product?.name || 'this product'}"?
+              </h3>
+              <p className="text-sm text-slate-600 mb-4">
+                This action cannot be undone. The product will be permanently removed from your inventory.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={closeDeleteModal}
+                  disabled={deleteProduct.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmDelete}
+                  disabled={deleteProduct.isPending}
+                >
+                  {deleteProduct.isPending ? 'Deleting...' : 'Delete Product'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

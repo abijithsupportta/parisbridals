@@ -62,7 +62,7 @@ export class ProductRepository extends BaseRepository {
       select: `
         *,
         category:category_id(id, name, slug),
-        store:store_id(id, name)
+        branch:branch_id(id, name)
       `,
       filters,
       orderBy: { column: sort_by, ascending: sort_order === 'asc' },
@@ -139,7 +139,7 @@ export class ProductRepository extends BaseRepository {
       .select(`
         *,
         category:category_id(id, name, slug),
-        store:store_id(id, name)
+        branch:branch_id(id, name)
       `)
       .eq('id', id)
       .single();
@@ -195,7 +195,7 @@ export class ProductRepository extends BaseRepository {
       .from(this.tableName)
       .insert({
         ...data,
-        created_at: new Date().toISOString(),
+        ...this.getCreateAuditFields(),
       })
       .select()
       .single();
@@ -212,6 +212,7 @@ export class ProductRepository extends BaseRepository {
       .update({
         ...data,
         updated_at: new Date().toISOString(),
+        ...this.getUpdateAuditFields(),
       })
       .eq('id', id)
       .select()
@@ -415,6 +416,7 @@ export class ProductRepository extends BaseRepository {
       .update({ 
         available_quantity: availableQuantity,
         updated_at: new Date().toISOString(),
+        ...this.getUpdateAuditFields(),
       })
       .eq('id', id)
       .select()

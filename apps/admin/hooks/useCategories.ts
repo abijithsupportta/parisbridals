@@ -2,6 +2,9 @@
  * Category Hooks
  *
  * Custom React hooks for category operations using TanStack Query.
+ * All operations go through API routes (server-side, service role key).
+ *
+ * Flow: UI → hooks → fetch(/api/categories) → service → repository → supabase
  *
  * @module hooks/useCategories
  */
@@ -14,20 +17,39 @@ import {
   CategoryWithRelations,
   CategoryHierarchy
 } from '@/domain';
-import { categoryService } from '@/services';
-import { queryKeys, queryUtils } from '@/lib/query-client';
 import { useAppStore } from '@/stores';
 import { useCallback } from 'react';
+
+const categoryKeys = {
+  all: ['categories'] as const,
+  detail: (id: string) => ['categories', id] as const,
+  children: (id: string) => ['categories', id, 'children'] as const,
+  hierarchy: ['categories-hierarchy'] as const,
+};
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
 
 /**
  * Hook for fetching all categories
  */
 export function useCategories() {
   const query = useQuery({
-    queryKey: queryKeys.categories,
-    queryFn: () => categoryService.getAllCategories(),
+    queryKey: categoryKeys.all,
+    queryFn: async () => {
+      const response = await apiFetch<{ categories: Category[] }>('/api/categories');
+      return response.categories;
+    },
     staleTime: 10 * 60 * 1000, // 10 minutes
-    select: (result) => result.data,
   });
 
   return {
@@ -38,33 +60,14 @@ export function useCategories() {
 }
 
 /**
- * Hook for fetching category hierarchy
- */
-export function useCategoryHierarchy() {
-  const query = useQuery({
-    queryKey: ['categories-hierarchy'],
-    queryFn: () => categoryService.getCategoryHierarchy(),
-    staleTime: 10 * 60 * 1000, // 10 minutes
-    select: (result) => result.data,
-  });
-
-  return {
-    ...query,
-    hierarchy: query.data || { mains: [], subs: [], variants: [] },
-    isLoading: query.isLoading || query.isFetching,
-  };
-}
-
-/**
  * Hook for fetching a single category by ID
  */
 export function useCategory(id: string) {
   const query = useQuery({
-    queryKey: queryKeys.category(id),
-    queryFn: () => categoryService.getCategoryById(id),
+    queryKey: categoryKeys.detail(id),
+    queryFn: () => apiFetch<Category>(`/api/categories/${id}`),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    select: (result) => result.data,
   });
 
   return {
@@ -79,11 +82,10 @@ export function useCategory(id: string) {
  */
 export function useCategoryChildren(parentId: string) {
   const query = useQuery({
-    queryKey: queryKeys.categoryChildren(parentId),
-    queryFn: () => categoryService.getCategoryChildren(parentId),
+    queryKey: categoryKeys.children(parentId),
+    queryFn: () => apiFetch<Category[]>(`/api/categories/${parentId}/children`),
     enabled: !!parentId,
     staleTime: 5 * 60 * 1000, // 5 minutes
-    select: (result) => result.data,
   });
 
   return {
@@ -101,18 +103,13 @@ export function useCreateCategory() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (data: CreateCategoryDTO) => categoryService.createCategory(data),
+    mutationFn: (data: CreateCategoryDTO) =>
+      apiFetch('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateCategories();
-        showSuccess('Category created successfully');
-      } else {
-        showError('Failed to create category', result.error?.message);
-      }
+      queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+      showSuccess('Category created successfully');
     },
-    onError: (error) => {
-      showError('Failed to create category', error.message);
-    },
+    onError: (error) => showError('Failed to create category', error.message),
   });
 
   return {
@@ -130,22 +127,14 @@ export function useUpdateCategory() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateCategoryDTO }) => 
-      categoryService.updateCategory(id, data),
-    onSuccess: (result, variables) => {
-      if (result.success) {
-        queryUtils.invalidateCategories();
-        queryClient.invalidateQueries({
-        queryKey: queryKeys.category(variables.id),
-      });
-        showSuccess('Category updated successfully');
-      } else {
-        showError('Failed to update category', result.error?.message);
-      }
+    mutationFn: ({ id, data }: { id: string; data: UpdateCategoryDTO }) =>
+      apiFetch(`/api/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+      queryClient.invalidateQueries({ queryKey: categoryKeys.detail(variables.id) });
+      showSuccess('Category updated successfully');
     },
-    onError: (error) => {
-      showError('Failed to update category', error.message);
-    },
+    onError: (error) => showError('Failed to update category', error.message),
   });
 
   return {
@@ -163,18 +152,13 @@ export function useDeleteCategory() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (id: string) => categoryService.deleteCategory(id),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateCategories();
-        showSuccess('Category deleted successfully');
-      } else {
-        showError('Failed to delete category', result.error?.message);
-      }
+    mutationFn: (id: string) =>
+      apiFetch(`/api/categories/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+      showSuccess('Category deleted successfully');
     },
-    onError: (error) => {
-      showError('Failed to delete category', error.message);
-    },
+    onError: (error) => showError('Failed to delete category', error.message),
   });
 
   return {
@@ -190,93 +174,14 @@ export function useDeleteCategory() {
 export function useCanDeleteCategory(id: string) {
   const query = useQuery({
     queryKey: ['category-can-delete', id],
-    queryFn: () => categoryService.canDeleteCategory(id),
+    queryFn: () => apiFetch<{ canDelete: boolean; reason?: string }>(`/api/categories/${id}/can-delete`),
     enabled: !!id,
-    select: (result) => result.data,
   });
 
   return {
     ...query,
     canDelete: query.data?.canDelete ?? false,
     reason: query.data?.reason,
-    relatedData: query.data?.relatedData,
-    isLoading: query.isLoading || query.isFetching,
-  };
-}
-
-/**
- * Hook for moving category to new parent
- */
-export function useMoveCategory() {
-  const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
-
-  const mutation = useMutation({
-    mutationFn: ({ id, newParentId }: { id: string; newParentId: string | null }) => 
-      categoryService.moveCategory(id, newParentId),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateCategories();
-        showSuccess('Category moved successfully');
-      } else {
-        showError('Failed to move category', result.error?.message);
-      }
-    },
-    onError: (error) => {
-      showError('Failed to move category', error.message);
-    },
-  });
-
-  return {
-    ...mutation,
-    moveCategory: mutation.mutate,
-    isLoading: mutation.isPending,
-  };
-}
-
-/**
- * Hook for reordering categories
- */
-export function useReorderCategories() {
-  const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
-
-  const mutation = useMutation({
-    mutationFn: (categoryIds: string[]) => categoryService.reorderCategories(categoryIds),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidateCategories();
-        showSuccess('Categories reordered successfully');
-      } else {
-        showError('Failed to reorder categories', result.error?.message);
-      }
-    },
-    onError: (error) => {
-      showError('Failed to reorder categories', error.message);
-    },
-  });
-
-  return {
-    ...mutation,
-    reorderCategories: mutation.mutate,
-    isLoading: mutation.isPending,
-  };
-}
-
-/**
- * Hook for getting category product count
- */
-export function useCategoryProductCount(id: string) {
-  const query = useQuery({
-    queryKey: ['category-product-count', id],
-    queryFn: () => categoryService.getCategoryProductCount(id),
-    enabled: !!id,
-    select: (result) => result.data,
-  });
-
-  return {
-    ...query,
-    productCount: query.data || 0,
     isLoading: query.isLoading || query.isFetching,
   };
 }
@@ -303,7 +208,7 @@ export function useCategorySearch(query: string, enabled: boolean = true) {
  * Hook for category tree management
  */
 export function useCategoryTree() {
-  const { hierarchy } = useCategoryHierarchy();
+  const { categories } = useCategories();
   
   const buildTree = useCallback((categories: Category[]) => {
     interface CategoryNode extends Category {
@@ -330,16 +235,11 @@ export function useCategoryTree() {
     return roots;
   }, []);
 
-  // Handle both array and object hierarchy formats
-    const allCategories = Array.isArray(hierarchy) 
-      ? hierarchy 
-      : [...(hierarchy.mains || []), ...(hierarchy.subs || []), ...(hierarchy.variants || [])];
-    
-    const categoryTree = buildTree(allCategories);
+  const categoryTree = buildTree(categories);
 
   return {
     categoryTree,
-    hierarchy,
+    categories,
     buildTree,
   };
 }

@@ -4,22 +4,20 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { createStore } from "@/lib/supabase/queries";
+import { useCreateBranch } from "@/hooks";
 import { useRouter } from "next/navigation";
 
 export default function StoreForm() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
-    slug: "",
-    email: "",
-    phone: "",
     address: "",
-    logo_url: "",
-    subscription_status: "trial",
+    phone: "",
+    is_main: false,
     is_active: true,
   });
+
+  const { createBranch, isLoading } = useCreateBranch();
 
   const clearZeroOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === "0") {
@@ -40,18 +38,7 @@ export default function StoreForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    
-    try {
-      await createStore(formData);
-      router.push("/dashboard/stores");
-      router.refresh();
-    } catch (error) {
-      console.error("Error creating store:", error);
-      alert("Failed to create store");
-    } finally {
-      setLoading(false);
-    }
+    createBranch(formData);
   };
 
   return (
@@ -73,52 +60,15 @@ export default function StoreForm() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 block">Slug *</label>
-              <Input
-                value={formData.slug}
-                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                required
-                placeholder="paris-bridals-chennai"
-                className="h-12 border-slate-300 focus:border-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 block">Email *</label>
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
-                placeholder="store@example.com"
-                className="h-12 border-slate-300 focus:border-primary"
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 block">Phone</label>
-              <Input
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+91 98765 43210"
-                className="h-12 border-slate-300 focus:border-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 block">Subscription Status</label>
-              <select
-                value={formData.subscription_status}
-                onChange={(e) => setFormData({ ...formData, subscription_status: e.target.value })}
-                className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white focus:border-primary focus:outline-none"
-              >
-                <option value="trial">Trial</option>
-                <option value="active">Active</option>
-                <option value="expired">Expired</option>
-              </select>
-            </div>
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700 block">Phone</label>
+            <Input
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="+91 98765 43210"
+              className="h-12 border-slate-300 focus:border-primary"
+            />
           </div>
 
           <div className="space-y-2">
@@ -131,15 +81,6 @@ export default function StoreForm() {
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700 block">Logo URL</label>
-            <Input
-              value={formData.logo_url}
-              onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-              placeholder="https://example.com/logo.png"
-              className="h-12 border-slate-300 focus:border-primary"
-            />
-          </div>
 
           <div className="flex items-center gap-3 pt-4">
             <input
@@ -155,8 +96,8 @@ export default function StoreForm() {
           </div>
 
           <div className="flex gap-4 pt-6 border-t border-slate-200">
-            <Button type="submit" loading={loading} className="flex-1 h-12 text-base shadow-lg shadow-primary/25">
-              {loading ? "Creating..." : "Create Store"}
+            <Button type="submit" disabled={isLoading} variant="gradient" className="flex-1 h-12 text-base">
+              {isLoading ? "Creating..." : "Create Store"}
             </Button>
             <Button 
               type="button" 

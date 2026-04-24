@@ -13,18 +13,32 @@
  * @module app/api/categories/[id]/can-delete/route
  */
 
-import { NextResponse } from "next/server";
-import { canDeleteCategory } from "@/lib/supabase/categories";
+import { NextRequest, NextResponse } from "next/server";
+import { categoryService } from "@/services/categoryService";
+import { apiGuard } from "@/lib/apiGuard";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_request: Request, { params }: RouteContext) {
+export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
+    const guard = await apiGuard(request, 'categories');
+    if (guard.error) return guard.error;
+
     const { id } = await params;
-    const result = await canDeleteCategory(id);
-    return NextResponse.json(result);
+    const result = await categoryService.canDeleteCategory(id);
+    
+    if (!result.success) {
+      return NextResponse.json({ 
+        canDelete: false, 
+        reason: result.error?.message,
+        productCount: 0,
+        childCount: 0
+      });
+    }
+
+    return NextResponse.json(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

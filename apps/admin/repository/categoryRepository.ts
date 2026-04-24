@@ -125,7 +125,7 @@ export class CategoryRepository extends BaseRepository {
       .from(this.tableName)
       .insert({
         ...data,
-        created_at: new Date().toISOString(),
+        ...this.getCreateAuditFields(),
       })
       .select()
       .single();
@@ -142,6 +142,7 @@ export class CategoryRepository extends BaseRepository {
       .update({
         ...data,
         updated_at: new Date().toISOString(),
+        ...this.getUpdateAuditFields(),
       })
       .eq('id', id)
       .select()

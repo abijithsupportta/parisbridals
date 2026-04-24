@@ -29,6 +29,19 @@ import { CreateProductSchema, UpdateProductSchema } from '@/domain';
 import { generateSlug } from '@/lib/shared-utils';
 
 export class ProductService {
+  // Current user context for audit fields
+  private currentUserId: string | null = null;
+  private currentBranchId: string | null = null;
+
+  /**
+   * Set current user context for audit fields
+   */
+  setUserContext(userId: string | null, branchId: string | null) {
+    this.currentUserId = userId;
+    this.currentBranchId = branchId;
+    productRepository.setUserContext(userId, branchId);
+  }
+
   /**
    * Handle service errors
    */
@@ -67,7 +80,7 @@ export class ProductService {
   /**
    * Create a new product with validation
    */
-  async createProduct(data: CreateProductDTO): Promise<RepositoryResult<ProductWithRelations>> {
+  async createProduct(data: CreateProductDTO, userRole: string = 'staff'): Promise<RepositoryResult<ProductWithRelations>> {
     // Validate input data
     const validation = this.validateProductData(data);
     if (!validation.is_valid) {
@@ -87,18 +100,18 @@ export class ProductService {
       data.slug = generateSlug(data.name);
     }
 
-    // TODO: Temporarily bypass slug check for comprehensive API testing
-    // const slugCheck = await this.checkSlugAvailability(data.slug);
-    // if (!slugCheck.success || slugCheck.data) {
-    //   return {
-    //     data: null,
-    //     error: {
-    //       message: 'Product slug already exists',
-    //       code: 'SLUG_EXISTS'
-    //     } as any,
-    //     success: false,
-    //   };
-    // }
+    // Check slug availability
+    const slugCheck = await this.checkSlugAvailability(data.slug);
+    if (!slugCheck.success || !slugCheck.data) {
+      return {
+        data: null,
+        error: {
+          message: 'Product slug already exists',
+          code: 'SLUG_EXISTS'
+        } as any,
+        success: false,
+      };
+    }
 
     // Validate category if provided
     if (data.category_id) {
@@ -115,11 +128,41 @@ export class ProductService {
       }
     }
 
-    // Create product
-    const createResult = await productRepository.create(data);
+    // Handle "all branches" for admin/super admin
+    let branchId = data.branch_id;
+    if ((userRole === 'admin' || userRole === 'super_admin') && data.branch_id === 'all') {
+      // For "all branches", set branch_id to null (product is not tied to a specific branch)
+      branchId = undefined;
+    }
+
+    // Create product with adjusted branch_id
+    const createData = { ...data, branch_id: branchId };
+    const createResult = await productRepository.create(createData);
     
     if (!createResult.success || !createResult.data) {
       return createResult;
+    }
+
+    // If admin/super admin selected "all branches", create inventory entries for all branches
+    if ((userRole === 'admin' || userRole === 'super_admin') && data.branch_id === 'all') {
+      const { branchRepository } = await import('@/repository');
+      const branchesResult = await branchRepository.findAllWithStaffCount('00000000-0000-0000-0000-000000000001');
+      
+      if (branchesResult.success && branchesResult.data) {
+        const adminClient = (await import('@/lib/supabase/server')).createAdminClient();
+        
+        for (const branch of branchesResult.data) {
+          await adminClient
+            .from('product_inventory')
+            .insert({
+              product_id: createResult.data.id,
+              branch_id: branch.id,
+              quantity: data.quantity || 0,
+              available_quantity: data.quantity || 0,
+              low_stock_threshold: data.low_stock_threshold ?? 5,
+            });
+        }
+      }
     }
 
     // Return product with relations
@@ -457,18 +500,27 @@ export class ProductService {
    */
   private async checkSlugAvailability(slug: string, excludeId?: string): Promise<RepositoryResult<boolean>> {
     try {
-      // Use direct repository search instead of complex filter objects
-      const result = await productRepository.findAll({ query: slug, limit: 5, page: 1 });
-      if (!result.success || !result.data) {
-        return { success: false, data: null, error: result.error };
+      // Use exact slug match instead of search query
+      const adminClient = (await import('@/lib/supabase/server')).createAdminClient();
+      
+      let query = adminClient
+        .from('products')
+        .select('id')
+        .eq('slug', slug);
+      
+      // Exclude current product when editing
+      if (excludeId) {
+        query = query.neq('id', excludeId);
       }
       
-      // Check if any product (other than the excluded one) has this exact slug
-      const conflicting = result.data.products.filter(
-        (p: any) => p.slug === slug && (!excludeId || p.id !== excludeId)
-      );
+      const { data, error } = await query.maybeSingle();
       
-      return { success: true, data: conflicting.length === 0, error: null };
+      if (error) {
+        return { success: false, data: null, error: this.handleError(error) };
+      }
+      
+      // If no product found with this slug, it's available
+      return { success: true, data: data === null, error: null };
     } catch (error) {
       return { success: false, data: null, error: this.handleError(error) };
     }

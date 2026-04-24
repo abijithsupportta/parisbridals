@@ -19,6 +19,11 @@ export interface Category {
   is_global: boolean;
   created_at: string;
   updated_at?: string;
+  // Audit fields
+  readonly created_by: string | null;
+  readonly created_at_branch_id: string | null;
+  readonly updated_by: string | null;
+  readonly updated_at_branch_id: string | null;
 }
 
 // Category Level Enum

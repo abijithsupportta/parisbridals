@@ -2,8 +2,8 @@
  * Products API Route
  *
  * REST API endpoints for product operations.
- * GET /api/products - List products with search and filtering
- * POST /api/products - Create a new product
+ * GET /api/products - List products with search and filtering (super_admin, admin, manager)
+ * POST /api/products - Create a new product (super_admin, admin, manager)
  *
  * @module app/api/products/route
  */
@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { productService } from '@/services';
 import { Product, CreateProductDTO, ProductSearchSchema, CreateProductSchema } from '@/domain';
 import { z } from 'zod';
+import { apiGuard } from '@/lib/apiGuard';
+import { getAuthUser } from '@/lib/auth';
 
 /**
  * GET /api/products
@@ -32,6 +34,10 @@ import { z } from 'zod';
  */
 export async function GET(request: NextRequest) {
   try {
+    // Super Admin, Admin, and Manager can view products
+    const guard = await apiGuard(request, 'products');
+    if (guard.error) return guard.error;
+
     const { searchParams } = new URL(request.url);
     
     // Parse and validate query parameters
@@ -109,6 +115,16 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Super Admin, Admin, and Manager can create products
+    const guard = await apiGuard(request, 'products');
+    if (guard.error) return guard.error;
+
+    // Get authenticated user for audit fields
+    const authUser = await getAuthUser(request);
+    
+    // Set user context in service
+    productService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+
     const body = await request.json();
     
     // Validate request body
@@ -122,7 +138,8 @@ export async function POST(request: NextRequest) {
       subvariant_id: validatedData.subvariant_id || undefined,
     };
 
-    const result = await productService.createProduct(productData);
+    // Pass user role to service for "all branches" logic
+    const result = await productService.createProduct(productData, authUser?.role || 'staff');
 
     if (!result.success) {
       return NextResponse.json(

@@ -14,6 +14,7 @@ export interface Product {
   readonly category_id: string | null;
   readonly subcategory_id: string | null;
   readonly subvariant_id: string | null;
+  readonly branch_id: string | null;
   name: string;
   slug: string;
   description: string | null;
@@ -32,6 +33,11 @@ export interface Product {
   low_stock_threshold: number;
   created_at: string;
   updated_at?: string;
+  // Audit fields
+  readonly created_by: string | null;
+  readonly created_at_branch_id: string | null;
+  readonly updated_by: string | null;
+  readonly updated_at_branch_id: string | null;
 }
 
 // Product Image Value Object
@@ -75,6 +81,7 @@ export interface CreateProductDTO {
   category_id?: string;
   subcategory_id?: string;
   subvariant_id?: string;
+  branch_id?: string | 'all';
   store_id: string;
   description?: string;
   price_per_day: number;
