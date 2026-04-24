@@ -28,7 +28,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
-    amount: 0,
+    amount: "0",
     paymentMode: PaymentMode.CASH,
     paymentType: PaymentType.FINAL,
     notes: ""
@@ -97,7 +97,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   };
 
   const handleCollectPayment = async () => {
-    if (!order || paymentForm.amount <= 0) {
+    const amountVal = parseFloat(paymentForm.amount) || 0;
+    if (!order || amountVal <= 0) {
       showError("Validation Error", "Amount must be greater than 0");
       return;
     }
@@ -107,7 +108,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         {
           order_id: order.id,
           payment_type: paymentForm.paymentType,
-          amount: paymentForm.amount,
+          amount: amountVal,
           payment_mode: paymentForm.paymentMode,
           notes: paymentForm.notes,
         },
@@ -122,7 +123,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 },
               });
             } else {
-              const newAmountPaid = ((order as any).amount_paid || 0) + paymentForm.amount;
+              const newAmountPaid = ((order as any).amount_paid || 0) + amountVal;
               const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
               updateOrder({
                 id: order.id,
@@ -133,7 +134,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               });
             }
             setIsPaymentModalOpen(false);
-            setPaymentForm({ amount: 0, paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
+            setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
           },
         }
       );
@@ -399,7 +400,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                       size="sm" 
                       className="h-7 text-xs border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium"
                       onClick={() => {
-                        setPaymentForm({ amount: order.security_deposit, paymentMode: PaymentMode.CASH, paymentType: PaymentType.DEPOSIT, notes: "" });
+                        setPaymentForm({ amount: order.security_deposit.toString(), paymentMode: PaymentMode.CASH, paymentType: PaymentType.DEPOSIT, notes: "" });
                         setIsPaymentModalOpen(true);
                       }}
                       disabled={isUpdating || isCreatingPayment}
@@ -425,7 +426,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                         size="sm" 
                         className="h-7 text-xs border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
                         onClick={() => {
-                          setPaymentForm({ amount: Math.max(0, order.total_amount - ((order as any).amount_paid || 0)), paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
+                          setPaymentForm({ amount: Math.max(0, order.total_amount - ((order as any).amount_paid || 0)).toString(), paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
                           setIsPaymentModalOpen(true);
                         }}
                         disabled={isUpdating || isCreatingPayment || Math.max(0, order.total_amount - ((order as any).amount_paid || 0)) === 0}
@@ -582,8 +583,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
             <Input
               type="number"
-              value={paymentForm.amount || ""}
-              onChange={(e) => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
+              value={paymentForm.amount}
+              onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
               className="w-full"
               placeholder="0.00"
             />
