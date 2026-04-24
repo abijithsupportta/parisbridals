@@ -130,6 +130,18 @@ Main Category (parent_id = null)
 - **Image Upload**: Cloudflare R2 integration for category images
 - **Comprehensive Validation**: Server-side validation with clear error messages
 
+### Product Management System
+
+The admin also features a highly optimized **Product Module** for managing high-value rental inventory across multiple branches. 
+
+#### Key Features
+- **Instant Save & Background Sync**: Fire-and-forget inventory synchronization for sub-second form submissions.
+- **Client-Side Image Compression**: Compresses huge photos (up to 20MB) to WebP (<100KB) in the browser before parallel uploading to Cloudflare R2.
+- **Optimistic UI Updates**: Instant cache updates on deletion for a zero-latency feel.
+- **Server-Side Pagination & Debounced Search**: Fast filtering across branches and categories.
+
+👉 **[View Detailed Product Module Documentation](./docs/PRODUCT_MODULE.md)** (Flow diagrams, User Flows, Architecture details)
+
 ### Security Model
 
 - **Service Role Isolation**: Admin operations use service role key bypassing RLS
