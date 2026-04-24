@@ -527,3 +527,4 @@ export class CategoryService {
 
 // Export singleton instance
 export const categoryService = new CategoryService();
+

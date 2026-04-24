@@ -1,5 +1,5 @@
 /**
- * Banner Hooks
+ * Banner Hooks - Optimized with API Routes
  *
  * TanStack Query hooks for banner operations.
  *
@@ -7,28 +7,40 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { bannerService } from '@/services';
 import { Banner, CreateBannerDTO, UpdateBannerDTO, BannerSearchParams } from '@/domain';
 import { useAppStore } from '@/stores';
 
 // Query keys
 const bannerKeys = {
   all: ['banners'] as const,
-  lists: () => [...bannerKeys.all, 'list'] as const,
-  list: (params?: BannerSearchParams) => [...bannerKeys.lists(), params] as const,
-  details: () => [...bannerKeys.all, 'detail'] as const,
-  detail: (id: string) => [...bannerKeys.details(), id] as const,
+  detail: (id: string) => ['banners', id] as const,
 };
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
 
 /**
  * Fetch all banners
  */
 export function useBanners(params?: BannerSearchParams) {
   return useQuery({
-    queryKey: bannerKeys.list(params),
-    queryFn: () => bannerService.getAllBanners(params),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    queryKey: bannerKeys.all,
+    queryFn: async () => {
+      const response = await apiFetch<{ banners: Banner[] }>('/api/banners');
+      return response.banners || [];
+    },
+    staleTime: 0, // Always consider data stale
+    refetchOnWindowFocus: false,
+    refetchOnMount: true, // Refetch when component mounts
   });
 }
 
@@ -38,9 +50,14 @@ export function useBanners(params?: BannerSearchParams) {
 export function useBanner(id: string) {
   return useQuery({
     queryKey: bannerKeys.detail(id),
-    queryFn: () => bannerService.getBannerById(id),
+    queryFn: async () => {
+      const response = await apiFetch<{ banner: Banner }>(`/api/banners/${id}`);
+      return response.banner;
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -51,26 +68,20 @@ export function useCreateBanner() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useAppStore();
 
-  const mutation = useMutation({
-    mutationFn: (data: CreateBannerDTO) => bannerService.createBanner(data),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: bannerKeys.lists() });
-        showSuccess('Banner created successfully');
-      } else {
-        showError('Failed to create banner', result.error?.message);
-      }
+  return useMutation({
+    mutationFn: (data: CreateBannerDTO) =>
+      apiFetch('/api/banners', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: async (result: any) => {
+      // Optimistically update cache with new banner
+      queryClient.setQueryData(bannerKeys.all, (old: Banner[] = []) => {
+        return [result.banner, ...old];
+      });
+      showSuccess('Banner created successfully');
     },
     onError: (error) => {
       showError('Failed to create banner', error.message);
     },
   });
-
-  return {
-    ...mutation,
-    createBanner: mutation.mutate,
-    isLoading: mutation.isPending,
-  };
 }
 
 /**
@@ -80,28 +91,21 @@ export function useUpdateBanner() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useAppStore();
 
-  const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateBannerDTO }) => 
-      bannerService.updateBanner(id, data),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: bannerKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: bannerKeys.details() });
-        showSuccess('Banner updated successfully');
-      } else {
-        showError('Failed to update banner', result.error?.message);
-      }
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateBannerDTO }) =>
+      apiFetch(`/api/banners/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: async (result: any, variables) => {
+      // Optimistically update cache
+      queryClient.setQueryData(bannerKeys.all, (old: Banner[] = []) => {
+        return old.map(banner => banner.id === variables.id ? result.banner : banner);
+      });
+      queryClient.setQueryData(bannerKeys.detail(variables.id), result.banner);
+      showSuccess('Banner updated successfully');
     },
     onError: (error) => {
       showError('Failed to update banner', error.message);
     },
   });
-
-  return {
-    ...mutation,
-    updateBanner: mutation.mutate,
-    isLoading: mutation.isPending,
-  };
 }
 
 /**
@@ -111,36 +115,57 @@ export function useDeleteBanner() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useAppStore();
 
-  const mutation = useMutation({
-    mutationFn: (id: string) => bannerService.deleteBanner(id),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: bannerKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: bannerKeys.details() });
-        showSuccess('Banner deleted successfully');
-      } else {
-        showError('Failed to delete banner', result.error?.message);
-      }
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/banners/${id}`, { method: 'DELETE' }),
+    onSuccess: (_data, id) => {
+      // Optimistically remove from cache
+      queryClient.setQueryData(bannerKeys.all, (old: Banner[] = []) => {
+        return old.filter(banner => banner.id !== id);
+      });
+      showSuccess('Banner deleted successfully');
     },
     onError: (error) => {
       showError('Failed to delete banner', error.message);
     },
   });
-
-  return {
-    ...mutation,
-    deleteBanner: mutation.mutate,
-    isLoading: mutation.isPending,
-  };
 }
 
 /**
- * Count banners
+ * Reorder banners
  */
-export function useBannerCount(params?: BannerSearchParams) {
-  return useQuery({
-    queryKey: [...bannerKeys.lists(), 'count', params],
-    queryFn: () => bannerService.countBanners(params),
-    staleTime: 5 * 60 * 1000,
+export function useReorderBanners() {
+  const queryClient = useQueryClient();
+  const { showSuccess, showError } = useAppStore();
+
+  return useMutation({
+    mutationFn: (banners: { id: string; priority: number }[]) =>
+      apiFetch('/api/banners/reorder', { method: 'POST', body: JSON.stringify({ banners }) }),
+    onMutate: async (newOrder) => {
+      await queryClient.cancelQueries({ queryKey: bannerKeys.all });
+      const previousBanners = queryClient.getQueryData<Banner[]>(bannerKeys.all);
+      
+      // Optimistically update
+      if (previousBanners) {
+        const reordered = [...previousBanners].sort((a, b) => {
+          const aPriority = newOrder.find(o => o.id === a.id)?.priority ?? a.priority;
+          const bPriority = newOrder.find(o => o.id === b.id)?.priority ?? b.priority;
+          return bPriority - aPriority;
+        });
+        queryClient.setQueryData(bannerKeys.all, reordered);
+      }
+      
+      return { previousBanners };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: bannerKeys.all, exact: true });
+      showSuccess('Banner order updated');
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previousBanners) {
+        queryClient.setQueryData(bannerKeys.all, context.previousBanners);
+      }
+      showError('Failed to reorder banners', error.message);
+    },
   });
 }

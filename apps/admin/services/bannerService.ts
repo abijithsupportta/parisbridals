@@ -58,27 +58,29 @@ export class BannerService {
       };
     }
 
-    // Validate redirect type
-    if (data.redirect_type === 'url' && !data.redirect_url) {
-      return {
-        data: null,
-        error: {
-          message: 'Redirect URL is required when redirect type is URL',
-          code: 'VALIDATION_ERROR'
-        } as any,
-        success: false,
-      };
-    }
-
-    if (data.redirect_type !== 'url' && data.redirect_type !== 'none' && !data.redirect_target_id) {
-      return {
-        data: null,
-        error: {
-          message: 'Redirect target ID is required for this redirect type',
-          code: 'VALIDATION_ERROR'
-        } as any,
-        success: false,
-      };
+    // Validate redirect configuration
+    if (data.redirect_type === 'url') {
+      if (!data.redirect_url) {
+        return {
+          data: null,
+          error: {
+            message: 'Redirect URL is required when redirect type is URL',
+            code: 'VALIDATION_ERROR'
+          } as any,
+          success: false,
+        };
+      }
+    } else if (['category', 'subcategory', 'subvariant', 'product'].includes(data.redirect_type)) {
+      if (!data.redirect_target_id) {
+        return {
+          data: null,
+          error: {
+            message: 'Redirect target ID is required for this redirect type',
+            code: 'VALIDATION_ERROR'
+          } as any,
+          success: false,
+        };
+      }
     }
 
     return await bannerRepository.create(data);
@@ -101,27 +103,29 @@ export class BannerService {
       };
     }
 
-    // Validate redirect type if changed
-    if (data.redirect_type === 'url' && !data.redirect_url) {
-      return {
-        data: null,
-        error: {
-          message: 'Redirect URL is required when redirect type is URL',
-          code: 'VALIDATION_ERROR'
-        } as any,
-        success: false,
-      };
-    }
-
-    if (data.redirect_type !== 'url' && data.redirect_type !== 'none' && !data.redirect_target_id) {
-      return {
-        data: null,
-        error: {
-          message: 'Redirect target ID is required for this redirect type',
-          code: 'VALIDATION_ERROR'
-        } as any,
-        success: false,
-      };
+    // Validate redirect configuration if changed
+    if (data.redirect_type === 'url') {
+      if (!data.redirect_url) {
+        return {
+          data: null,
+          error: {
+            message: 'Redirect URL is required when redirect type is URL',
+            code: 'VALIDATION_ERROR'
+          } as any,
+          success: false,
+        };
+      }
+    } else if (data.redirect_type && ['category', 'subcategory', 'subvariant', 'product'].includes(data.redirect_type)) {
+      if (!data.redirect_target_id) {
+        return {
+          data: null,
+          error: {
+            message: 'Redirect target ID is required for this redirect type',
+            code: 'VALIDATION_ERROR'
+          } as any,
+          success: false,
+        };
+      }
     }
 
     return await bannerRepository.update(id, data);
