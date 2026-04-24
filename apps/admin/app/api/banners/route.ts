@@ -7,8 +7,6 @@
  *   GET    /api/banners/counts    Get banner counts by type
  *   GET    /api/banners/remaining-slots  Get remaining slots by type
  *
-<<<<<<< HEAD
-=======
  * GET Query Params:
  *   - is_active: boolean (optional)
  *   - redirect_type: string (optional)
@@ -24,7 +22,6 @@
  *   409 { error }    (limit exceeded)
  *   500 { error }    (server/database failure)
  *
->>>>>>> main
  * @module app/api/banners/route
  */
 
@@ -78,12 +75,7 @@ export async function POST(request: NextRequest) {
     const result = await bannerService.createBanner(body);
 
     if (!result.success) {
-<<<<<<< HEAD
       return apiRepositoryError(result.error, 'Failed to create banner');
-=======
-      const statusCode = result.error?.code === 'LIMIT_EXCEEDED' || result.error?.code === 'POSITION_TAKEN' ? 409 : 400;
-      return NextResponse.json({ error: result.error?.message }, { status: statusCode });
->>>>>>> main
     }
     return apiSuccess(result.data, { status: 201, message: 'Banner created successfully' });
   } catch (err) {

@@ -10,6 +10,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Modal from "@/components/admin/Modal";
 import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment } from "@/hooks";
 import { useAppStore } from "@/stores";
@@ -563,24 +565,28 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         onClose={() => setIsPaymentModalOpen(false)}
         title={paymentForm.paymentType === PaymentType.DEPOSIT ? "Collect Security Deposit" : "Collect Payment"}
       >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
-            <select
+        <div className="space-y-5 pt-2">
+          <div className="space-y-2">
+            <Label>Payment Method</Label>
+            <Select
               value={paymentForm.paymentMode}
-              onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value as PaymentMode })}
-              className="w-full border-slate-200 rounded-md h-10 text-sm focus:border-slate-900 focus:ring-slate-900"
+              onValueChange={(value) => setPaymentForm({ ...paymentForm, paymentMode: value as PaymentMode })}
             >
-              <option value={PaymentMode.CASH}>Cash</option>
-              <option value={PaymentMode.UPI}>UPI</option>
-              <option value={PaymentMode.CARD}>Card</option>
-              <option value={PaymentMode.BANK_TRANSFER}>Bank Transfer</option>
-              <option value={PaymentMode.CHEQUE}>Cheque</option>
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a payment method" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PaymentMode.CASH}>Cash</SelectItem>
+                <SelectItem value={PaymentMode.UPI}>UPI</SelectItem>
+                <SelectItem value={PaymentMode.CARD}>Card</SelectItem>
+                <SelectItem value={PaymentMode.BANK_TRANSFER}>Bank Transfer</SelectItem>
+                <SelectItem value={PaymentMode.CHEQUE}>Cheque</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
+          <div className="space-y-2">
+            <Label>Amount (₹)</Label>
             <Input
               type="number"
               value={paymentForm.amount}
@@ -589,14 +595,14 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               placeholder="0.00"
             />
             {paymentForm.paymentType === PaymentType.FINAL && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-slate-500 font-medium">
                 Max amount due: {formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}
               </p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Notes / Transaction ID (Optional)</label>
+          <div className="space-y-2">
+            <Label>Notes / Transaction ID <span className="text-slate-400 font-normal">(Optional)</span></Label>
             <Input
               value={paymentForm.notes}
               onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
@@ -605,7 +611,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             />
           </div>
 
-          <div className="pt-4 flex justify-end gap-2">
+          <div className="pt-4 flex justify-end gap-3">
             <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancel</Button>
             <Button onClick={handleCollectPayment} disabled={isCreatingPayment}>
               {isCreatingPayment ? "Saving..." : "Save Payment"}

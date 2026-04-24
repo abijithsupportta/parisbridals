@@ -5,27 +5,19 @@
  * Expected form fields:
  *   - file: The binary file to upload
  *   - folder: (optional) Logical folder name, defaults to "uploads"
-<<<<<<< HEAD
- * 
  * Returns JSON: { success: true, data: { url, key } }
- * 
-=======
- *
- * Returns JSON: { url: string, key: string }
  *   - url: Publicly accessible URL of the uploaded file
  *   - key: S3 object key for future reference (e.g., deletion)
  *
  * HEIC/HEIF files are automatically converted to JPEG for web compatibility.
  *
->>>>>>> main
  * @route POST /api/upload
  * @module app/api/upload/route
  */
 
 import { uploadFileToR2, generateR2Key } from "@/lib/r2";
-<<<<<<< HEAD
 import { apiSuccess, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
-=======
+// @ts-ignore - no types available for heic-convert
 import convert from "heic-convert";
 
 function isHeicFile(file: File): boolean {
@@ -52,8 +44,6 @@ async function convertHeicToJpeg(buffer: Buffer): Promise<Buffer> {
     throw new Error("Failed to convert HEIC file to JPEG");
   }
 }
->>>>>>> main
-
 export async function POST(request: Request) {
   try {
     // Parse the multipart form data from the incoming request
