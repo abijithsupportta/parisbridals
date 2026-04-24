@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Search, Send, X, Package, Sparkles, Tag, Heart, Truck, BookOpen, ShoppingBag } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/client";
 
 interface ProductSuggestion {
   id: string;

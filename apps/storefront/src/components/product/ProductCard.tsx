@@ -20,7 +20,7 @@ export default function ProductCard({ product, badge }: ProductCardProps) {
       href={`/product/${product.id}`}
       className="group"
     >
-      <Card className="relative aspect-[3/4] overflow-hidden bg-silk border-none shadow-silk hover:shadow-2xl transition-all duration-700 hover:-translate-y-1">
+      <Card className="relative aspect-[3/4] overflow-hidden bg-silk border-none shadow-silk silk-hover">
         <CardContent className="p-0 h-full w-full">
           {firstImage ? (
             <img

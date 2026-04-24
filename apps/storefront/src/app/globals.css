@@ -395,10 +395,50 @@
   animation: fadeInUp 0.8s ease-out forwards;
 }
 
+/* Luxury Micro-Animations */
+.silk-hover {
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.silk-hover:hover {
+  transform: translateY(-8px) scale(1.01);
+  box-shadow: 0 40px 80px -20px rgba(183, 110, 121, 0.18), 0 20px 40px -10px rgba(183, 110, 121, 0.1);
+}
+
+.luxury-link {
+  position: relative;
+  transition: color 0.3s ease;
+}
+.luxury-link::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 0;
+  height: 1px;
+  background: var(--rosegold);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  transform: translateX(-50%);
+}
+.luxury-link:hover {
+  color: var(--rosegold);
+}
+.luxury-link:hover::after {
+  width: 80%;
+}
+
+@keyframes softGlow {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(183, 110, 121, 0.1)); }
+  50% { filter: drop-shadow(0 0 15px rgba(183, 110, 121, 0.3)); }
+}
+
+.animate-softGlow {
+  animation: softGlow 4s ease-in-out infinite;
+}
+
 /* Staggered children animation */
 .stagger-children > * {
   opacity: 0;
-  animation: fadeInUp 0.6s ease-out forwards;
+  animation: fadeInUp 0.8s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 .stagger-children > *:nth-child(1) { animation-delay: 0.1s; }
 .stagger-children > *:nth-child(2) { animation-delay: 0.2s; }

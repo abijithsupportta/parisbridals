@@ -169,7 +169,7 @@ export default function Header({ store, categories }: HeaderProps) {
                 <Link
                   href="/collections"
                   className={cn(
-                    "flex items-center gap-2 shrink-0 transition-all duration-300 ml-4",
+                    "flex items-center gap-2 shrink-0 transition-all duration-300 ml-4 luxury-link",
                     isScrolled ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col h-20 justify-center"
                   )}
                 >
@@ -190,7 +190,7 @@ export default function Header({ store, categories }: HeaderProps) {
                     key={category.id || index}
                     href={`/collections?category_id=${category.id}`}
                     className={cn(
-                      "flex items-center snap-start group shrink-0 transition-all duration-300",
+                      "flex items-center snap-start group shrink-0 transition-all duration-300 luxury-link",
                       isScrolled ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col gap-2 h-20 justify-center"
                     )}
                   >
