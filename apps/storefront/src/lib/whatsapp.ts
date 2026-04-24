@@ -1,5 +1,5 @@
 // Shared WhatsApp ordering config for Paris Bridals
-export const WHATSAPP_NUMBER = "917010085577";
+export const WHATSAPP_NUMBER = "918129668157";
 
 interface OrderDetails {
   productName: string;
