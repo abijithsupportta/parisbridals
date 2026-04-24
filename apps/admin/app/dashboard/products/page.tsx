@@ -138,18 +138,38 @@ export default function ProductsPage() {
   // Get stock for a product at the current branch
   const getStockAtBranch = (productId: string) => {
     const rows = inventoryByProduct[productId] || [];
+    const product = products.find(p => p.id === productId);
+    
     if (!selectedBranchId) {
-      // No branch selected — aggregate across all branches
+      // No branch selected — aggregate across all branches or fallback
+      if (rows.length === 0) {
+        return { 
+          quantity: product?.quantity || 0, 
+          available: product?.available_quantity || 0, 
+          threshold: product?.low_stock_threshold || 0, 
+          hasStock: true 
+        };
+      }
       const totalQty = rows.reduce((sum, r) => sum + (r.quantity || 0), 0);
       const totalAvail = rows.reduce((sum, r) => sum + (r.available_quantity || 0), 0);
       return { quantity: totalQty, available: totalAvail, threshold: 0, hasStock: rows.length > 0 };
     }
+    
     const row = rows.find((r) => r.branch_id === selectedBranchId);
+    if (!row) {
+      return { 
+        quantity: product?.quantity || 0, 
+        available: product?.available_quantity || 0, 
+        threshold: product?.low_stock_threshold || 0, 
+        hasStock: true 
+      };
+    }
+    
     return {
-      quantity: row?.quantity ?? 0,
-      available: row?.available_quantity ?? 0,
-      threshold: row?.low_stock_threshold ?? 0,
-      hasStock: !!row,
+      quantity: row.quantity ?? 0,
+      available: row.available_quantity ?? 0,
+      threshold: row.low_stock_threshold ?? 0,
+      hasStock: true,
     };
   };
 

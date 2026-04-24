@@ -211,7 +211,7 @@ export function useProcessOrderReturn() {
 
   const mutation = useMutation({
     mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) => 
-      apiFetch<{ order: OrderWithRelations }>(`/api/orders/${orderId}/return`, { method: 'POST', body: JSON.stringify(returnData) }),
+      apiFetch<{ order: OrderWithRelations }>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       queryClient.invalidateQueries({ queryKey: orderKeys.details() });

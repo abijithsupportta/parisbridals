@@ -283,7 +283,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.orderStatusHistoryTable)
       .insert({
         order_id: order.id,
-        status: 'pending',
+        status: initialStatus,
         changed_by: null,
       });
 
@@ -460,6 +460,16 @@ export class OrderRepository extends BaseRepository {
 
     // Update order items with condition and damage info
     for (const item of returnData.items) {
+      // Get existing order item to prevent double-counting inventory on partial returns
+      const { data: orderItem } = await this.client
+        .from(this.orderItemsTable)
+        .select('returned_quantity, product_id, order(branch_id)')
+        .eq('id', item.item_id)
+        .single();
+        
+      const oldReturnedQuantity = orderItem?.returned_quantity || 0;
+      const quantityToIncrement = item.returned_quantity - oldReturnedQuantity;
+
       await this.client
         .from(this.orderItemsTable)
         .update({
@@ -472,14 +482,8 @@ export class OrderRepository extends BaseRepository {
         })
         .eq('id', item.item_id);
 
-      // Increment inventory
-      const { data: orderItem } = await this.client
-        .from(this.orderItemsTable)
-        .select('product_id, order(branch_id)')
-        .eq('id', item.item_id)
-        .single();
-
-      if (orderItem && orderItem.product_id) {
+      // Increment inventory only by the difference
+      if (quantityToIncrement > 0 && orderItem && orderItem.product_id) {
         const branchId = (orderItem as any).order?.branch_id || (orderItem as any).order?.[0]?.branch_id;
         
         const { data: inv } = await this.client
@@ -492,7 +496,7 @@ export class OrderRepository extends BaseRepository {
         if (inv) {
           await this.client
             .from('product_inventory')
-            .update({ available_quantity: inv.available_quantity + item.returned_quantity })
+            .update({ available_quantity: inv.available_quantity + quantityToIncrement })
             .eq('product_id', orderItem.product_id)
             .eq('branch_id', branchId);
         }
@@ -506,7 +510,7 @@ export class OrderRepository extends BaseRepository {
         if (prod) {
           await this.client
             .from('products')
-            .update({ available_quantity: prod.available_quantity + item.returned_quantity })
+            .update({ available_quantity: prod.available_quantity + quantityToIncrement })
             .eq('id', orderItem.product_id);
         }
       }
@@ -517,7 +521,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.orderStatusHistoryTable)
       .insert({
         order_id: orderId,
-        status: 'returned',
+        status: newStatus,
         notes: returnData.notes || null,
         changed_by: null,
       });
