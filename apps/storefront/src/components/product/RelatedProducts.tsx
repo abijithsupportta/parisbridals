@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Product } from "@/lib/supabase/queries";
-import { Card, CardContent } from "@/components/ui/card";
 
 interface RelatedProductsProps {
   products: Product[];
@@ -30,32 +29,32 @@ export default function RelatedProducts({
 
         {/* Mobile: horizontal snap scroll */}
         <div className="lg:hidden px-6 overflow-x-auto snap-x snap-mandatory hide-scrollbar">
-          <div className="flex gap-4 pb-3 w-max">
+          <div className="flex gap-3 pb-3 w-max">
             {products.map((product) => (
               <Link
                 key={product.id}
                 href={`/product/${product.id}`}
                 className="group snap-start shrink-0"
-                style={{ width: "48vw", maxWidth: "210px" }}
+                style={{ width: "44vw", maxWidth: "200px" }}
               >
-                <Card className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-white border border-[var(--border-silk)] shadow-sm">
-                  <CardContent className="p-0 h-full w-full">
-                    {product.images && product.images.length > 0 ? (
-                      <img
-                        src={product.images[0]}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-rosegold/5 text-4xl opacity-20">
-                        💎
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white/85 to-transparent pointer-events-none" />
-                  </CardContent>
-                </Card>
-                <div className="mt-3 px-0.5">
-                  <h3 className="text-sm font-serif text-heading mb-1 line-clamp-1 group-hover:text-rosegold transition-colors">
+                <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-silk-dark">
+                  {product.images && product.images.length > 0 ? (
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      loading="lazy"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-rosegold/5 text-4xl opacity-20">
+                      💎
+                    </div>
+                  )}
+                  {/* Subtle depth gradient */}
+                  <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/8 to-transparent pointer-events-none" />
+                </div>
+                <div className="mt-2.5 px-0.5">
+                  <h3 className="text-[13px] font-serif text-heading mb-1 line-clamp-1 group-hover:text-rosegold transition-colors">
                     {product.name}
                   </h3>
                   <p className="text-xs text-rosegold font-bold font-serif">
@@ -68,30 +67,30 @@ export default function RelatedProducts({
         </div>
 
         {/* Desktop: grid */}
-        <div className="hidden lg:grid lg:grid-cols-4 gap-8 px-6 md:px-12 stagger-children">
+        <div className="hidden lg:grid lg:grid-cols-4 gap-6 xl:gap-8 px-6 md:px-12 stagger-children">
           {products.slice(0, 4).map((product) => (
             <Link
               key={product.id}
               href={`/product/${product.id}`}
-              className="group"
+              className="group block"
             >
-              <Card className="relative aspect-[4/5] rounded-3xl overflow-hidden bg-white border border-[var(--border-silk)] shadow-sm hover:shadow-silk transition-all duration-700 hover:-translate-y-2">
-                <CardContent className="p-0 h-full w-full">
-                  {product.images && product.images.length > 0 ? (
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-rosegold/5 text-4xl opacity-20">
-                      💎
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-white/85 to-transparent pointer-events-none" />
-                </CardContent>
-              </Card>
-              <div className="mt-5 px-1">
+              <div className="relative aspect-[3/4] rounded-2xl xl:rounded-3xl overflow-hidden bg-silk-dark shadow-sm hover:shadow-silk transition-all duration-700 group-hover:-translate-y-2">
+                {product.images && product.images.length > 0 ? (
+                  <img
+                    src={product.images[0]}
+                    alt={product.name}
+                    loading="lazy"
+                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
+                  />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-rosegold/5 text-4xl opacity-20">
+                    💎
+                  </div>
+                )}
+                {/* Subtle depth gradient */}
+                <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/8 to-transparent pointer-events-none" />
+              </div>
+              <div className="mt-4 px-1">
                 <h3 className="text-[15px] font-serif text-heading mb-1.5 line-clamp-1 group-hover:text-rosegold transition-colors">
                   {product.name}
                 </h3>

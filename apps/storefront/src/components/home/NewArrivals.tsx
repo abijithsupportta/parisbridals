@@ -158,7 +158,7 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
   const displayProducts = products && products.length > 0 ? products : fallbackProducts;
 
   return (
-    <section className="py-6 sm:py-8 md:py-12 px-6 md:px-12 bg-white">
+    <section className="py-6 sm:py-8 md:py-12 px-4 sm:px-6 md:px-12 bg-white">
       <div className="max-w-[1600px] mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-4 sm:mb-6 md:mb-8 gap-4 sm:gap-6">
           <div className="animate-fadeInUp">
@@ -175,8 +175,9 @@ export default function NewArrivals({ products }: NewArrivalsProps) {
           </Link>
         </div>
         
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-5 stagger-children">
-          {displayProducts.slice(0, 6).map((product) => (
+        {/* Mobile: 2 cols, Tablet: 3 cols, Desktop: 4 cols — images fill smoothly */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 stagger-children">
+          {displayProducts.slice(0, 8).map((product) => (
             <ProductCard
               key={product.id}
               product={product}

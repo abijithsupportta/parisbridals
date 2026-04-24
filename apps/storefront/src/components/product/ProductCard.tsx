@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { Product } from '@/lib/supabase/queries';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 
 interface ProductCardProps {
   product: Product;
@@ -12,47 +11,52 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, badge }: ProductCardProps) {
+  const imageUrl = product.images && product.images.length > 0 ? product.images[0] : null;
+
   return (
     <Link
       href={`/product/${product.id}`}
-      className="group"
+      className="group block"
     >
-      <Card className="relative aspect-[3/4] overflow-hidden bg-silk border-none shadow-silk hover:shadow-2xl transition-all duration-700 hover:-translate-y-1">
-        <CardContent className="p-0 h-full w-full">
-          {product.images && product.images.length > 0 ? (
-            <img
-              src={product.images[0]}
-              alt={product.name}
-              className="w-full h-full object-fill transition-transform duration-1000 group-hover:scale-105"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-rosegold/5">
-              <span className="text-4xl opacity-20">??</span>
-            </div>
-          )}
+      {/* Image Container — fixed aspect ratio, image fills & crops */}
+      <div className="relative aspect-[3/4] overflow-hidden rounded-xl sm:rounded-2xl bg-silk-dark">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={product.name}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06]"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center bg-rosegold/5">
+            <span className="text-4xl opacity-20">💎</span>
+          </div>
+        )}
 
-          {badge && (
-            <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-10">
-              <Badge variant={badge.variant || 'secondary'} className="bg-silk/80 backdrop-blur-sm text-rosegold text-[8px] sm:text-[9px] uppercase tracking-widest border-rosegold/20 px-1.5 sm:px-2 py-0.5">
-                {badge.text}
-              </Badge>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        {/* Subtle bottom gradient for depth */}
+        <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/10 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
-      <div className="mt-2 sm:mt-3 text-center">
-        <h3 className="text-sm sm:text-base md:text-lg font-serif text-rosegold mb-1 sm:mb-1.5 line-clamp-2 transition-colors leading-tight">
+        {/* Badge */}
+        {badge && (
+          <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-10">
+            <Badge
+              variant={badge.variant || 'secondary'}
+              className="bg-white/85 backdrop-blur-sm text-rosegold text-[8px] sm:text-[9px] uppercase tracking-widest border-rosegold/15 px-1.5 sm:px-2 py-0.5 shadow-sm"
+            >
+              {badge.text}
+            </Badge>
+          </div>
+        )}
+      </div>
+
+      {/* Product Info */}
+      <div className="mt-2.5 sm:mt-3 text-center px-0.5">
+        <h3 className="text-[13px] sm:text-sm md:text-base font-serif text-heading mb-1 sm:mb-1.5 line-clamp-1 group-hover:text-rosegold transition-colors leading-snug">
           {product.name}
         </h3>
-        <div className="flex flex-col items-center gap-1 sm:gap-1.5">
-          <p className="text-sm sm:text-base md:text-lg text-rosegold font-semibold font-serif">
-            ₹{product.price_per_day.toLocaleString()}/day
-          </p>
-          <p className="text-[8px] sm:text-[9px] md:text-[10px] uppercase tracking-[0.15em] text-caption">
-            Available for Rent
-          </p>
-        </div>
+        <p className="text-[13px] sm:text-sm md:text-base text-rosegold font-semibold font-serif">
+          ₹{product.price_per_day.toLocaleString('en-IN')}<span className="text-[9px] sm:text-[10px] text-caption font-sans ml-0.5">/day</span>
+        </p>
       </div>
     </Link>
   );
