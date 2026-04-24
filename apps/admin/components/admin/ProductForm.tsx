@@ -460,7 +460,7 @@ export default function ProductForm({
               accept="image/*"
               multiple={true}
               maxFiles={MAX_IMAGES}
-              maxSize={5 * 1024 * 1024}
+              maxSize={20 * 1024 * 1024}
               folder="products"
               value={imageUrls}
               onChange={setImageUrls}

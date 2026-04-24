@@ -105,15 +105,14 @@ export function useProduct(id: string) {
  */
 export function useCreateProduct() {
   const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
+  const { showError } = useAppStore();
   const closeCreateModal = useProductStore((state) => state.closeCreateModal);
 
   const mutation = useMutation({
     mutationFn: (data: CreateProductDTO) =>
       apiFetch('/api/products', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (result) => {
+    onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ['products'] });
-      showSuccess('Product created successfully');
       closeCreateModal();
     },
     onError: (error) => showError('Failed to create product', error.message),
@@ -131,7 +130,7 @@ export function useCreateProduct() {
  */
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
+  const { showError } = useAppStore();
   const closeEditModal = useProductStore((state) => state.closeEditModal);
 
   const mutation = useMutation({
@@ -140,7 +139,6 @@ export function useUpdateProduct() {
     onSuccess: (_data, variables) => {
       queryClient.refetchQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.id) });
-      showSuccess('Product updated successfully');
       closeEditModal();
     },
     onError: (error) => showError('Failed to update product', error.message),
