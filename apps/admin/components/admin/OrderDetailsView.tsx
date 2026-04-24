@@ -10,7 +10,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useOrder, useOrderStatusHistory, useProcessOrderReturn } from "@/hooks";
+import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
 import { OrderStatus, ConditionRating } from "@/domain/types/order";
@@ -20,6 +20,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const { data: orderResponse, isLoading } = useOrder(orderId);
   const { data: historyResponse } = useOrderStatusHistory(orderId);
   const { processOrderReturn, isPending: isReturning } = useProcessOrderReturn();
+  const { updateOrder, isLoading: isUpdating } = useUpdateOrder();
   const { showSuccess, showError } = useAppStore();
 
   const order = orderResponse?.data;
@@ -64,6 +65,17 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       updated[key] = { ...returnItems[key], status: 'excellent', damage_fee: 0, notes: "" };
     });
     setReturnItems(updated);
+  };
+
+  const handleStartOrder = () => {
+    if (!order) return;
+    updateOrder({
+      id: order.id,
+      data: {
+        status: OrderStatus.ONGOING,
+        start_date: new Date().toISOString().split('T')[0]
+      }
+    });
   };
 
   const handleItemUpdate = (itemId: string, field: string, value: any) => {
@@ -145,6 +157,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             </p>
           </div>
         </div>
+        {order.status === OrderStatus.SCHEDULED && (
+          <Button
+            onClick={handleStartOrder}
+            disabled={isUpdating}
+            className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold h-9 px-4 shadow-sm"
+          >
+            {isUpdating ? "Starting..." : "Start Order Today"}
+          </Button>
+        )}
       </div>
 
       {/* Two-column layout */}

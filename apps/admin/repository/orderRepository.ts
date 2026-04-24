@@ -190,6 +190,10 @@ export class OrderRepository extends BaseRepository {
     
     const storeId = branchResponse.data.store_id;
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const initialStatus = startDateStr > todayStr ? 'scheduled' : 'ongoing';
+
     // Start a transaction by creating the order first
     // DB columns: start_date, end_date, event_date (all DATE type)
     const orderResponse = await this.client
@@ -198,8 +202,8 @@ export class OrderRepository extends BaseRepository {
         customer_id: data.customer_id,
         branch_id: data.branch_id,
         store_id: storeId,
-        status: 'pending',
-        start_date: startDate.toISOString().split('T')[0],
+        status: initialStatus,
+        start_date: startDateStr,
         end_date: endDate.toISOString().split('T')[0],
         event_date: data.event_date ? new Date(data.event_date).toISOString().split('T')[0] : startDate.toISOString().split('T')[0],
         delivery_method: data.delivery_method || 'pickup',
@@ -423,11 +427,28 @@ export class OrderRepository extends BaseRepository {
    * Process order return with condition assessment
    */
   async processReturn(orderId: string, returnData: ReturnOrderDTO): Promise<RepositoryResult<OrderWithRelations>> {
-    // Update order status to returned
+    // Determine final status based on return condition
+    let newStatus = 'returned';
+    let hasMissing = false;
+    let hasDamage = false;
+
+    for (const item of returnData.items) {
+      if (item.damage_charges && item.damage_charges > 0) hasDamage = true;
+      if (item.condition_rating === 'damaged') hasDamage = true;
+      if (item.returned_quantity === 0) hasMissing = true;
+    }
+
+    if (hasDamage) {
+      newStatus = 'flagged';
+    } else if (hasMissing) {
+      newStatus = 'partial';
+    }
+
+    // Update order status to new calculated status
     const orderResponse = await this.client
       .from(this.tableName)
       .update({
-        status: 'returned',
+        status: newStatus,
       })
       .eq('id', orderId)
       .select()
