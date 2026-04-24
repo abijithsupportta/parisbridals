@@ -288,7 +288,7 @@ export default function ProductsPage() {
             <span>• {stats.count} total items</span>
           </p>
         </div>
-        <Button asChild className="gap-2">
+        <Button asChild className="gap-2 bg-slate-900 text-white hover:bg-slate-800">
           <Link href="/dashboard/products/create">
             <Plus className="w-4 h-4" />
             Add Product
@@ -409,7 +409,7 @@ export default function ProductsPage() {
                 : `There are no products stocked at ${currentBranchName || "this branch"}.`}
             </p>
             {!searchQuery && (
-              <Button className="mt-6" onClick={() => router.push("/dashboard/products/create")}>
+              <Button className="mt-6 bg-slate-900 text-white hover:bg-slate-800" onClick={() => router.push("/dashboard/products/create")}>
                 Add New Product
               </Button>
             )}
