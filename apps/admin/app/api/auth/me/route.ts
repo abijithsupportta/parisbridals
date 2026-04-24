@@ -3,21 +3,19 @@
  * GET /api/auth/me — Get current authenticated user info
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { apiSuccess, apiUnauthorized, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
     
     if (!user) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
-      );
+      return apiUnauthorized('Not authenticated');
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       id: user.id,
       email: user.email,
       role: user.role,
@@ -26,9 +24,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('[API] GET /api/auth/me error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

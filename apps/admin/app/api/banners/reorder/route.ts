@@ -3,10 +3,11 @@
  * POST /api/banners/reorder — bulk update banner priorities
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { bannerService } from "@/services/bannerService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     const { banners } = await request.json();
     
     if (!Array.isArray(banners)) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+      return apiBadRequest('Invalid payload — banners must be an array');
     }
 
     // Update each banner's priority
@@ -27,9 +28,9 @@ export async function POST(request: NextRequest) {
       await bannerService.updateBanner(banner.id, { priority: banner.priority });
     }
 
-    return NextResponse.json({ success: true });
+    return apiSuccess(null, { message: 'Banner order updated successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

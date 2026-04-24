@@ -22,6 +22,7 @@ import {
 } from '@/domain';
 import { useAppStore, useProductStore } from '@/stores';
 import { useCallback } from 'react';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 const productKeys = {
   all: ['products'] as const,
@@ -36,7 +37,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -55,7 +56,7 @@ export function useProducts(params: ProductSearchParams = {}) {
         }
       });
       const url = `/api/products${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
-      const response = await apiFetch<{ success: boolean; data: ProductSearchResult }>(url);
+      const response = await apiFetch<ApiSuccessResponse<ProductSearchResult>>(url);
       return response.data;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -84,7 +85,7 @@ export function useProduct(id: string) {
     queryKey: productKeys.detail(id),
     queryFn: async () => {
       console.log('Fetching product with ID:', id);
-      const response = await apiFetch<{ success: boolean; data: ProductWithRelations }>(`/api/products/${id}`);
+      const response = await apiFetch<ApiSuccessResponse<ProductWithRelations>>(`/api/products/${id}`);
       console.log('API response:', response);
       if (!response || !response.data) {
         throw new Error('Invalid response from API');
@@ -240,7 +241,10 @@ export function useDeleteProduct() {
 export function useCanDeleteProduct(id: string) {
   const query = useQuery({
     queryKey: ['product-can-delete', id],
-    queryFn: () => apiFetch<{ canDelete: boolean; reason?: string }>(`/api/products/${id}/can-delete`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<{ canDelete: boolean; reason?: string }>>(`/api/products/${id}/can-delete`);
+      return response.data;
+    },
     enabled: false, // Manual query
   });
 
@@ -263,7 +267,7 @@ export function useBulkProductOperation() {
 
   const mutation = useMutation({
     mutationFn: (operation: BulkProductOperation) =>
-      apiFetch<{ success: boolean; data: BulkOperationResult }>('/api/products/bulk', { method: 'POST', body: JSON.stringify(operation) }),
+      apiFetch<ApiSuccessResponse<BulkOperationResult>>('/api/products/bulk', { method: 'POST', body: JSON.stringify(operation) }),
     onSuccess: (result) => {
       queryClient.refetchQueries({ queryKey: productKeys.all });
       if (result.success && result.data) {
@@ -358,4 +362,3 @@ export function useProductSelection() {
     hasSelection: selectedCount > 0,
   };
 }
-

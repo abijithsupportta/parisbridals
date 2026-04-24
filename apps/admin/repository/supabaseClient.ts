@@ -251,11 +251,24 @@ export abstract class BaseRepository {
   }
 
   /**
-   * Transaction helper (for multiple operations)
+   * @deprecated — This method runs operations sequentially in JavaScript and
+   * provides NO true database-level atomicity. If operation 1 succeeds and
+   * operation 2 fails, operation 1 is **already committed** — there is no
+   * rollback. Do NOT use for multi-table writes.
+   *
+   * Instead, use `rpc()` to call a Supabase PostgreSQL function that wraps
+   * the operations in a real `BEGIN / COMMIT / ROLLBACK` block.
+   *
+   * Kept for backwards compatibility — will be removed in a future release.
    */
   protected async transaction<T>(
     operations: (() => Promise<RepositoryResult<any>>)[]
   ): Promise<RepositoryResult<T[]>> {
+    console.warn(
+      '[BaseRepository.transaction] ⚠️  This method is non-atomic. ' +
+      'Use rpc() with a PostgreSQL function for true transactional safety.'
+    );
+
     const results: T[] = [];
     const errors: PostgrestError[] = [];
 
@@ -285,6 +298,57 @@ export abstract class BaseRepository {
       error: null,
       success: true,
     };
+  }
+
+  /**
+   * Execute a Supabase RPC (PostgreSQL function) for truly atomic operations.
+   *
+   * Use this instead of `transaction()` whenever you need multiple tables
+   * modified atomically. The PostgreSQL function runs inside a single
+   * transaction — if any step fails, all changes are rolled back.
+   *
+   * @example
+   * ```ts
+   * const result = await this.rpc<Staff>('create_staff_member', {
+   *   p_email: 'user@example.com',
+   *   p_password: 'securePass123',
+   *   p_name: 'John Doe',
+   *   p_role: 'staff',
+   *   p_branch_id: branchId,
+   * });
+   * ```
+   *
+   * @param functionName — Name of the PostgreSQL function (no schema prefix)
+   * @param params       — Key-value arguments matching the function's parameters
+   * @returns            — RepositoryResult wrapping the function's return value
+   */
+  protected async rpc<T>(
+    functionName: string,
+    params: Record<string, unknown> = {},
+  ): Promise<RepositoryResult<T>> {
+    try {
+      const { data, error } = await this.client.rpc(functionName, params);
+
+      if (error) {
+        return {
+          data: null,
+          error: error as PostgrestError,
+          success: false,
+        };
+      }
+
+      return {
+        data: data as T,
+        error: null,
+        success: true,
+      };
+    } catch (error) {
+      return {
+        data: null,
+        error: error as PostgrestError,
+        success: false,
+      };
+    }
   }
 }
 

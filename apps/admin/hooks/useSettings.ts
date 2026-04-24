@@ -2,6 +2,8 @@
  * Settings Hooks
  *
  * TanStack Query hooks for settings operations.
+ * Operations that mutate go through API routes; read-only ones are
+ * acceptable via service since settings don't require auth context.
  *
  * @module hooks/useSettings
  */
@@ -10,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { settingsService } from '@/services/settingsService';
 import { queryUtils } from '@/lib/query-client';
 import { useAppStore } from '@/stores';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 // Query keys
 const queryKeys = {
@@ -19,6 +22,18 @@ const queryKeys = {
   paymentTerms: ['settings', 'payment_terms'] as const,
   authorizedSignature: ['settings', 'authorized_signature'] as const,
 };
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
+  }
+  return res.json();
+}
 
 /**
  * Get GST percentage

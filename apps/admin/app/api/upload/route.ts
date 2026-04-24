@@ -6,16 +6,14 @@
  *   - file: The binary file to upload
  *   - folder: (optional) Logical folder name, defaults to "uploads"
  * 
- * Returns JSON: { url: string, key: string }
- *   - url: Publicly accessible URL of the uploaded file
- *   - key: S3 object key for future reference (e.g., deletion)
+ * Returns JSON: { success: true, data: { url, key } }
  * 
  * @route POST /api/upload
  * @module app/api/upload/route
  */
 
-import { NextResponse } from "next/server";
 import { uploadFileToR2, generateR2Key } from "@/lib/r2";
+import { apiSuccess, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +23,7 @@ export async function POST(request: Request) {
     const folder = (formData.get("folder") as string) || "uploads";
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return apiBadRequest("No file provided");
     }
 
     // Convert browser File to Node.js Buffer for S3 upload
@@ -38,12 +36,9 @@ export async function POST(request: Request) {
     // Upload to R2 and get the public URL
     const url = await uploadFileToR2(buffer, key, file.type);
 
-    return NextResponse.json({ url, key });
+    return apiSuccess({ url, key }, { message: 'File uploaded successfully' });
   } catch (error) {
     console.error("Upload error:", error);
-    return NextResponse.json(
-      { error: "Failed to upload file" },
-      { status: 500 }
-    );
+    return apiInternalError("Failed to upload file");
   }
 }
