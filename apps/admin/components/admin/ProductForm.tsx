@@ -17,7 +17,7 @@ import { AlertCircle, RefreshCw, Store, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/domain/types/category";
 import { useAppStore } from "@/stores";
@@ -329,30 +329,30 @@ export default function ProductForm({
 
   // ── Render ────────────────────────────────────────────────────────
   return (
-    <Card className="border-0 shadow-2xl w-full max-w-6xl">
-      <CardHeader className="rounded-t-xl bg-gradient-to-r from-purple-600 to-primary text-white">
-        <CardTitle className="text-2xl text-white">
-          {isEdit ? "Edit Product" : "Create New Product"}
+    <Card className="shadow-sm border-slate-200 bg-white w-full max-w-4xl mx-auto overflow-hidden">
+      <CardHeader className="border-b border-slate-200 bg-white pb-6 pt-6">
+        <CardTitle className="text-xl font-semibold text-slate-900">
+          {isEdit ? "Edit Product Details" : "Create New Product"}
         </CardTitle>
-        <p className="text-slate-100 text-sm mt-1">
+        <CardDescription className="text-slate-500 mt-1 text-sm">
           {isEdit
-            ? "Update product details and per-branch stock"
-            : "Add a new item and assign stock to each branch"}
-        </p>
+            ? "Update the product information and per-branch stock allocation."
+            : "Fill in the details below to add a new item to your catalog."}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="p-8">
-        <form onSubmit={handleSubmit} className="space-y-8">
+      <CardContent className="p-6 md:p-8">
+        <form onSubmit={handleSubmit} className="space-y-10">
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm font-medium text-red-800">{error}</p>
             </div>
           )}
 
           {/* ── Product Images ─────────────────────────────────────── */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Product Images
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Product Imagery
             </h3>
             <FileUpload
               accept="image/*"
@@ -362,19 +362,19 @@ export default function ProductForm({
               folder="products"
               value={imageUrls}
               onChange={setImageUrls}
-              helperText={`Upload up to ${MAX_IMAGES} images (max 5MB each). Images are optional.`}
+              helperText={`Upload up to ${MAX_IMAGES} images (max 5MB each). PNG or JPG.`}
             />
           </div>
 
           {/* ── Basic Information ──────────────────────────────────── */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
               Basic Information
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Product Name *
+                <label className="text-sm font-medium text-slate-700 block">
+                  Product Name <span className="text-red-500">*</span>
                 </label>
                 <Input
                   value={formData.name}
@@ -383,12 +383,12 @@ export default function ProductForm({
                   }
                   required
                   placeholder="e.g., Diamond Necklace Set"
-                  className="h-12 border-slate-300 focus:border-primary"
+                  className="h-11 border-slate-200 focus:border-slate-900"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Slug *
+                <label className="text-sm font-medium text-slate-700 block">
+                  URL Slug <span className="text-red-500">*</span>
                 </label>
                 <Input
                   value={formData.slug}
@@ -399,12 +399,12 @@ export default function ProductForm({
                   }}
                   required
                   placeholder="auto-generated-from-name"
-                  className="h-12 border-slate-300 focus:border-primary"
+                  className="h-11 border-slate-200 focus:border-slate-900"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 block">
+              <label className="text-sm font-medium text-slate-700 block">
                 Description
               </label>
               <textarea
@@ -413,33 +413,33 @@ export default function ProductForm({
                   setFormData({ ...formData, description: e.target.value })
                 }
                 placeholder="Materials, occasion, style details..."
-                rows={3}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none resize-none"
+                rows={4}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
               />
             </div>
           </div>
 
           {/* ── Identifiers ────────────────────────────────────────── */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
               Identifiers
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  SKU
+                <label className="text-sm font-medium text-slate-700 block">
+                  SKU (Stock Keeping Unit)
                 </label>
                 <Input
                   value={formData.sku}
                   onChange={(e) =>
                     setFormData({ ...formData, sku: e.target.value })
                   }
-                  placeholder="PB-NK-001"
-                  className="h-12 border-slate-300 focus:border-primary font-mono text-sm"
+                  placeholder="e.g., PB-NK-001"
+                  className="h-11 border-slate-200 focus:border-slate-900 font-mono text-sm"
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
+                <label className="text-sm font-medium text-slate-700 block">
                   Barcode
                 </label>
                 <div className="flex gap-2">
@@ -449,14 +449,14 @@ export default function ProductForm({
                       setFormData({ ...formData, barcode: e.target.value })
                     }
                     placeholder="Auto-generated"
-                    className="flex-1 h-12 border-slate-300 focus:border-primary font-mono text-sm"
+                    className="flex-1 h-11 border-slate-200 focus:border-slate-900 font-mono text-sm"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={generateBarcode}
-                    className="h-12 px-3 border-slate-300"
-                    title="Generate barcode"
+                    className="h-11 px-3 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    title="Generate random barcode"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </Button>
@@ -467,18 +467,18 @@ export default function ProductForm({
 
           {/* ── Categories ─────────────────────────────────────────── */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Categories
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Classification
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
+                <label className="text-sm font-medium text-slate-700 block">
                   Main Category
                 </label>
                 <select
                   value={formData.category_id}
                   onChange={(e) => handleMainCategoryChange(e.target.value)}
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
+                  className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none"
                 >
                   <option value="">Select category</option>
                   {mains.map((c) => (
@@ -489,14 +489,14 @@ export default function ProductForm({
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
+                <label className="text-sm font-medium text-slate-700 block">
                   Subcategory
                 </label>
                 <select
                   value={formData.subcategory_id}
                   onChange={(e) => handleSubCategoryChange(e.target.value)}
                   disabled={!formData.category_id || subs.length === 0}
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none disabled:opacity-50 disabled:bg-slate-50"
                 >
                   <option value="">
                     {!formData.category_id
@@ -513,7 +513,7 @@ export default function ProductForm({
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
+                <label className="text-sm font-medium text-slate-700 block">
                   Variant
                 </label>
                 <select
@@ -522,7 +522,7 @@ export default function ProductForm({
                     setFormData({ ...formData, subvariant_id: e.target.value })
                   }
                   disabled={!formData.subcategory_id || variants.length === 0}
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full h-11 px-3 rounded-md border border-slate-200 bg-white text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none disabled:opacity-50 disabled:bg-slate-50"
                 >
                   <option value="">
                     {!formData.subcategory_id
@@ -543,16 +543,16 @@ export default function ProductForm({
 
           {/* ── Rent Price (common across branches) ────────────────── */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Rent Price
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Pricing
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Rent Amount (₹) *
+                <label className="text-sm font-medium text-slate-700 block">
+                  Daily Rental Rate <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">
                     ₹
                   </span>
                   <Input
@@ -567,11 +567,11 @@ export default function ProductForm({
                     onFocus={clearZeroOnFocus}
                     required
                     placeholder="0"
-                    className="h-12 pl-7 border-slate-300 focus:border-primary"
+                    className="h-11 pl-8 border-slate-200 focus:border-slate-900 font-semibold"
                   />
                 </div>
                 <p className="text-xs text-slate-500">
-                  Same rate applies across all branches.
+                  Standardized rate applies across all branches.
                 </p>
               </div>
             </div>
@@ -579,116 +579,97 @@ export default function ProductForm({
 
           {/* ── Stock per Branch ───────────────────────────────────── */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                <Store className="w-5 h-5 text-violet-600" />
-                Stock per Branch *
+            <div className="flex items-end justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Inventory Allocation
               </h3>
-              <span className="text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 px-3 py-1 rounded-full">
-                Total: {totalBranchQuantity}
-              </span>
+              <div className="text-xs font-medium text-slate-500">
+                Total Units: <span className="font-bold text-slate-900">{totalBranchQuantity}</span>
+              </div>
             </div>
-            <p className="text-sm text-slate-500 -mt-2">
-              Stock is tracked <strong>separately for each branch</strong>. Pick a
-              branch, enter its stock count, click Add. Then pick the next branch
-              and repeat.
-            </p>
 
             {isLoadingInventory ? (
-              <p className="text-sm text-slate-400 text-center py-6">
-                Loading existing stock...
-              </p>
+              <div className="flex justify-center p-8 border border-slate-200 rounded-lg">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900" />
+              </div>
             ) : activeBranches.length === 0 ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                No active branches. Please create a branch first.
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-600 text-center">
+                No active branches in the system.
               </div>
             ) : (
-              <>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-5">
                 {/* Add stock form */}
                 {availableBranches.length > 0 ? (
-                  <div className="p-5 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/40">
-                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide mb-3">
-                      Add Stock for a Branch
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-600 font-medium">
-                          Branch
-                        </label>
-                        <select
-                          value={selectedBranchId}
-                          onChange={(e) => setSelectedBranchId(e.target.value)}
-                          className="w-full h-11 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
-                        >
-                          <option value="">Select a branch</option>
-                          {availableBranches.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-600 font-medium">
-                          Stock Count
-                        </label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={newStockQty}
-                          onChange={(e) =>
-                            setNewStockQty(parseInt(e.target.value) || 0)
-                          }
-                          onFocus={clearZeroOnFocus}
-                          placeholder="0"
-                          className="h-11 bg-white border-slate-300 focus:border-primary"
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <Button
-                          type="button"
-                          onClick={handleAddBranchStock}
-                          disabled={!selectedBranchId}
-                          className="h-11 bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add
-                        </Button>
-                      </div>
+                  <div className="flex flex-col md:flex-row items-end gap-3 mb-6">
+                    <div className="space-y-1.5 flex-1 w-full">
+                      <label className="text-xs font-medium text-slate-700">
+                        Assign to Branch
+                      </label>
+                      <select
+                        value={selectedBranchId}
+                        onChange={(e) => setSelectedBranchId(e.target.value)}
+                        className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm focus:border-slate-900 outline-none"
+                      >
+                        <option value="">Select branch...</option>
+                        {availableBranches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
+                    <div className="space-y-1.5 w-full md:w-32">
+                      <label className="text-xs font-medium text-slate-700">
+                        Initial Stock
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={newStockQty}
+                        onChange={(e) =>
+                          setNewStockQty(parseInt(e.target.value) || 0)
+                        }
+                        onFocus={clearZeroOnFocus}
+                        placeholder="0"
+                        className="h-10 border-slate-200 focus:border-slate-900 bg-white font-medium"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={handleAddBranchStock}
+                      disabled={!selectedBranchId}
+                      className="h-10 bg-slate-900 text-white hover:bg-slate-800 gap-1.5 w-full md:w-auto"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Location
+                    </Button>
                   </div>
                 ) : (
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
-                    Stock configured for all available branches.
+                  <div className="mb-6 p-3 bg-white border border-slate-200 rounded-md text-sm text-slate-500 text-center font-medium">
+                    Stock allocated to all available branches.
                   </div>
                 )}
 
                 {/* List of added branch stocks */}
                 {branchStocks.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4 italic">
-                    No branch stock added yet.
-                  </p>
+                  <div className="bg-white border border-dashed border-slate-300 rounded-md p-6 text-center text-sm text-slate-400">
+                    No inventory assigned yet.
+                  </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      Branches with Stock ({branchStocks.length})
-                    </p>
                     {branchStocks.map((entry) => (
                       <div
                         key={entry.branch_id}
-                        className="flex items-center gap-3 p-4 rounded-lg border border-slate-200 bg-white hover:border-violet-200 transition-colors"
+                        className="flex items-center justify-between p-3 rounded-md border border-slate-200 bg-white"
                       >
-                        <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
-                          <Store className="w-5 h-5 text-violet-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-slate-800 truncate">
+                        <div className="flex items-center gap-3">
+                          <Store className="w-4 h-4 text-slate-400" />
+                          <span className="text-sm font-semibold text-slate-900">
                             {getBranchName(entry.branch_id)}
-                          </p>
-                          <p className="text-xs text-slate-500">Branch stock</p>
+                          </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <label className="text-xs text-slate-500">Qty:</label>
+                        <div className="flex items-center gap-3">
+                          <label className="text-xs font-medium text-slate-500">Units</label>
                           <Input
                             type="number"
                             min={0}
@@ -700,15 +681,13 @@ export default function ProductForm({
                               )
                             }
                             onFocus={clearZeroOnFocus}
-                            className="h-10 w-24 text-center font-semibold border-slate-300"
+                            className="h-8 w-20 text-center font-semibold border-slate-200 focus:border-slate-900"
                           />
                           <button
                             type="button"
-                            onClick={() =>
-                              handleRemoveBranchStock(entry.branch_id)
-                            }
-                            className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Remove this branch"
+                            onClick={() => handleRemoveBranchStock(entry.branch_id)}
+                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors ml-1"
+                            title="Remove branch allocation"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -717,20 +696,20 @@ export default function ProductForm({
                     ))}
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
 
           {/* ── Status (Active switch only) ────────────────────────── */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Status
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+              Visibility
             </h3>
-            <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 max-w-md">
+            <div className="flex items-center justify-between p-5 rounded-md bg-white border border-slate-200 max-w-sm">
               <div>
-                <p className="text-sm font-semibold text-slate-800">Active</p>
-                <p className="text-xs text-slate-500">
-                  Visible to customers and available for rental
+                <p className="text-sm font-semibold text-slate-900">Active Listing</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Available for rent in the storefront
                 </p>
               </div>
               <Switch
@@ -743,24 +722,23 @@ export default function ProductForm({
           </div>
 
           {/* ── Submit ─────────────────────────────────────────────── */}
-          <div className="flex gap-4 pt-6 border-t border-slate-200">
+          <div className="flex gap-4 pt-8 mt-8 border-t border-slate-200">
             <Button
               type="submit"
               disabled={loading}
-              variant="gradient"
-              className="flex-1 h-12 text-base"
+              className="flex-1 h-12 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800"
             >
               {loading
-                ? "Saving..."
+                ? "Saving details..."
                 : isEdit
-                ? "Update Product"
+                ? "Save Changes"
                 : "Create Product"}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => router.push("/dashboard/products")}
-              className="flex-1 h-12 text-base border-slate-300 hover:bg-slate-50"
+              className="flex-1 h-12 text-sm font-semibold border-slate-200 text-slate-700 hover:bg-slate-50"
             >
               Cancel
             </Button>

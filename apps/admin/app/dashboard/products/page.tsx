@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Search,
@@ -28,11 +29,14 @@ import {
   TrendingUp,
   PackageX,
   CircleAlert,
+  MoreVertical,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddLinkButton from "@/components/admin/AddLinkButton";
 import Modal from "@/components/admin/Modal";
@@ -47,6 +51,7 @@ import {
   downloadBarcode,
   downloadMultipleBarcodes,
 } from "@/lib/barcode";
+import Image from "next/image";
 
 interface BranchInvRow {
   id: string;
@@ -59,6 +64,7 @@ interface BranchInvRow {
 }
 
 export default function ProductsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
   const { products, total, isLoading } = useProducts({
@@ -269,22 +275,23 @@ export default function ProductsPage() {
 
   // ── Render ───────────────────────────────────────────────────────
   const noBranchSelected = !selectedBranchId;
+  const showShimmer = isLoading || isLoadingInventory;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Products</h1>
-          <p className="text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-            <Store className="w-4 h-4 text-violet-500" />
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Products Catalog</h1>
+          <p className="text-sm text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+            <Store className="w-4 h-4 text-slate-400" />
             <span>
-              Showing <strong>{stats.count}</strong> product
-              {stats.count === 1 ? "" : "s"} at
+              Viewing inventory for
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 text-xs font-semibold border border-violet-100">
-              {currentBranchName || "this branch"}
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
+              {currentBranchName || "All Branches"}
             </span>
+            <span>• {stats.count} total items</span>
           </p>
         </div>
         <AddLinkButton label="Add Product" href="/dashboard/products/create" />
@@ -293,63 +300,61 @@ export default function ProductsPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Products"
-          value={stats.count}
-          icon={<Boxes className="w-5 h-5 text-violet-500" />}
-          tint="violet"
+          label="Catalog Size"
+          value={showShimmer ? null : String(stats.count)}
+          subtext="Total unique products"
         />
         <StatCard
-          label="Total Stock"
-          value={stats.totalQty}
-          icon={<TrendingUp className="w-5 h-5 text-emerald-500" />}
-          tint="emerald"
+          label="Total Inventory"
+          value={showShimmer ? null : String(stats.totalQty)}
+          subtext="Items physically in stock"
         />
         <StatCard
-          label="Low Stock"
-          value={stats.lowStock}
-          icon={<CircleAlert className="w-5 h-5 text-amber-500" />}
-          tint="amber"
+          label="Low Stock Alert"
+          value={showShimmer ? null : String(stats.lowStock)}
+          subtext="Items nearing depletion"
+          alert={stats.lowStock > 0}
         />
         <StatCard
           label="Out of Stock"
-          value={stats.outOfStock}
-          icon={<PackageX className="w-5 h-5 text-red-500" />}
-          tint="red"
+          value={showShimmer ? null : String(stats.outOfStock)}
+          subtext="Zero available quantity"
+          alert={stats.outOfStock > 0}
         />
       </div>
 
       {/* Search + Bulk actions */}
-      <Card className="border border-slate-100 shadow-sm">
-        <CardContent className="p-4">
-          <div className="relative">
+      <Card className="shadow-sm border-slate-200 bg-white">
+        <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
               type="text"
-              placeholder="Search products by name, SKU, barcode..."
-              className="pl-10 bg-slate-50 border-slate-200 focus:border-primary"
+              placeholder="Search products by name, SKU, or barcode..."
+              className="pl-9 border-slate-200 focus:border-slate-900"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
 
           {selectedProducts.length > 0 && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 p-3 bg-violet-50 border border-violet-100 rounded-lg">
-              <span className="text-sm font-medium text-violet-700">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-sm font-semibold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md">
                 {selectedProducts.length} selected
               </span>
-              <div className="flex gap-2 ml-auto flex-wrap">
-                <Button size="sm" variant="outline" onClick={handleBulkActivate} disabled={bulkOperation.isPending}>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" className="border-slate-200" onClick={handleBulkActivate} disabled={bulkOperation.isPending}>
                   Activate
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleBulkDeactivate} disabled={bulkOperation.isPending}>
+                <Button size="sm" variant="outline" className="border-slate-200" onClick={handleBulkDeactivate} disabled={bulkOperation.isPending}>
                   Deactivate
                 </Button>
-                <Button size="sm" variant="outline" onClick={handleBulkDownloadBarcodes} disabled={bulkOperation.isPending}>
-                  <Download className="w-4 h-4 mr-1" />
+                <Button size="sm" variant="outline" className="border-slate-200 gap-1.5" onClick={handleBulkDownloadBarcodes} disabled={bulkOperation.isPending}>
+                  <Download className="w-4 h-4" />
                   Barcodes
                 </Button>
-                <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={bulkOperation.isPending}>
-                  <Trash2 className="w-4 h-4 mr-1" />
+                <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleBulkDelete} disabled={bulkOperation.isPending}>
+                  <Trash2 className="w-4 h-4" />
                   Delete
                 </Button>
                 <Button size="sm" variant="ghost" onClick={clearSelection}>
@@ -362,195 +367,211 @@ export default function ProductsPage() {
       </Card>
 
       {/* Products Grid */}
-      <Card className="border border-slate-100 shadow-sm overflow-hidden">
-        {isLoading || isLoadingInventory ? (
-          <div className="p-16 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500 mx-auto" />
-            <p className="text-slate-500 mt-3 text-sm">Loading products...</p>
+      <Card className="shadow-sm border-slate-200 overflow-hidden bg-white">
+        {showShimmer ? (
+          <div className="divide-y divide-slate-100">
+            {/* Table header skeleton */}
+            <div className="hidden md:grid grid-cols-[auto_1fr_160px_140px_150px_140px_120px] gap-4 p-4 bg-slate-50/50">
+              <div className="h-4 w-4 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-24 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-16 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-16 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-24 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-16 bg-slate-200 rounded animate-pulse" />
+              <div className="h-4 w-16 bg-slate-200 rounded animate-pulse justify-self-end" />
+            </div>
+            {/* Rows skeleton */}
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 p-4">
+                <div className="h-4 w-4 bg-slate-100 rounded animate-pulse shrink-0" />
+                <div className="h-12 w-12 bg-slate-100 rounded-lg animate-pulse shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <div className="h-4 w-1/3 bg-slate-100 rounded animate-pulse" />
+                  <div className="h-3 w-1/4 bg-slate-50 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : noBranchSelected ? (
           <div className="p-16 text-center">
             <Store className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-600 font-medium">Select a branch from the top-right switcher</p>
-            <p className="text-slate-400 text-sm mt-1">
-              Each branch has its own inventory and product list.
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Branch</h3>
+            <p className="text-sm text-slate-500 max-w-sm mx-auto">
+              Please select a branch from the top-right switcher to view localized product inventory.
             </p>
           </div>
         ) : visibleProducts.length === 0 ? (
           <div className="p-16 text-center">
             <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-600 font-medium">
+            <h3 className="text-lg font-semibold text-slate-900 mb-1">No Products Found</h3>
+            <p className="text-sm text-slate-500 max-w-sm mx-auto">
               {searchQuery
-                ? `No products found for "${searchQuery}"`
-                : `No products stocked at ${currentBranchName || "this branch"}`}
+                ? `No products matched your search for "${searchQuery}".`
+                : `There are no products stocked at ${currentBranchName || "this branch"}.`}
             </p>
-            <p className="text-slate-400 text-sm mt-1">
-              Add a product and assign stock to this branch to see it here.
-            </p>
+            {!searchQuery && (
+              <Button className="mt-6" onClick={() => router.push("/dashboard/products/create")}>
+                Add New Product
+              </Button>
+            )}
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {/* Table header */}
-            <div className="hidden md:grid grid-cols-[auto_1fr_160px_140px_150px_140px_120px] gap-4 items-center p-4 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              <div>
-                <input
-                  type="checkbox"
-                  checked={
-                    selectedProducts.length === visibleProducts.length &&
-                    visibleProducts.length > 0
-                  }
-                  onChange={handleSelectAll}
-                  className="rounded border-slate-300"
-                />
-              </div>
-              <div>Product</div>
-              <div>Category</div>
-              <div>Rent</div>
-              <div>Stock at Branch</div>
-              <div>Status</div>
-              <div className="text-right">Actions</div>
-            </div>
-
-            {visibleProducts.map((product: any) => {
-              const stock = getStockAtBranch(product.id);
-              const primaryImage = Array.isArray(product.images) && product.images.length > 0
-                ? typeof product.images[0] === "string"
-                  ? product.images[0]
-                  : product.images[0]?.url
-                : null;
-              const isOut = stock.available === 0;
-              const isLow = !isOut && stock.available <= stock.threshold;
-              const selected = isProductSelected(product.id);
-
-              return (
-                <div
-                  key={product.id}
-                  className={`grid grid-cols-[auto_1fr_120px] md:grid-cols-[auto_1fr_160px_140px_150px_140px_120px] gap-4 items-center p-4 hover:bg-violet-50/30 transition-colors ${
-                    selected ? "bg-violet-50/60" : ""
-                  }`}
-                >
-                  {/* Checkbox */}
-                  <div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 w-10 text-center">
                     <input
                       type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleProductSelection(product.id)}
-                      className="rounded border-slate-300"
-                    />
-                  </div>
-
-                  {/* Product */}
-                  <Link
-                    href={`/dashboard/products/${product.id}`}
-                    className="flex items-center gap-3 min-w-0 group"
-                  >
-                    {primaryImage ? (
-                      <img
-                        src={primaryImage}
-                        alt={product.name}
-                        className="w-12 h-12 rounded-xl object-cover border border-slate-100 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 flex items-center justify-center shrink-0">
-                        <Package className="w-5 h-5 text-violet-400" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900 group-hover:text-violet-600 transition-colors truncate">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-slate-400 truncate font-mono">
-                        {product.sku || product.slug}
-                      </p>
-                    </div>
-                  </Link>
-
-                  {/* Category */}
-                  <div className="hidden md:block">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                      {product.category?.name || "Uncategorized"}
-                    </span>
-                  </div>
-
-                  {/* Rent */}
-                  <div className="hidden md:block text-slate-800 font-semibold">
-                    {formatCurrency(product.price_per_day)}
-                  </div>
-
-                  {/* Stock at Branch */}
-                  <div className="hidden md:flex items-center gap-2">
-                    <div className="flex flex-col">
-                      <span className="text-slate-800 font-bold text-lg leading-none">
-                        {stock.quantity}
-                      </span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">
-                        {stock.available} available
-                      </span>
-                    </div>
-                    {isOut ? (
-                      <Badge className="bg-red-100 text-red-700 text-[10px] border-red-200 border">
-                        Out
-                      </Badge>
-                    ) : isLow ? (
-                      <Badge className="bg-amber-100 text-amber-700 text-[10px] border-amber-200 border">
-                        Low
-                      </Badge>
-                    ) : (
-                      <Badge className="bg-emerald-100 text-emerald-700 text-[10px] border-emerald-200 border">
-                        In Stock
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Status */}
-                  <div className="hidden md:flex">
-                    <Badge
-                      className={
-                        product.is_active
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-slate-100 text-slate-500 border border-slate-200"
+                      checked={
+                        selectedProducts.length === visibleProducts.length &&
+                        visibleProducts.length > 0
                       }
-                    >
-                      {product.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </div>
+                      onChange={handleSelectAll}
+                      className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                    />
+                  </th>
+                  <th className="px-4 py-3">Product</th>
+                  <th className="px-4 py-3">Category</th>
+                  <th className="px-4 py-3">Pricing</th>
+                  <th className="px-4 py-3">Branch Stock</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleProducts.map((product: any) => {
+                  const stock = getStockAtBranch(product.id);
+                  const primaryImage = Array.isArray(product.images) && product.images.length > 0
+                    ? typeof product.images[0] === "string"
+                      ? product.images[0]
+                      : product.images[0]?.url
+                    : null;
+                  const isOut = stock.available === 0;
+                  const isLow = !isOut && stock.available <= stock.threshold;
+                  const selected = isProductSelected(product.id);
 
-                  {/* Actions */}
-                  <div className="flex gap-1 justify-end">
-                    <Link
-                      href={`/dashboard/products/${product.id}`}
-                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="View Details"
+                  return (
+                    <tr
+                      key={product.id}
+                      className={`hover:bg-slate-50 transition-colors group ${
+                        selected ? "bg-slate-50/80" : ""
+                      }`}
                     >
-                      <Eye className="w-4 h-4 text-slate-400" />
-                    </Link>
-                    <Link
-                      href={`/dashboard/products/${product.id}/edit`}
-                      className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                      title="Edit"
-                    >
-                      <Edit className="w-4 h-4 text-slate-400" />
-                    </Link>
-                    {product.barcode && (
-                      <button
-                        className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                        onClick={() => downloadBarcode(product.barcode, product.name)}
-                        title="Download Barcode"
-                      >
-                        <Download className="w-4 h-4 text-slate-400" />
-                      </button>
-                    )}
-                    <button
-                      className="p-2 hover:bg-red-50 rounded-lg transition-colors"
-                      onClick={() => openDeleteModal(product)}
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                      <td className="px-4 py-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleProductSelection(product.id)}
+                          className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                        />
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <Link href={`/dashboard/products/${product.id}`} className="flex items-center gap-3">
+                          {primaryImage ? (
+                            <div className="relative w-12 h-12 rounded-lg border border-slate-200 bg-white overflow-hidden shrink-0">
+                              <Image src={primaryImage} alt={product.name} fill className="object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center shrink-0">
+                              <Package className="w-5 h-5 text-slate-300" />
+                            </div>
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-900 group-hover:text-slate-600 transition-colors">
+                              {product.name}
+                            </p>
+                            <p className="text-xs text-slate-400 font-mono mt-0.5">
+                              {product.sku || product.slug}
+                            </p>
+                          </div>
+                        </Link>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
+                          {product.category?.name || "Uncategorized"}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <span className="font-semibold text-slate-900">{formatCurrency(product.price_per_day)}</span>
+                        <span className="text-xs text-slate-500 ml-1">/day</span>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="flex flex-col">
+                            <span className="text-slate-900 font-bold text-base leading-none">
+                              {stock.available}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-400 mt-0.5 uppercase tracking-wide">
+                              / {stock.quantity} total
+                            </span>
+                          </div>
+                          {isOut ? (
+                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider text-red-600 border-red-200 bg-red-50">
+                              Out
+                            </Badge>
+                          ) : isLow ? (
+                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider text-amber-600 border-amber-200 bg-amber-50">
+                              Low
+                            </Badge>
+                          ) : null}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <Badge
+                          variant="secondary"
+                          className={`text-xs font-medium px-2 py-0.5 ${
+                            product.is_active
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-slate-100 text-slate-600 border border-slate-200"
+                          }`}
+                        >
+                          {product.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+
+                      <td className="px-4 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-400 hover:text-slate-900" asChild>
+                            <Link href={`/dashboard/products/${product.id}`}>
+                              <Eye className="w-4 h-4" />
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-400 hover:text-slate-900" asChild>
+                            <Link href={`/dashboard/products/${product.id}/edit`}>
+                              <Edit className="w-4 h-4" />
+                            </Link>
+                          </Button>
+                          {product.barcode && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="w-8 h-8 text-slate-400 hover:text-slate-900"
+                              onClick={() => downloadBarcode(product.barcode, product.name)}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-8 h-8 text-red-400 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => openDeleteModal(product)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
@@ -563,36 +584,22 @@ export default function ProductsPage() {
         maxWidth="max-w-md"
       >
         <div className="p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">
-                Delete "{currentProduct?.name || "this product"}"?
-              </h3>
-              <p className="text-sm text-slate-600 mb-4">
-                This action cannot be undone. Products with existing order
-                history <strong>cannot</strong> be deleted — their related
-                orders must be removed first.
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 mb-1">Confirm Deletion</h4>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Are you sure you want to permanently delete <span className="font-semibold text-slate-900">{currentProduct?.name}</span>? This action cannot be undone and will remove all associated data.
               </p>
-              <div className="flex gap-3 justify-end">
-                <Button
-                  variant="outline"
-                  onClick={closeDeleteModal}
-                  disabled={deleteProduct.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleConfirmDelete}
-                  disabled={deleteProduct.isPending}
-                >
-                  {deleteProduct.isPending ? "Deleting..." : "Delete Product"}
-                </Button>
-              </div>
             </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button variant="outline" onClick={closeDeleteModal} className="border-slate-200">Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleteProduct.isPending}>
+              {deleteProduct.isPending ? "Deleting..." : "Delete Product"}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -600,35 +607,38 @@ export default function ProductsPage() {
   );
 }
 
-// ── Small Stat Card component ───────────────────────────────────────
+/* ── Minimalist Professional Stat Card ──────────────────── */
 function StatCard({
   label,
   value,
-  icon,
-  tint,
+  subtext,
+  alert
 }: {
   label: string;
-  value: number;
-  icon: React.ReactNode;
-  tint: "violet" | "emerald" | "amber" | "red";
+  value: string | null;
+  subtext?: string;
+  alert?: boolean;
 }) {
-  const tints: Record<typeof tint, string> = {
-    violet: "from-violet-50 to-purple-50 border-violet-100",
-    emerald: "from-emerald-50 to-green-50 border-emerald-100",
-    amber: "from-amber-50 to-orange-50 border-amber-100",
-    red: "from-red-50 to-rose-50 border-red-100",
-  };
   return (
-    <Card className={`border bg-gradient-to-br ${tints[tint]} shadow-none`}>
-      <CardContent className="p-4 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-            {label}
-          </p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
+    <Card className="shadow-sm border-slate-200 bg-white overflow-hidden">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{label}</p>
+          {alert && (
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+          )}
         </div>
-        <div className="w-10 h-10 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
-          {icon}
+        <div className="space-y-1">
+          {value === null ? (
+            <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" />
+          ) : (
+            <p className={`text-2xl font-bold tracking-tight ${alert ? "text-red-600" : "text-slate-900"}`}>
+              {value}
+            </p>
+          )}
+          {subtext && (
+            <p className="text-xs font-medium text-slate-500">{subtext}</p>
+          )}
         </div>
       </CardContent>
     </Card>
