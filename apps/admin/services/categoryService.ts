@@ -19,7 +19,9 @@ import {
   CategoryLevel 
 } from '@/domain';
 import { 
-  CategoryValidationResult,\n  CategoryValidationError\n} from '@/domain';
+  CategoryValidationResult,
+  CategoryValidationError
+} from '@/domain';
 import { generateSlug } from '@/lib/shared-utils';
 
 export class CategoryService {
