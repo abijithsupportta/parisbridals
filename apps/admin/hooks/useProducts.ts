@@ -59,6 +59,7 @@ export function useProducts(params: ProductSearchParams = {}) {
       return response.data;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnMount: 'always', // Always fetch fresh on page mount
   });
 
   return {
@@ -112,7 +113,7 @@ export function useCreateProduct() {
     mutationFn: (data: CreateProductDTO) =>
       apiFetch('/api/products', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       closeCreateModal();
     },
     onError: (error) => showError('Failed to create product', error.message),
@@ -137,7 +138,7 @@ export function useUpdateProduct() {
     mutationFn: ({ id, data }: { id: string; data: UpdateProductDTO }) =>
       apiFetch(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (_data, variables) => {
-      queryClient.refetchQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.id) });
       closeEditModal();
     },

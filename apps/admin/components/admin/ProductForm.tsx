@@ -19,9 +19,9 @@ import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/domain/types/category";
-import { type Product, type CreateProductDTO, type UpdateProductDTO } from "@/domain/types/product";
+import { type Product } from "@/domain/types/product";
 import { useAppStore } from "@/stores";
-import { useCreateProduct, useUpdateProduct } from "@/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 
 const DEFAULT_STORE_ID = "00000000-0000-0000-0000-000000000001";
 const MAX_IMAGES = 5;
@@ -69,9 +69,7 @@ export default function ProductForm({
   const router = useRouter();
   const isEdit = !!product;
   const { showError, showSuccess } = useAppStore();
-
-  const createProduct = useCreateProduct();
-  const updateProduct = useUpdateProduct();
+  const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -269,31 +267,37 @@ export default function ProductForm({
         };
 
         let productId: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let result: any;
+
         if (isEdit && product) {
-          result = await updateProduct.mutateAsync({
-            id: product.id,
-            data: basePayload as UpdateProductDTO,
+          const res = await fetch(`/api/products/${product.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(basePayload),
           });
+          const result = await res.json();
+          if (!res.ok || !result?.success) {
+            showError(result?.error?.message || result?.message || "Failed to update product");
+            setLoading(false);
+            return;
+          }
           productId = product.id;
         } else {
-          result = await createProduct.mutateAsync(
-            basePayload as CreateProductDTO
-          );
-          productId = result?.data?.id;
-        }
-
-        if (!result?.success) {
-          let msg = result?.error?.message || "Request failed";
-          if (result?.error?.code === "SLUG_EXISTS") {
-            msg = "A product with this slug already exists.";
-          } else if (result?.error?.code === "VALIDATION_ERROR") {
-            msg = "Please check all required fields.";
+          const res = await fetch("/api/products", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(basePayload),
+          });
+          const result = await res.json();
+          if (!res.ok || !result?.success) {
+            let msg = result?.error?.message || result?.message || "Failed to create product";
+            if (result?.error?.code === "SLUG_EXISTS") {
+              msg = "A product with this slug already exists.";
+            }
+            showError(msg);
+            setLoading(false);
+            return;
           }
-          showError(msg);
-          setLoading(false);
-          return;
+          productId = result?.data?.id;
         }
 
         // Persist branch inventory in background (fire-and-forget)
@@ -337,6 +341,9 @@ export default function ProductForm({
           }
         };
         inventorySync(); // fire and forget — don't await
+
+        // Invalidate product cache so list page shows fresh data
+        queryClient.invalidateQueries({ queryKey: ["products"] });
 
         showSuccess(isEdit ? "Product updated" : "Product created");
 
