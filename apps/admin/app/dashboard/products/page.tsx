@@ -12,7 +12,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -26,6 +26,8 @@ import {
   AlertTriangle,
   Store,
   Plus,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -59,11 +61,28 @@ interface BranchInvRow {
 
 export default function ProductsPage() {
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
-  const { products, isLoading } = useProducts({
-    query: searchQuery,
-    limit: 100,
+  // Debounce search input by 300ms
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(searchInput);
+      setPage(1); // Reset to page 1 on new search
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchInput]);
+
+  const { products, isLoading, total, totalPages, hasNext, hasPrev } = useProducts({
+    query: debouncedQuery,
+    limit: pageSize,
+    page,
   });
 
   const deleteProduct = useDeleteProduct();
@@ -120,7 +139,10 @@ export default function ProductsPage() {
   const getStockAtBranch = (productId: string) => {
     const rows = inventoryByProduct[productId] || [];
     if (!selectedBranchId) {
-      return { quantity: 0, available: 0, threshold: 0, hasStock: false };
+      // No branch selected — aggregate across all branches
+      const totalQty = rows.reduce((sum, r) => sum + (r.quantity || 0), 0);
+      const totalAvail = rows.reduce((sum, r) => sum + (r.available_quantity || 0), 0);
+      return { quantity: totalQty, available: totalAvail, threshold: 0, hasStock: rows.length > 0 };
     }
     const row = rows.find((r) => r.branch_id === selectedBranchId);
     return {
@@ -268,7 +290,6 @@ export default function ProductsPage() {
   };
 
   // ── Render ───────────────────────────────────────────────────────
-  const noBranchSelected = !selectedBranchId;
   const showShimmer = isLoading || isLoadingInventory;
 
   return (
@@ -331,8 +352,8 @@ export default function ProductsPage() {
               type="text"
               placeholder="Search products by name, SKU, or barcode..."
               className="pl-9 border-slate-200 focus:border-slate-900"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
             />
           </div>
 
@@ -391,24 +412,16 @@ export default function ProductsPage() {
               </div>
             ))}
           </div>
-        ) : noBranchSelected ? (
-          <div className="p-16 text-center">
-            <Store className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Branch</h3>
-            <p className="text-sm text-slate-500 max-w-sm mx-auto">
-              Please select a branch from the top-right switcher to view localized product inventory.
-            </p>
-          </div>
         ) : visibleProducts.length === 0 ? (
           <div className="p-16 text-center">
             <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-semibold text-slate-900 mb-1">No Products Found</h3>
             <p className="text-sm text-slate-500 max-w-sm mx-auto">
-              {searchQuery
-                ? `No products matched your search for "${searchQuery}".`
+              {searchInput
+                ? `No products matched your search for "${searchInput}".`
                 : `There are no products stocked at ${currentBranchName || "this branch"}.`}
             </p>
-            {!searchQuery && (
+            {!searchInput && (
               <Button className="mt-6 bg-slate-900 text-white hover:bg-slate-800" onClick={() => router.push("/dashboard/products/create")}>
                 Add New Product
               </Button>
@@ -574,6 +587,71 @@ export default function ProductsPage() {
           </div>
         )}
       </Card>
+
+      {/* Pagination */}
+      {!isLoading && visibleProducts.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <span>Showing</span>
+            <span className="font-semibold text-slate-900">
+              {Math.min((page - 1) * pageSize + 1, total)}
+            </span>
+            <span>–</span>
+            <span className="font-semibold text-slate-900">
+              {Math.min(page * pageSize, total)}
+            </span>
+            <span>of</span>
+            <span className="font-semibold text-slate-900">{total}</span>
+            <span>products</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Page size selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900"
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Page indicator */}
+            <span className="text-xs text-slate-500 hidden sm:inline">
+              Page {page} of {totalPages || 1}
+            </span>
+
+            {/* Prev / Next */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="w-8 h-8 border-slate-200"
+                disabled={!hasPrev}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="w-8 h-8 border-slate-200"
+                disabled={!hasNext}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       <Modal

@@ -46,7 +46,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
  */
 export function useProducts(params: ProductSearchParams = {}) {
   const query = useQuery({
-    queryKey: productKeys.all,
+    queryKey: [...productKeys.all, params],
     queryFn: async () => {
       const searchParams = new URLSearchParams();
       Object.entries(params).forEach(([key, value]) => {
@@ -59,6 +59,8 @@ export function useProducts(params: ProductSearchParams = {}) {
       return response.data;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnMount: 'always', // Always fetch fresh on page mount
+    placeholderData: (prev) => prev, // Keep old data visible while loading new results
   });
 
   return {
@@ -69,7 +71,8 @@ export function useProducts(params: ProductSearchParams = {}) {
     totalPages: query.data?.total_pages || 0,
     hasNext: query.data?.has_next || false,
     hasPrev: query.data?.has_prev || false,
-    isLoading: query.isLoading || query.isFetching,
+    isLoading: query.isLoading, // true only on first load, not background refetches
+    isFetching: query.isFetching, // true during any fetch (for subtle indicators)
   };
 }
 
@@ -105,15 +108,14 @@ export function useProduct(id: string) {
  */
 export function useCreateProduct() {
   const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
+  const { showError } = useAppStore();
   const closeCreateModal = useProductStore((state) => state.closeCreateModal);
 
   const mutation = useMutation({
     mutationFn: (data: CreateProductDTO) =>
       apiFetch('/api/products', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (result) => {
-      queryClient.refetchQueries({ queryKey: ['products'] });
-      showSuccess('Product created successfully');
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       closeCreateModal();
     },
     onError: (error) => showError('Failed to create product', error.message),
@@ -131,16 +133,15 @@ export function useCreateProduct() {
  */
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
-  const { showSuccess, showError } = useAppStore();
+  const { showError } = useAppStore();
   const closeEditModal = useProductStore((state) => state.closeEditModal);
 
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProductDTO }) =>
       apiFetch(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (_data, variables) => {
-      queryClient.refetchQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.id) });
-      showSuccess('Product updated successfully');
       closeEditModal();
     },
     onError: (error) => showError('Failed to update product', error.message),
@@ -162,14 +163,68 @@ export function useDeleteProduct() {
   const closeDeleteModal = useProductStore((state) => state.closeDeleteModal);
 
   const mutation = useMutation({
-    mutationFn: (id: string) =>
-      apiFetch(`/api/products/${id}`, { method: 'DELETE' }),
+    mutationFn: async (id: string) => {
+      // Delete product images from R2 in background
+      try {
+        const cached = queryClient.getQueriesData<ProductSearchResult>({ queryKey: productKeys.all });
+        for (const [, data] of cached) {
+          const prod = data?.products?.find((p: Product) => p.id === id);
+          if (prod?.images && Array.isArray(prod.images)) {
+            // Fire-and-forget image cleanup from R2
+            for (const img of prod.images) {
+              const url = typeof img === 'string' ? img : img.url;
+              if (url) {
+                fetch('/api/upload/delete', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url }),
+                }).catch(() => {}); // best effort
+              }
+            }
+            break;
+          }
+        }
+      } catch { /* best effort */ }
+
+      return apiFetch(`/api/products/${id}`, { method: 'DELETE' });
+    },
+    onMutate: async (id: string) => {
+      // Cancel ongoing product queries to prevent overwrites
+      await queryClient.cancelQueries({ queryKey: productKeys.all });
+
+      // Snapshot all product query caches
+      const previousQueries = queryClient.getQueriesData<ProductSearchResult>({ queryKey: productKeys.all });
+
+      // Optimistically remove the product from ALL cached query results
+      queryClient.setQueriesData<ProductSearchResult>(
+        { queryKey: productKeys.all },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            products: old.products.filter((p: Product) => p.id !== id),
+            total: old.total - 1,
+          };
+        }
+      );
+
+      return { previousQueries };
+    },
     onSuccess: () => {
-      queryClient.refetchQueries({ queryKey: productKeys.all });
+      // Also remove branch inventory cache
+      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
       showSuccess('Product deleted successfully');
       closeDeleteModal();
     },
-    onError: (error) => showError('Failed to delete product', error.message),
+    onError: (error, _id, context) => {
+      // Rollback on failure
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      showError('Failed to delete product', error.message);
+    },
   });
 
   return {
