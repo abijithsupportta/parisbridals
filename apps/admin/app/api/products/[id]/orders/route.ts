@@ -92,17 +92,21 @@ export async function GET(
     const CANCELLED_STATUSES = new Set(['cancelled', 'refunded']);
 
     for (const item of rows as any[]) {
-      totalUnitsRented += item.quantity || 0;
-      totalRevenue += Number(item.subtotal ?? item.total_price ?? 0);
-
       const order = item.order;
       if (!order) continue;
       const status = (order.status || '').toLowerCase();
 
+      if (CANCELLED_STATUSES.has(status)) {
+        cancelledOrders += 1;
+        continue;
+      }
+
+      totalUnitsRented += item.quantity || 0;
+      totalRevenue += Number(item.subtotal ?? 0);
+
       if (order.customer_id) uniqueCustomers.add(order.customer_id);
       if (ACTIVE_STATUSES.has(status)) activeOrders += 1;
       else if (COMPLETED_STATUSES.has(status)) completedOrders += 1;
-      else if (CANCELLED_STATUSES.has(status)) cancelledOrders += 1;
     }
 
     return NextResponse.json({

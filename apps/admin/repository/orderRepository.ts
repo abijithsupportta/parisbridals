@@ -283,7 +283,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.orderStatusHistoryTable)
       .insert({
         order_id: order.id,
-        status: 'pending',
+        status: initialStatus,
         changed_by: null,
       });
 
@@ -517,7 +517,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.orderStatusHistoryTable)
       .insert({
         order_id: orderId,
-        status: 'returned',
+        status: newStatus,
         notes: returnData.notes || null,
         changed_by: null,
       });
