@@ -1,6 +1,19 @@
-# Paris Bridals — Agent Rules & Best Practices
+# AGENTS.md — Paris Bridals Development Rules
 
 > This document serves as the single source of truth for AI agents working on the Paris Bridals monorepo. Read this BEFORE writing any code.
+
+---
+
+## 🚨 MANDATORY: Post-Work Build Verification
+
+**After EVERY code change, the agent MUST:**
+
+1. Run `flutter analyze --no-pub` (for Flutter/Dart) or the equivalent lint/build command
+2. Fix ALL `error` and `warning` level issues before delivering to the user
+3. `info` level hints are acceptable but should be minimized
+4. Never deliver code that has compilation errors
+
+**This is non-negotiable. Every single change must be verified.**
 
 ---
 
@@ -12,9 +25,10 @@
 
 ### Apps
 | App | Port | Purpose | Directory |
-|-----|------|---------|-----------|
+|-----|------|---------|-----------| 
 | `admin` | 3001 | Admin dashboard for managing categories, products, banners, orders, customers | `apps/admin/` |
 | `storefront` | 3002 | Customer-facing rental storefront | `apps/storefront/` |
+| `mobile` | — | Flutter mobile app (thin client) | `apps/mobile/` |
 
 ### Shared Packages (`packages/`)
 | Package | Purpose |
@@ -34,7 +48,9 @@ pnpm format       # Prettier format
 
 ---
 
-## 2. Architecture (Admin App) — MANDATORY LAYERED PATTERN
+## 2. Architecture Rules
+
+### Next.js Admin (apps/admin) — MANDATORY LAYERED PATTERN
 
 The admin app follows a **strict 5-layer architecture**. All new features MUST follow this pattern:
 
@@ -42,7 +58,7 @@ The admin app follows a **strict 5-layer architecture**. All new features MUST f
 Domain → Repository → Service → Hooks → Components/Pages
 ```
 
-### Layer Responsibilities
+#### Layer Responsibilities
 
 | Layer | Directory | Responsibility | Imports From |
 |-------|-----------|---------------|--------------|
@@ -52,7 +68,7 @@ Domain → Repository → Service → Hooks → Components/Pages
 | **Hooks** | `hooks/` | TanStack Query hooks wrapping services, cache management | `services/`, `domain/`, `stores/` |
 | **Components** | `components/` | React components (UI + admin feature components) | `hooks/`, `domain/`, `stores/` |
 
-### Layer Rules
+#### Layer Rules
 
 1. **Domain layer** is pure — NO imports from other layers.
 2. **Repository layer** — raw database access only. No business logic. Returns `RepositoryResult<T>`.
@@ -62,14 +78,14 @@ Domain → Repository → Service → Hooks → Components/Pages
 6. **Client components** call REST API via `fetch()` — they do NOT import server-only Supabase code.
 7. **Server components** (pages) can call service/data-access functions directly.
 
-### Singleton Pattern
+#### Singleton Pattern
 Each repository and service exports both the class AND a singleton instance:
 ```typescript
 export class CategoryRepository extends BaseRepository { ... }
 export const categoryRepository = new CategoryRepository();
 ```
 
-### Barrel Exports
+#### Barrel Exports
 Every layer has an `index.ts` that re-exports everything. Always import from the barrel:
 ```typescript
 // ✅ Correct
@@ -80,6 +96,27 @@ import { useCategories } from '@/hooks';
 // ❌ Wrong
 import { Category } from '@/domain/types/category';
 ```
+
+### Flutter Mobile (apps/mobile)
+```
+View (widget) → Provider (Riverpod) → Repository → Dio HTTP → Next.js API
+```
+- Flutter is a **thin client** — it NEVER talks to Supabase directly
+- All business logic, validation, and RBAC enforcement lives on the Next.js server
+- Providers are the equivalent of React hooks
+- Repositories encapsulate all HTTP calls via Dio
+
+### Module Folder Structure (Flutter)
+Every feature module MUST follow this structure:
+```
+features/<module_name>/
+├── models/           # Data classes (fromJson/toJson)
+├── repositories/     # HTTP calls via Dio to Next.js API
+├── providers/        # Riverpod providers (state management)
+└── views/            # UI widgets and screens
+```
+
+**No shortcuts.** Providers must never call Dio directly — always go through a repository.
 
 ---
 
@@ -260,7 +297,21 @@ const allowedFields = ['name', 'slug', 'description', 'image_url', 'parent_id', 
 
 ---
 
-## 9. Category System — 3-Level Hierarchy
+## 9. RBAC (Role-Based Access Control)
+
+| Role    | Can View | Can Create/Edit/Delete |
+|---------|----------|------------------------|
+| Admin   | ✅       | ✅                     |
+| Manager | ✅       | ✅                     |
+| Staff   | ✅       | ❌                     |
+
+- Use `canManageProvider` to conditionally show/hide add/edit/delete UI
+- Staff users can only view data and access the orders module
+- Category and Product management is admin/manager only
+
+---
+
+## 10. Category System — 3-Level Hierarchy
 
 ```
 Main Category (parent_id = null)
@@ -276,7 +327,7 @@ Main Category (parent_id = null)
 
 ---
 
-## 10. Image Upload (Cloudflare R2)
+## 11. Image Upload (Cloudflare R2)
 
 ### R2 Configuration
 - Client: `lib/r2.ts` — lazy-initialized S3-compatible client
@@ -290,7 +341,71 @@ Main Category (parent_id = null)
 
 ---
 
-## 11. Component Organization
+## 12. Responsive Design Rules (Flutter Mobile)
+
+- **ALL sizes must use `Responsive.*` helpers** — no hardcoded pixel values
+- `Responsive.sp()` for font sizes
+- `Responsive.icon()` for icon sizes
+- `Responsive.w()` for widths and horizontal spacing
+- `Responsive.h()` for heights and vertical spacing
+- `Responsive.r()` for border radii
+- `Responsive.all()`, `Responsive.symmetric()`, `Responsive.only()` for padding
+- Base design: 375 × 812 (iPhone X)
+
+---
+
+## 13. 🛡️ Flutter Responsive UI — Golden Rules
+
+> **THE GOLDEN RULE: Never give a child a fixed size inside a parent with constrained space.**
+> Always use `Expanded`, `Flexible`, `FittedBox`, or percentage-based sizing so the child
+> *negotiates* with its parent rather than demanding space.
+
+### 1. FittedBox — Auto-Shrink
+- Wrap any widget that could exceed its parent in a `FittedBox` so it **scales down** automatically.
+- Use on titles, price labels, and any text inside a bounded container.
+- Example: `FittedBox(fit: BoxFit.scaleDown, child: Text(...))`.
+
+### 2. Flexible / Expanded — Space Sharing
+- Inside every `Row` or `Column`, at least one child MUST be `Expanded` or `Flexible`.
+- Text-heavy children should always be `Expanded` so they take remaining space.
+- Badges, icons, and fixed-width elements can stay un-wrapped but should be minimal.
+
+### 3. TextOverflow.ellipsis + maxLines
+- Every `Text` widget that could grow unbounded MUST have `maxLines` and `overflow: TextOverflow.ellipsis`.
+- Single-line labels: `maxLines: 1`. Descriptions: `maxLines: 2` or `3`.
+
+### 4. LayoutBuilder — Adaptive Layout
+- Use `LayoutBuilder` when content needs to change shape based on available space.
+- Example: show 2-column grid on small screens, 3-column on wider screens.
+- Access `constraints.maxWidth` to make decisions.
+
+### 5. MediaQuery + Clamped Scale Factors
+- The `Responsive` class already handles this via `_scaleText.clamp(0.8, 1.4)`.
+- Never let scale factors grow unbounded — always clamp.
+- Use comfortable base sizes (sp(13-14) body, sp(16-18) titles) and let the scaler adjust.
+
+### 6. Wrap instead of Row
+- When placing multiple chips, badges, or tags horizontally, use `Wrap` instead of `Row`.
+- `Wrap` automatically flows items to the next line when space runs out.
+- Always set `spacing` and `runSpacing` using `Responsive.w()` and `Responsive.h()`.
+
+### Sizing Guidelines (Base at 375px width)
+| Element              | Recommended sp/w/h | Notes                          |
+|----------------------|---------------------|--------------------------------|
+| Body text            | sp(13)              | Comfortable reading size       |
+| Card titles          | sp(14)              | Slightly larger than body      |
+| Section headers      | sp(15)              | Clear hierarchy                |
+| Page titles          | sp(16-18)           | Prominent but not oversized    |
+| Icons (inline)       | icon(18-20)         | Matches body text height       |
+| Icons (action)       | icon(22-24)         | Tap-friendly                   |
+| Card padding         | all(12)             | Breathable without waste       |
+| List item spacing    | h(8-10)             | Tight but readable             |
+| Thumbnails           | w(64-72)            | Visible without dominating     |
+| Border radii         | r(10-12)            | Modern, consistent curves      |
+
+---
+
+## 14. Component Organization
 
 ### Component Directories
 ```
@@ -315,7 +430,7 @@ components/
 
 ---
 
-## 12. Storefront Architecture
+## 15. Storefront Architecture
 
 ### Key Differences from Admin
 - Uses `src/` directory structure (`src/app/`, `src/components/`, `src/lib/`)
@@ -336,7 +451,7 @@ components/
 
 ---
 
-## 13. Database
+## 16. Database
 
 ### Schema Location
 - Migrations in `database/migrations/`
@@ -362,7 +477,7 @@ components/
 
 ---
 
-## 14. Security Rules
+## 17. Security Rules
 
 1. **NEVER hardcode secrets** — all keys in `.env.local` (git-ignored)
 2. **Service role key** — server-side only, never exposed to client bundles
@@ -374,7 +489,30 @@ components/
 
 ---
 
-## 15. Documentation Standards
+## 18. Code Quality Standards
+
+1. **No unused imports** — remove them immediately
+2. **Use `ref.invalidate()` instead of `ref.refresh()`** when the return value isn't needed
+3. **AppBar must not change color on scroll** — `scrolledUnderElevation: 0` in theme
+4. **Debug banner must be OFF** — `debugShowCheckedModeBanner: false`
+5. **Feature-first folder structure** — never dump files in `lib/` root
+6. **Every view must call `Responsive.init(context)`** or inherit from a parent that does
+
+---
+
+## 19. API Communication (Flutter Mobile)
+
+- Base URL: `https://parisbridals-admin.vercel.app/api`
+- All requests go through the shared `apiClient` (Dio instance in `core/api_client.dart`)
+- Response format follows the admin API conventions:
+  - Lists: `{ categories: [...] }`, `{ products: [...] }`
+  - Singles: `{ category: {...} }`, `{ product: {...} }`
+  - Success: `{ success: true }`
+  - Errors: `{ error: "message" }`
+
+---
+
+## 20. Documentation Standards
 
 1. **Module-level JSDoc** on every new file:
    ```typescript
@@ -393,7 +531,7 @@ components/
 
 ---
 
-## 16. Testing
+## 21. Testing
 
 ### PowerShell Test Scripts (`scripts/`)
 - `test-categories-api.ps1` — 12 basic CRUD tests
@@ -416,7 +554,7 @@ powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy.ps1
 
 ---
 
-## 17. CSS & Styling
+## 22. CSS & Styling
 
 ### Admin
 - Tailwind CSS 4 with CSS variables (HSL color system)
@@ -433,7 +571,7 @@ powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy.ps1
 
 ---
 
-## 18. Common Patterns Quick Reference
+## 23. Common Patterns Quick Reference
 
 ### Creating a New CRUD Module (e.g., "Banners")
 
@@ -460,7 +598,7 @@ powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy.ps1
 
 ---
 
-## 19. Known TODOs & Incomplete Areas
+## 24. Known TODOs & Incomplete Areas
 
 - Several service methods have `// TODO: Calculate actual level` — the repository `findById()` already calculates level, but the service overrides it
 - `getCategoryHierarchy()` returns flat list with `// TODO: Build hierarchy tree`
@@ -470,7 +608,7 @@ powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy.ps1
 
 ---
 
-## 20. Environment Variables Reference
+## 25. Environment Variables Reference
 
 ### Admin App (`.env.local`)
 ```env
@@ -492,3 +630,11 @@ R2_PUBLIC_URL=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 ```
+
+---
+
+## Git & Documentation
+
+- Update `README.md` in each app when adding new modules
+- Document new API endpoints, models, and providers
+- Keep `AGENTS.md` updated with new rules as they emerge

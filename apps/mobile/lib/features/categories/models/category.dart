@@ -1,0 +1,80 @@
+/// Category model matching the admin panel's domain/types/category.ts
+///
+/// Core entity fields: id, name, slug, description, image_url,
+/// parent_id (for hierarchy: Main → Sub → Variant), sort_order,
+/// is_active, is_global, created_at, updated_at.
+class Category {
+  final String id;
+  final String name;
+  final String slug;
+  final String? description;
+  final String? imageUrl;
+  final String? parentId;
+  final int sortOrder;
+  final bool isActive;
+  final bool isGlobal;
+  final String createdAt;
+  final String? updatedAt;
+
+  // Relations (optional, populated by detail endpoints)
+  final Category? parent;
+  final List<Category>? children;
+  final int? productCount;
+
+  Category({
+    required this.id,
+    required this.name,
+    required this.slug,
+    this.description,
+    this.imageUrl,
+    this.parentId,
+    this.sortOrder = 0,
+    this.isActive = true,
+    this.isGlobal = false,
+    required this.createdAt,
+    this.updatedAt,
+    this.parent,
+    this.children,
+    this.productCount,
+  });
+
+  /// Whether this is a Main (root) category.
+  bool get isMain => parentId == null;
+
+  factory Category.fromJson(Map<String, dynamic> json) {
+    return Category(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      slug: json['slug'] as String,
+      description: json['description'] as String?,
+      imageUrl: json['image_url'] as String?,
+      parentId: json['parent_id'] as String?,
+      sortOrder: json['sort_order'] ?? 0,
+      isActive: json['is_active'] ?? true,
+      isGlobal: json['is_global'] ?? false,
+      createdAt: json['created_at'] as String,
+      updatedAt: json['updated_at'] as String?,
+      parent: json['parent'] != null ? Category.fromJson(json['parent']) : null,
+      children: json['children'] != null
+          ? (json['children'] as List).map((c) => Category.fromJson(c)).toList()
+          : null,
+      productCount: json['product_count'] as int?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'slug': slug,
+      'description': description,
+      'image_url': imageUrl,
+      'parent_id': parentId,
+      'sort_order': sortOrder,
+      'is_active': isActive,
+      'is_global': isGlobal,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+}
