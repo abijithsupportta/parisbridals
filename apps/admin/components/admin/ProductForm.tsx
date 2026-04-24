@@ -300,50 +300,47 @@ export default function ProductForm({
           productId = result?.data?.id;
         }
 
-        // Persist branch inventory in background (fire-and-forget)
-        // Product is already saved — inventory syncs asynchronously
-        const inventorySync = async () => {
-          try {
-            const deletePromises = removedInventoryIds.map((rid) =>
-              fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" })
-            );
-            await Promise.all(deletePromises);
+        // Save branch inventory (parallel — fast, ~500ms)
+        try {
+          const deletePromises = removedInventoryIds.map((rid) =>
+            fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" })
+          );
+          await Promise.all(deletePromises);
 
-            const upsertPromises = branchStocks
-              .filter((entry) => entry.id || entry.quantity > 0)
-              .map((entry) => {
-                if (entry.id) {
-                  return fetch(`/api/branch-inventory/${entry.id}`, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      quantity: entry.quantity,
-                      available_quantity: entry.quantity,
-                      low_stock_threshold: 0,
-                    }),
-                  });
-                }
-                return fetch("/api/branch-inventory", {
-                  method: "POST",
+          const upsertPromises = branchStocks
+            .filter((entry) => entry.id || entry.quantity > 0)
+            .map((entry) => {
+              if (entry.id) {
+                return fetch(`/api/branch-inventory/${entry.id}`, {
+                  method: "PATCH",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    branch_id: entry.branch_id,
-                    product_id: productId,
                     quantity: entry.quantity,
                     available_quantity: entry.quantity,
                     low_stock_threshold: 0,
                   }),
                 });
+              }
+              return fetch("/api/branch-inventory", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  branch_id: entry.branch_id,
+                  product_id: productId,
+                  quantity: entry.quantity,
+                  available_quantity: entry.quantity,
+                  low_stock_threshold: 0,
+                }),
               });
-            await Promise.all(upsertPromises);
-          } catch (invErr) {
-            console.error("Branch inventory save error:", invErr);
-          }
-        };
-        inventorySync(); // fire and forget — don't await
+            });
+          await Promise.all(upsertPromises);
+        } catch (invErr) {
+          console.error("Branch inventory save error:", invErr);
+        }
 
-        // Wipe product cache so list page fetches completely fresh data
+        // Wipe ALL product + inventory cache so list page fetches fresh
         queryClient.removeQueries({ queryKey: ["products"] });
+        queryClient.removeQueries({ queryKey: ["branch-inventory"] });
 
         showSuccess(isEdit ? "Product updated" : "Product created");
 
