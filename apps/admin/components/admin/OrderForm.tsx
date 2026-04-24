@@ -181,32 +181,34 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       return;
     }
 
-    const payload = {
-      customer_id: selectedCustomer.id,
-      branch_id: selectedBranchId,
-      rental_start_date: startDate.toISOString(),
-      rental_end_date: endDate.toISOString(),
+    const basePayload = {
       notes: notes || undefined,
       deposit_collected: depositCollected,
       security_deposit: depositCollected ? depositAmount : 0,
       deposit_payment_method: depositCollected ? depositPaymentMethod : undefined,
       deposit_collected_at: depositCollected ? new Date().toISOString() : undefined,
-      items: cartItems.map(item => ({
-        product_id: item.product.id,
-        quantity: item.quantity,
-        price_per_day: item.price_per_day
-      }))
     };
 
     if (isEditing) {
-      updateOrder({ id: initialData.id, data: payload as any }, {
+      updateOrder({ id: initialData.id, data: { ...basePayload, start_date: startDate.toISOString(), end_date: endDate.toISOString() } as any }, {
         onSuccess: () => {
           showSuccess("Order updated successfully");
           router.push("/dashboard/orders");
         }
       });
     } else {
-      createOrder(payload as any, {
+      createOrder({
+        ...basePayload,
+        customer_id: selectedCustomer.id,
+        branch_id: selectedBranchId,
+        rental_start_date: startDate.toISOString(),
+        rental_end_date: endDate.toISOString(),
+        items: cartItems.map(item => ({
+          product_id: item.product.id,
+          quantity: item.quantity,
+          price_per_day: item.price_per_day
+        }))
+      } as any, {
         onSuccess: () => {
           showSuccess("Order created successfully");
           router.push("/dashboard/orders");

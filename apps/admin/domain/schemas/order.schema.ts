@@ -38,8 +38,8 @@ export const CreateOrderSchema = z.object({
 
 export const UpdateOrderSchema = z.object({
   status: z.nativeEnum(OrderStatus).optional(),
-  rental_start_date: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
-  rental_end_date: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+  start_date: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+  end_date: z.string().datetime().or(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
   notes: z.string().max(2000).optional(),
   delivery_method: z.nativeEnum(DeliveryMethod).optional(),
   delivery_address: z.string().max(1000).optional(),
@@ -51,15 +51,15 @@ export const UpdateOrderSchema = z.object({
   amount_paid: z.number().nonnegative().optional(),
   payment_status: z.nativeEnum(PaymentStatus).optional(),
 }).refine((data) => {
-  if (data.rental_start_date && data.rental_end_date) {
-    const start = new Date(data.rental_start_date);
-    const end = new Date(data.rental_end_date);
+  if (data.start_date && data.end_date) {
+    const start = new Date(data.start_date);
+    const end = new Date(data.end_date);
     return end >= start;
   }
   return true;
 }, {
   message: "Rental end date cannot be before start date",
-  path: ["rental_end_date"],
+  path: ["end_date"],
 });
 
 const returnItemSchema = z.object({

@@ -159,12 +159,17 @@ export class InvoiceService {
     }
     yPosition += 10;
 
+    const formatMoney = (val: any) => {
+      const num = Number(val);
+      return isNaN(num) ? '0' : num.toLocaleString();
+    };
+
     // Items table
     const tableData = data.order.items.map((item) => [
       item.product_id.slice(0, 8),
-      item.quantity.toString(),
-      `₹${item.price_per_day.toLocaleString()}`,
-      `₹${item.total_price.toLocaleString()}`,
+      (item.quantity || 0).toString(),
+      `₹${formatMoney(item.price_per_day)}`,
+      `₹${formatMoney(item.total_price || (item.price_per_day || 0) * (item.quantity || 0))}`,
     ]);
 
     autoTable(doc, {
@@ -186,22 +191,22 @@ export class InvoiceService {
       yPosition += 8;
 
       doc.setFont('helvetica', 'normal');
-      doc.text(`Subtotal: ₹${data.order.subtotal?.toLocaleString() || '0'}`, 20, yPosition);
+      doc.text(`Subtotal: ₹${formatMoney(data.order.subtotal)}`, 20, yPosition);
       yPosition += 5;
-      doc.text(`GST: ₹${data.order.gst_amount?.toLocaleString() || '0'}`, 20, yPosition);
+      doc.text(`GST: ₹${formatMoney(data.order.gst_amount)}`, 20, yPosition);
       yPosition += 5;
       doc.setFont('helvetica', 'bold');
-      doc.text(`Total: ₹${data.order.total_amount.toLocaleString()}`, 20, yPosition);
+      doc.text(`Total: ₹${formatMoney(data.order.total_amount)}`, 20, yPosition);
       yPosition += 8;
 
       // Show deposit already paid
       const depositPayment = data.payments?.find((p) => p.payment_type === 'deposit');
       if (depositPayment) {
         doc.setFont('helvetica', 'normal');
-        doc.text(`Security Deposit Paid: ₹${depositPayment.amount.toLocaleString()}`, 20, yPosition);
+        doc.text(`Security Deposit Paid: ₹${formatMoney(depositPayment.amount)}`, 20, yPosition);
         yPosition += 5;
         doc.setFont('helvetica', 'bold');
-        doc.text(`Balance Due: ₹${(data.order.total_amount - depositPayment.amount).toLocaleString()}`, 20, yPosition);
+        doc.text(`Balance Due: ₹${formatMoney(Number(data.order.total_amount || 0) - Number(depositPayment.amount || 0))}`, 20, yPosition);
         yPosition += 8;
       }
     } else {
@@ -212,8 +217,8 @@ export class InvoiceService {
       yPosition += 8;
 
       doc.setFont('helvetica', 'normal');
-      const totalDeposit = data.order.items.reduce((sum, item) => sum + (item.price_per_day * item.quantity), 0);
-      doc.text(`Amount: ₹${totalDeposit.toLocaleString()}`, 20, yPosition);
+      const totalDeposit = data.order.items.reduce((sum, item) => sum + ((item.price_per_day || 0) * (item.quantity || 0)), 0);
+      doc.text(`Amount: ₹${formatMoney(totalDeposit)}`, 20, yPosition);
       yPosition += 8;
     }
 
