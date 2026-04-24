@@ -80,7 +80,6 @@ export type {
   User,
   Store,
   StoreSettings,
-  Customer,
   Analytics,
   Notification,
   Optional,
@@ -103,6 +102,17 @@ export {
   isValidMoney,
   isValidDateRange,
 } from './common';
+
+// Customer types
+export type {
+  Customer,
+  IdType,
+  IdDocument,
+  CreateCustomerDTO,
+  UpdateCustomerDTO,
+  CustomerSearchParams,
+  CustomerSearchResult,
+} from './customer';
 
 // Branch & Staff types
 export type {

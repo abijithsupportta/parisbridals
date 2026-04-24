@@ -130,6 +130,43 @@ Main Category (parent_id = null)
 - **Image Upload**: Cloudflare R2 integration for category images
 - **Comprehensive Validation**: Server-side validation with clear error messages
 
+### Product Management System
+
+The admin also features a highly optimized **Product Module** for managing high-value rental inventory across multiple branches. 
+
+#### Key Features
+- **Instant Save & Background Sync**: Fire-and-forget inventory synchronization for sub-second form submissions.
+- **Client-Side Image Compression**: Compresses huge photos (up to 20MB) to WebP (<100KB) in the browser before parallel uploading to Cloudflare R2.
+- **Optimistic UI Updates**: Instant cache updates on deletion for a zero-latency feel.
+- **Server-Side Pagination & Debounced Search**: Fast filtering across branches and categories.
+
+👉 **[View Detailed Product Module Documentation](./docs/PRODUCT_MODULE.md)** (Flow diagrams, User Flows, Architecture details)
+
+### Customer Management System
+
+The **Customer Module** is a high-performance, fully integrated system for managing client profiles, identity verification, and order history, built upon the strict 5-layer Next.js architecture.
+
+#### Key Features
+- **Comprehensive Profiles**: Track essential contact details, GSTIN, addresses, and high-resolution profile photos.
+- **Identity Verification (KYC)**: Dual-sided document uploads (Front/Back) for Aadhaar, PAN, Passport, Driving License, or other IDs.
+- **Client-Side Image Compression**: Instant compression of large ID/Profile photos to WebP format (<100KB) before uploading to Cloudflare R2, ensuring rapid form submissions and low storage costs.
+- **Real-Time Search & Pagination**: Debounced server-side search paired with React Query pagination (`keepPreviousData` enabled) for flicker-free rendering of 25/50/100 items per page.
+- **Optimistic UI Deletions**: Deleting a customer instantly removes them from the UI while safely handling database cascades and asynchronous R2 storage cleanup in the background.
+- **Unified Form Component**: A single `CustomerForm` powers both Creation and Updating, utilizing Zod schemas for strict bi-directional validation.
+
+#### Architecture Flow (UI to Database)
+1. **Components**: Client-side views (`customers/page.tsx`, `CustomerForm`, `CustomerDetailView`) collect data and handle browser-based WebP compression.
+2. **Hooks**: `useCustomers.ts` (TanStack Query) manages cache invalidation and triggers optimistic updates.
+3. **API Routes**: `app/api/customers/route.ts` runs strict Zod validation (`CreateCustomerSchema`) to sanitize inputs before passing them to the server context.
+4. **Service Layer**: `customerService.ts` executes core business logic (e.g., verifying phone uniqueness, orchestrating safe R2 file deletions).
+5. **Repository**: `customerRepository.ts` executes raw Supabase queries using the robust `BaseRepository` error-handling wrapper.
+
+#### Detailed User Flows
+- **Viewing Customers**: Navigate to `/dashboard/customers`. The data table automatically fetches Page 1. Users can dynamically change rows-per-page or search by name/phone/email using the debounced search bar. Shimmer skeletons prevent layout shift during loading.
+- **Creating a Customer**: The user clicks "Add Customer" and fills out `/dashboard/customers/create`. Profile pictures and ID documents are uploaded via the `FileUpload` component (instantly compressed). Upon "Save", a POST request is sent, images hit R2, the DB saves the URLs, the local cache is invalidated, and the user is redirected to the list page where the new customer appears instantly.
+- **Viewing Details**: Clicking a customer name opens `/dashboard/customers/[id]`. This Server Component securely fetches the user profile, rendering a premium UI showing contact info, interactive previews for identity documents, and quick account statistics.
+- **Editing & Deletion**: Editing uses the exact same `CustomerForm` pre-filled via `PATCH`. Deletion utilizes an optimistic UI — the row disappears instantly on click, while the Next.js API deletes the Supabase record and asynchronously calls Cloudflare R2 to wipe all associated document/photo files to prevent orphaned storage blobs.
+
 ### Security Model
 
 - **Service Role Isolation**: Admin operations use service role key bypassing RLS

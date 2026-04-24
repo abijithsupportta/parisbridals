@@ -6,14 +6,14 @@
  * @module services/customerService
  */
 
-import { RepositoryResult } from '@/repository';
-import { Customer } from '@/domain';
+import { RepositoryResult, customerRepository } from '@/repository';
 import { 
-  customerRepository, 
+  Customer,
   CreateCustomerDTO, 
   UpdateCustomerDTO,
-  CustomerSearchParams 
-} from '@/repository';
+  CustomerSearchParams,
+  CustomerSearchResult
+} from '@/domain';
 
 export class CustomerService {
   private currentUserId: string | null = null;
@@ -31,7 +31,7 @@ export class CustomerService {
   /**
    * Get all customers
    */
-  async getAllCustomers(params?: CustomerSearchParams): Promise<RepositoryResult<Customer[]>> {
+  async getAllCustomers(params?: CustomerSearchParams): Promise<RepositoryResult<CustomerSearchResult>> {
     return await customerRepository.findAll(params);
   }
 
@@ -130,7 +130,7 @@ export class CustomerService {
   /**
    * Delete a customer
    */
-  async deleteCustomer(id: string): Promise<RepositoryResult<void>> {
+  async deleteCustomer(id: string): Promise<RepositoryResult<boolean>> {
     // Check if customer exists
     const existingCustomer = await customerRepository.findById(id);
     if (!existingCustomer.success || !existingCustomer.data) {
@@ -145,13 +145,6 @@ export class CustomerService {
     }
 
     return await customerRepository.delete(id);
-  }
-
-  /**
-   * Count customers
-   */
-  async countCustomers(params?: CustomerSearchParams): Promise<RepositoryResult<number>> {
-    return await customerRepository.count(params);
   }
 }
 

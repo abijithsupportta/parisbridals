@@ -151,7 +151,7 @@ export class InvoiceService {
     doc.setFont('helvetica', 'bold');
     doc.text(`Order ID: #${data.order.id.slice(0, 8)}`, 20, yPosition);
     yPosition += 5;
-    doc.text(`Rental Period: ${new Date(data.order.rental_start_date).toLocaleDateString()} - ${new Date(data.order.rental_end_date).toLocaleDateString()}`, 20, yPosition);
+    doc.text(`Rental Period: ${new Date(data.order.start_date).toLocaleDateString()} - ${new Date(data.order.end_date).toLocaleDateString()}`, 20, yPosition);
     yPosition += 5;
     if (data.order.event_date) {
       doc.text(`Event Date: ${new Date(data.order.event_date).toLocaleDateString()}`, 20, yPosition);
@@ -169,7 +169,7 @@ export class InvoiceService {
 
     autoTable(doc, {
       startY: yPosition,
-      head: [['Item ID', 'Qty', 'Price/Day', 'Total']],
+      head: [['Item ID', 'Qty', 'Rent Price', 'Total']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [66, 66, 66] },
@@ -188,7 +188,7 @@ export class InvoiceService {
       doc.setFont('helvetica', 'normal');
       doc.text(`Subtotal: ₹${data.order.subtotal?.toLocaleString() || '0'}`, 20, yPosition);
       yPosition += 5;
-      doc.text(`GST (${data.order.gst_percentage}%): ₹${data.order.gst_amount?.toLocaleString() || '0'}`, 20, yPosition);
+      doc.text(`GST: ₹${data.order.gst_amount?.toLocaleString() || '0'}`, 20, yPosition);
       yPosition += 5;
       doc.setFont('helvetica', 'bold');
       doc.text(`Total: ₹${data.order.total_amount.toLocaleString()}`, 20, yPosition);

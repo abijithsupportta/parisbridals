@@ -30,14 +30,13 @@ interface OrderItemRow {
   order_id: string;
   quantity: number;
   price_per_day: number;
-  total_price: number;
   subtotal: number;
   created_at: string;
   order?: {
     id: string;
     status: string;
-    rental_start_date: string;
-    rental_end_date: string;
+    start_date: string;
+    end_date: string;
     total_amount: number;
     created_at: string;
     customer?: { id: string; name: string; phone?: string };
@@ -269,10 +268,9 @@ export default function ProductDetailPage() {
               {/* Core Details Panel */}
               <div className="flex-1 p-6 flex flex-col">
                 <div className="mb-6">
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Rental Pricing</h3>
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Rent Price</h3>
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold tracking-tight text-slate-900">{formatCurrency(product.price_per_day)}</span>
-                    <span className="text-sm font-medium text-slate-500">/ day</span>
                   </div>
                 </div>
 
@@ -356,7 +354,7 @@ export default function ProductDetailPage() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-slate-600 whitespace-nowrap">
-                            {new Date(order.rental_start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — {new Date(order.rental_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            {new Date(order.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} — {new Date(order.end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                           </td>
                           <td className="px-6 py-4">
                             {getStatusBadge(order.status)}

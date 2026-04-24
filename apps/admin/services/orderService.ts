@@ -143,7 +143,7 @@ export class OrderService {
         return {
           data: null,
           error: {
-            message: 'Price per day must be a positive number',
+            message: 'Rent price must be a positive number',
             code: 'VALIDATION_ERROR'
           } as any,
           success: false,
@@ -151,9 +151,14 @@ export class OrderService {
       }
     }
 
-    // Get GST percentage from settings
-    const gstResult = await settingsService.getGSTPercentage();
-    const gstPercentage = gstResult.success ? gstResult.data || 0 : 0;
+    // Get GST settings
+    const [gstResult, isGstEnabledResult] = await Promise.all([
+      settingsService.getGSTPercentage(),
+      settingsService.getIsGSTEnabled()
+    ]);
+    
+    const isGstEnabled = isGstEnabledResult.success && isGstEnabledResult.data;
+    const gstPercentage = (isGstEnabled && gstResult.success) ? gstResult.data || 0 : 0;
 
     return await orderRepository.create(data, gstPercentage);
   }
@@ -182,12 +187,16 @@ export class OrderService {
 
       // Define allowed transitions
       const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-        [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
-        [OrderStatus.CONFIRMED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
-        [OrderStatus.DELIVERED]: [OrderStatus.IN_USE, OrderStatus.CANCELLED],
-        [OrderStatus.IN_USE]: [OrderStatus.RETURNED, OrderStatus.LATE_RETURN, OrderStatus.CANCELLED],
+        [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.SCHEDULED, OrderStatus.CANCELLED],
+        [OrderStatus.CONFIRMED]: [OrderStatus.DELIVERED, OrderStatus.SCHEDULED, OrderStatus.CANCELLED],
+        [OrderStatus.SCHEDULED]: [OrderStatus.DELIVERED, OrderStatus.ONGOING, OrderStatus.CANCELLED],
+        [OrderStatus.DELIVERED]: [OrderStatus.IN_USE, OrderStatus.ONGOING, OrderStatus.CANCELLED],
+        [OrderStatus.IN_USE]: [OrderStatus.RETURNED, OrderStatus.LATE_RETURN, OrderStatus.PARTIAL, OrderStatus.FLAGGED, OrderStatus.CANCELLED],
+        [OrderStatus.ONGOING]: [OrderStatus.RETURNED, OrderStatus.LATE_RETURN, OrderStatus.PARTIAL, OrderStatus.FLAGGED, OrderStatus.CANCELLED],
+        [OrderStatus.PARTIAL]: [OrderStatus.RETURNED, OrderStatus.COMPLETED, OrderStatus.FLAGGED],
+        [OrderStatus.FLAGGED]: [OrderStatus.RETURNED, OrderStatus.COMPLETED],
         [OrderStatus.RETURNED]: [OrderStatus.COMPLETED],
-        [OrderStatus.LATE_RETURN]: [OrderStatus.COMPLETED],
+        [OrderStatus.LATE_RETURN]: [OrderStatus.COMPLETED, OrderStatus.FLAGGED],
         [OrderStatus.COMPLETED]: [],
         [OrderStatus.CANCELLED]: [],
       };
@@ -205,9 +214,9 @@ export class OrderService {
     }
 
     // Validate rental dates if provided
-    if (data.rental_start_date && data.rental_end_date) {
-      const startDate = new Date(data.rental_start_date);
-      const endDate = new Date(data.rental_end_date);
+    if (data.start_date && data.end_date) {
+      const startDate = new Date(data.start_date);
+      const endDate = new Date(data.end_date);
       
       if (startDate >= endDate) {
         return {
@@ -293,11 +302,11 @@ export class OrderService {
 
     // Validate order is in correct status for return
     const currentStatus = existingOrder.data.status;
-    if (currentStatus !== OrderStatus.IN_USE && currentStatus !== OrderStatus.LATE_RETURN) {
+    if (currentStatus !== OrderStatus.IN_USE && currentStatus !== OrderStatus.ONGOING && currentStatus !== OrderStatus.LATE_RETURN && currentStatus !== OrderStatus.PARTIAL) {
       return {
         data: null,
         error: {
-          message: 'Order must be in use or late return to process return',
+          message: 'Order must be in use, ongoing, partial, or late return to process return',
           code: 'INVALID_STATUS'
         } as any,
         success: false,

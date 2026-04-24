@@ -19,9 +19,9 @@ import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/domain/types/category";
-import { type Product, type CreateProductDTO, type UpdateProductDTO } from "@/domain/types/product";
+import { type Product } from "@/domain/types/product";
 import { useAppStore } from "@/stores";
-import { useCreateProduct, useUpdateProduct } from "@/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 
 const MAX_IMAGES = 5;
 
@@ -68,9 +68,7 @@ export default function ProductForm({
   const router = useRouter();
   const isEdit = !!product;
   const { showError, showSuccess, user } = useAppStore();
-
-  const createProduct = useCreateProduct();
-  const updateProduct = useUpdateProduct();
+  const queryClient = useQueryClient();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -268,51 +266,61 @@ export default function ProductForm({
         };
 
         let productId: string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let result: any;
+
         if (isEdit && product) {
-          result = await updateProduct.mutateAsync({
-            id: product.id,
-            data: basePayload as UpdateProductDTO,
+          const res = await fetch(`/api/products/${product.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(basePayload),
           });
+          const result = await res.json();
+          if (!res.ok || !result?.success) {
+            showError(result?.error?.message || result?.message || "Failed to update product");
+            setLoading(false);
+            return;
+          }
           productId = product.id;
         } else {
-          result = await createProduct.mutateAsync(
-            basePayload as CreateProductDTO
-          );
+          const res = await fetch("/api/products", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(basePayload),
+          });
+          const result = await res.json();
+          if (!res.ok || !result?.success) {
+            let msg = result?.error?.message || result?.message || "Failed to create product";
+            if (result?.error?.code === "SLUG_EXISTS") {
+              msg = "A product with this slug already exists.";
+            }
+            showError(msg);
+            setLoading(false);
+            return;
+          }
           productId = result?.data?.id;
         }
 
-        if (!result?.success) {
-          let msg = result?.error?.message || "Request failed";
-          if (result?.error?.code === "SLUG_EXISTS") {
-            msg = "A product with this slug already exists.";
-          } else if (result?.error?.code === "VALIDATION_ERROR") {
-            msg = "Please check all required fields.";
-          }
-          showError(msg);
-          setLoading(false);
-          return;
-        }
-
-        // Persist branch inventory
+        // Save branch inventory (parallel — fast, ~500ms)
         try {
-          for (const rid of removedInventoryIds) {
-            await fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" });
-          }
-          for (const entry of branchStocks) {
-            if (entry.id) {
-              await fetch(`/api/branch-inventory/${entry.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  quantity: entry.quantity,
-                  available_quantity: entry.quantity,
-                  low_stock_threshold: 0,
-                }),
-              });
-            } else if (entry.quantity > 0) {
-              await fetch("/api/branch-inventory", {
+          const deletePromises = removedInventoryIds.map((rid) =>
+            fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" })
+          );
+          await Promise.all(deletePromises);
+
+          const upsertPromises = branchStocks
+            .filter((entry) => entry.id || entry.quantity > 0)
+            .map((entry) => {
+              if (entry.id) {
+                return fetch(`/api/branch-inventory/${entry.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    quantity: entry.quantity,
+                    available_quantity: entry.quantity,
+                    low_stock_threshold: 0,
+                  }),
+                });
+              }
+              return fetch("/api/branch-inventory", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -323,14 +331,15 @@ export default function ProductForm({
                   low_stock_threshold: 0,
                 }),
               });
-            }
-          }
+            });
+          await Promise.all(upsertPromises);
         } catch (invErr) {
           console.error("Branch inventory save error:", invErr);
-          showError(
-            "Product saved, but some branch stock may not have been persisted"
-          );
         }
+
+        // Wipe ALL product + inventory cache so list page fetches fresh
+        queryClient.removeQueries({ queryKey: ["products"] });
+        queryClient.removeQueries({ queryKey: ["branch-inventory"] });
 
         showSuccess(isEdit ? "Product updated" : "Product created");
 
@@ -454,7 +463,7 @@ export default function ProductForm({
               accept="image/*"
               multiple={true}
               maxFiles={MAX_IMAGES}
-              maxSize={5 * 1024 * 1024}
+              maxSize={20 * 1024 * 1024}
               folder="products"
               value={imageUrls}
               onChange={setImageUrls}

@@ -9,9 +9,8 @@
  * @module hooks/useOrders
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { orderService } from '@/services';
-import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO } from '@/domain/types/order';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO, OrderStatusHistory } from '@/domain/types/order';
 import { useAppStore } from '@/stores';
 
 // Query keys
@@ -31,18 +30,51 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    let errorMessage = body.error || `Request failed (${res.status})`;
+    if (body.details) {
+      errorMessage += `: ${JSON.stringify(body.details)}`;
+    }
+    throw new Error(errorMessage);
   }
   return res.json();
+}
+
+interface PaginatedResponse<T> {
+  success: boolean;
+  data: T[];
+  total: number;
+  totalPages: number;
+  page: number;
+  limit: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+  error?: any;
 }
 
 /**
  * Fetch all orders
  */
-export function useOrders(params?: OrderSearchParams) {
-  return useQuery({
+export function useOrders(params?: OrderSearchParams & { page?: number; limit?: number }) {
+  return useQuery<PaginatedResponse<OrderWithRelations>>({
     queryKey: orderKeys.list(params),
-    queryFn: () => orderService.getAllOrders(params),
+    queryFn: async () => {
+      const searchParams = new URLSearchParams();
+      if (params?.customer_id) searchParams.append('customer_id', params.customer_id);
+      if (params?.branch_id) searchParams.append('branch_id', params.branch_id);
+      if (params?.status) searchParams.append('status', params.status);
+      if (params?.query) searchParams.append('query', params.query);
+      if (params?.date_filter) searchParams.append('date_filter', params.date_filter);
+      if (params?.date_from) searchParams.append('date_from', params.date_from);
+      if (params?.date_to) searchParams.append('date_to', params.date_to);
+      if (params?.limit) searchParams.append('limit', params.limit.toString());
+      if (params?.page) searchParams.append('page', params.page.toString());
+      
+      const queryString = searchParams.toString();
+      const url = `/api/orders${queryString ? `?${queryString}` : ''}`;
+      
+      return await apiFetch<PaginatedResponse<OrderWithRelations>>(url);
+    },
+    placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -52,9 +84,12 @@ export function useOrders(params?: OrderSearchParams) {
  * Fetch a single order by ID
  */
 export function useOrder(id: string) {
-  return useQuery({
+  return useQuery<{ success: boolean; data?: OrderWithRelations; error?: any }>({
     queryKey: orderKeys.detail(id),
-    queryFn: () => orderService.getOrderById(id),
+    queryFn: async () => {
+      const res = await apiFetch<{ order: OrderWithRelations }>(`/api/orders/${id}`);
+      return { success: true, data: res.order };
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
   });
@@ -64,9 +99,12 @@ export function useOrder(id: string) {
  * Fetch order status history
  */
 export function useOrderStatusHistory(id: string, enabled: boolean = true) {
-  return useQuery({
+  return useQuery<{ success: boolean; data?: OrderStatusHistory[]; error?: any }>({
     queryKey: orderKeys.history(id),
-    queryFn: () => orderService.getOrderStatusHistory(id),
+    queryFn: async () => {
+      const res = await apiFetch<{ history: OrderStatusHistory[] }>(`/api/orders/${id}/history`);
+      return { success: true, data: res.history };
+    },
     enabled: enabled && !!id,
     staleTime: 5 * 60 * 1000,
   });
@@ -82,7 +120,7 @@ export function useCreateOrder() {
   const mutation = useMutation({
     mutationFn: (data: CreateOrderDTO) =>
       apiFetch<{ order: OrderWithRelations }>('/api/orders', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (result) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       showSuccess('Order created successfully');
     },
@@ -105,15 +143,11 @@ export function useUpdateOrder() {
 
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateOrderDTO }) => 
-      orderService.updateOrder(id, data),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: orderKeys.details() });
-        showSuccess('Order updated successfully');
-      } else {
-        showError('Failed to update order', result.error?.message);
-      }
+      apiFetch<{ order: OrderWithRelations }>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+      showSuccess('Order updated successfully');
     },
     onError: (error) => {
       showError('Failed to update order', error.message);
@@ -135,17 +169,28 @@ export function useDeleteOrder() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (id: string) => orderService.deleteOrder(id),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: orderKeys.details() });
-        showSuccess('Order deleted successfully');
-      } else {
-        showError('Failed to delete order', result.error?.message);
+    mutationFn: (id: string) => apiFetch<{ success: boolean }>(`/api/orders/${id}`, { method: 'DELETE' }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: orderKeys.lists() });
+      const previousOrders = queryClient.getQueryData<{ success: boolean, data: OrderWithRelations[] }>(orderKeys.lists());
+      
+      if (previousOrders?.data) {
+        queryClient.setQueryData(
+          orderKeys.lists(),
+          { ...previousOrders, data: previousOrders.data.filter((o) => o.id !== id) }
+        );
       }
+      return { previousOrders };
     },
-    onError: (error) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+      showSuccess('Order deleted successfully');
+    },
+    onError: (error, id, context) => {
+      if (context?.previousOrders) {
+        queryClient.setQueryData(orderKeys.lists(), context.previousOrders);
+      }
       showError('Failed to delete order', error.message);
     },
   });
@@ -158,17 +203,6 @@ export function useDeleteOrder() {
 }
 
 /**
- * Count orders
- */
-export function useOrderCount(params?: OrderSearchParams) {
-  return useQuery({
-    queryKey: [...orderKeys.lists(), 'count', params],
-    queryFn: () => orderService.countOrders(params),
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-/**
  * Process order return
  */
 export function useProcessOrderReturn() {
@@ -177,15 +211,11 @@ export function useProcessOrderReturn() {
 
   const mutation = useMutation({
     mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) => 
-      orderService.processOrderReturn(orderId, returnData),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: orderKeys.details() });
-        showSuccess('Order return processed successfully');
-      } else {
-        showError('Failed to process order return', result.error?.message);
-      }
+      apiFetch<{ order: OrderWithRelations }>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+      showSuccess('Order return processed successfully');
     },
     onError: (error) => {
       showError('Failed to process order return', error.message);
@@ -207,15 +237,11 @@ export function useMarkDepositReturned() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (orderId: string) => orderService.markDepositReturned(orderId),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: orderKeys.details() });
-        showSuccess('Deposit marked as returned');
-      } else {
-        showError('Failed to mark deposit as returned', result.error?.message);
-      }
+    mutationFn: (orderId: string) => apiFetch<{ order: OrderWithRelations }>(`/api/orders/${orderId}/deposit`, { method: 'PATCH' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+      showSuccess('Deposit marked as returned');
     },
     onError: (error) => {
       showError('Failed to mark deposit as returned', error.message);

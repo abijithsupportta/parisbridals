@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
       query: searchParams.get('query') || undefined,
       category_id: searchParams.get('category_id') || undefined,
       store_id: searchParams.get('store_id') || undefined,
+      branch_id: searchParams.get('branch_id') || undefined,
       status: searchParams.get('status') || undefined,
       is_featured: searchParams.get('is_featured') === 'true' ? true : 
                    searchParams.get('is_featured') === 'false' ? false : undefined,

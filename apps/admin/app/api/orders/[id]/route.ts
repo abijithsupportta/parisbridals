@@ -26,6 +26,8 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
+import { UpdateOrderSchema } from "@/domain";
+
 /** GET /api/orders/:id — fetch one order */
 export async function GET(request: NextRequest, { params }: RouteContext) {
   try {
@@ -56,7 +58,16 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const body = await request.json();
 
-    const result = await orderService.updateOrder(id, body);
+    // Validate request body
+    const validatedData = UpdateOrderSchema.safeParse(body);
+    if (!validatedData.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: validatedData.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const result = await orderService.updateOrder(id, validatedData.data);
     if (!result.success) {
       return NextResponse.json({ error: result.error?.message }, { status: 400 });
     }

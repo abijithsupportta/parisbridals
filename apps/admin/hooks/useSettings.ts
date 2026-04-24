@@ -61,6 +61,46 @@ export function useUpdateGSTPercentage() {
 }
 
 /**
+ * Check if GST is enabled
+ */
+export function useIsGSTEnabled() {
+  return useQuery({
+    queryKey: [...queryKeys.settings, 'is_gst_enabled'],
+    queryFn: () => settingsService.getIsGSTEnabled(),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Enable or disable GST
+ */
+export function useUpdateIsGSTEnabled() {
+  const queryClient = useQueryClient();
+  const { showSuccess, showError } = useAppStore();
+
+  const mutation = useMutation({
+    mutationFn: (isEnabled: boolean) => settingsService.setIsGSTEnabled(isEnabled),
+    onSuccess: (result) => {
+      if (result.success) {
+        queryUtils.invalidateSettings();
+        showSuccess('GST status updated successfully');
+      } else {
+        showError('Failed to update GST status', result.error?.message);
+      }
+    },
+    onError: (error) => {
+      showError('Failed to update GST status', error.message);
+    },
+  });
+
+  return {
+    ...mutation,
+    updateIsGSTEnabled: mutation.mutate,
+    isLoading: mutation.isPending,
+  };
+}
+
+/**
  * Get invoice prefix
  */
 export function useInvoicePrefix() {

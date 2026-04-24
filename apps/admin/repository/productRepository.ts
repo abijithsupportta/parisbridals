@@ -30,6 +30,7 @@ export class ProductRepository extends BaseRepository {
       query,
       category_id,
       store_id,
+      branch_id,
       status,
       is_featured,
       min_price,
@@ -74,6 +75,10 @@ export class ProductRepository extends BaseRepository {
     if (query) {
       selectQuery = (selectQuery as any).or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%`);
     }
+    
+    if (branch_id) {
+      selectQuery = (selectQuery as any).or(`branch_id.eq.${branch_id},branch_id.is.null`);
+    }
 
     if (min_price !== undefined) {
       selectQuery = (selectQuery as any).gte('price_per_day', min_price);
@@ -93,6 +98,13 @@ export class ProductRepository extends BaseRepository {
           countQuery = (countQuery as any).eq(key, value);
         }
       });
+    }
+    
+    if (query) {
+      countQuery = (countQuery as any).or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%`);
+    }
+    if (branch_id) {
+      countQuery = (countQuery as any).or(`branch_id.eq.${branch_id},branch_id.is.null`);
     }
 
     const { count: totalCount } = await countQuery;

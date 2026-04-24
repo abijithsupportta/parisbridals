@@ -89,7 +89,6 @@ export {
   useCreateCustomer,
   useUpdateCustomer,
   useDeleteCustomer,
-  useCustomerCount,
 } from './useCustomers';
 
 // Order hooks
@@ -100,7 +99,6 @@ export {
   useCreateOrder,
   useUpdateOrder,
   useDeleteOrder,
-  useOrderCount,
   useProcessOrderReturn,
   useMarkDepositReturned,
 } from './useOrders';
@@ -109,6 +107,8 @@ export {
 export {
   useGSTPercentage,
   useUpdateGSTPercentage,
+  useIsGSTEnabled,
+  useUpdateIsGSTEnabled,
   useInvoicePrefix,
   usePaymentTerms,
   useAuthorizedSignature,

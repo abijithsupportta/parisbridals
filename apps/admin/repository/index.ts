@@ -23,7 +23,7 @@ export { BranchRepository, branchRepository } from './branchRepository';
 export { StaffRepository, staffRepository } from './staffRepository';
 export { BranchInventoryRepository, branchInventoryRepository } from './branchInventoryRepository';
 export { BannerRepository, bannerRepository } from './bannerRepository';
-export { customerRepository, type CreateCustomerDTO, type UpdateCustomerDTO, type CustomerSearchParams } from './customerRepository';
+export { CustomerRepository, customerRepository } from './customerRepository';
 export { orderRepository } from './orderRepository';
 export { settingsRepository } from './settingsRepository';
 export { paymentRepository } from './paymentRepository';

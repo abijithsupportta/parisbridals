@@ -13,7 +13,9 @@ import {
   ChevronDown,
   ImageIcon,
   Building2,
-  UserCircle
+  UserCircle,
+  CalendarDays,
+  FolderTree
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
@@ -22,13 +24,14 @@ import { routePermissionMap, type Permission } from "@/lib/permissions";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Products", href: "/dashboard/products", icon: Package },
-  { name: "Categories", href: "/dashboard/categories", icon: Package },
-  { name: "Branches", href: "/dashboard/branches", icon: Building2 },
-  { name: "Staff", href: "/dashboard/staff", icon: UserCircle },
-  { name: "Banners", href: "/dashboard/banners", icon: ImageIcon },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+  { name: "Calendar", href: "/dashboard/calendar", icon: CalendarDays },
+  { name: "Products", href: "/dashboard/products", icon: Package },
+  { name: "Categories", href: "/dashboard/categories", icon: FolderTree },
   { name: "Customers", href: "/dashboard/customers", icon: Users },
+  { name: "Banners", href: "/dashboard/banners", icon: ImageIcon },
+  { name: "Staff", href: "/dashboard/staff", icon: UserCircle },
+  { name: "Branches", href: "/dashboard/branches", icon: Building2 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -78,7 +81,7 @@ export default function Sidebar() {
       </div>
       
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-400/25 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/50 [&::-webkit-scrollbar-thumb]:rounded-full">
         {visibleNav.map((item) => {
           const isActive = pathname === item.href;
           return (
