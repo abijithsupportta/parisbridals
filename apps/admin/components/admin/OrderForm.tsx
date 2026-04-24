@@ -254,10 +254,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
             {!selectedCustomer ? (
               <div className="relative" ref={customerRef}>
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <Input
                     placeholder="Search customer by name or phone..."
-                    className="pl-9 h-11 border-slate-200 focus:border-slate-900"
+                    className="pl-10 h-12 border-slate-200 focus:border-slate-900 text-base"
                     value={customerSearch}
                     onChange={(e) => {
                       setCustomerSearch(e.target.value);
@@ -376,19 +376,19 @@ export default function OrderForm({ initialData }: OrderFormProps) {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pickup Date</label>
+                <label className="text-sm font-medium text-slate-600">Pickup Date</label>
                 <Input
                   type="date"
-                  className="h-10 border-slate-200 focus:border-slate-900"
+                  className="h-12 border-slate-200 focus:border-slate-900 text-base"
                   value={format(startDate, "yyyy-MM-dd")}
                   onChange={(e) => setStartDate(new Date(e.target.value))}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Return Date</label>
+                <label className="text-sm font-medium text-slate-600">Return Date</label>
                 <Input
                   type="date"
-                  className="h-10 border-slate-200 focus:border-slate-900"
+                  className="h-12 border-slate-200 focus:border-slate-900 text-base"
                   value={format(endDate, "yyyy-MM-dd")}
                   min={format(startDate, "yyyy-MM-dd")}
                   onChange={(e) => setEndDate(new Date(e.target.value))}
@@ -435,22 +435,22 @@ export default function OrderForm({ initialData }: OrderFormProps) {
             {depositCollected && (
               <div className="space-y-3 pt-1">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Amount Collected (₹)</label>
+                  <label className="text-sm font-medium text-slate-600">Amount Collected (₹)</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-sm">₹</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-lg">₹</span>
                     <Input
                       type="number"
                       value={depositAmount || ""}
                       onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
                       placeholder="0"
-                      className="h-10 pl-7 border-slate-200 focus:border-slate-900 font-bold text-lg"
+                      className="h-12 pl-8 border-slate-200 focus:border-slate-900 font-bold text-xl"
                     />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Payment Method</label>
+                  <label className="text-sm font-medium text-slate-600">Payment Method</label>
                   <Select value={depositPaymentMethod} onValueChange={setDepositPaymentMethod}>
-                    <SelectTrigger className="h-10 border-slate-200 focus:border-slate-900">
+                    <SelectTrigger className="h-12 border-slate-200 focus:border-slate-900 text-base">
                       <SelectValue placeholder="Select method" />
                     </SelectTrigger>
                     <SelectContent>
@@ -482,10 +482,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 </span>
               </div>
               <div className="relative" ref={productRef}>
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                 <Input
-                  placeholder="Search products..."
-                  className="pl-9 h-10 border-slate-200 focus:border-slate-900 text-sm"
+                  placeholder="Search products to add to cart..."
+                  className="pl-10 h-12 border-slate-200 focus:border-slate-900 text-base"
                   value={productSearch}
                   onChange={(e) => {
                     setProductSearch(e.target.value);
@@ -495,9 +495,11 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 />
                 {isProductDropdownOpen && productSearch.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
-                    {products.length > 0 ? (
-                      <ul className="py-1">
-                        {products.map((p: any) => {
+                    {(() => {
+                      const availableProducts = products.filter((p: any) => !cartItems.some(item => item.product.id === p.id));
+                      return availableProducts.length > 0 ? (
+                        <ul className="py-1">
+                          {availableProducts.map((p: any) => {
                           const imgUrl = getImageUrl(p);
                           return (
                             <li
@@ -527,10 +529,13 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                             </li>
                           );
                         })}
-                      </ul>
-                    ) : (
-                      <div className="p-4 text-center text-sm text-slate-500">No products found.</div>
-                    )}
+                        </ul>
+                      ) : (
+                        <div className="p-4 text-center text-sm text-slate-500">
+                          {products.length > 0 ? "All matching products are already in the cart." : "No products found."}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -599,44 +604,28 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 <span className="font-medium">{formatCurrency(cartTotals.subtotal)}</span>
               </div>
               {isGstEnabled && (
-                <div className="flex justify-between text-sm text-slate-600 pb-3 border-b border-slate-200">
+                <div className="flex justify-between text-base text-slate-600 pb-3 border-b border-slate-200">
                   <span>GST ({gstPercentage}%)</span>
                   <span className="font-medium">{formatCurrency(cartTotals.gstAmount)}</span>
                 </div>
               )}
               <div className={`flex justify-between items-end pt-1 ${!isGstEnabled ? 'pt-3 border-t border-slate-200' : ''}`}>
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">Grand Total</div>
+                  <div className="text-base font-semibold text-slate-900">Grand Total</div>
                 </div>
-                <div className="text-2xl font-bold text-slate-900 tracking-tight">
+                <div className="text-3xl font-bold text-slate-900 tracking-tight">
                   {formatCurrency(cartTotals.grandTotal)}
                 </div>
               </div>
+              <Button
+                onClick={handleCheckout}
+                disabled={isCreating || isUpdating}
+                className="w-full h-14 bg-slate-900 text-white hover:bg-slate-800 font-bold text-lg mt-4 shadow-lg shadow-slate-900/20"
+              >
+                {isCreating || isUpdating ? "Processing..." : isEditing ? "Save Changes" : "Confirm Order"}
+              </Button>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Sticky Action Bar — same as product module */}
-      <div className="sticky bottom-0 z-10 -mx-8 px-8 py-4 bg-white/95 backdrop-blur-sm border-t border-slate-200">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.push("/dashboard/orders")}
-            className="h-10 border-slate-200 text-slate-600 hover:text-slate-900"
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={isCreating || isUpdating}
-            onClick={handleCheckout}
-            className="h-10 px-6 bg-slate-900 text-white hover:bg-slate-800 font-semibold"
-          >
-            {isCreating || isUpdating ? "Processing..." : isEditing ? "Save Changes" : "Confirm Order"}
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
         </div>
       </div>
     </div>

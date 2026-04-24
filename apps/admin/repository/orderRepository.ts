@@ -173,6 +173,23 @@ export class OrderRepository extends BaseRepository {
     // Total amount
     const totalAmount = subtotal + gstAmount;
 
+    // Fetch store_id from branch
+    const branchResponse = await this.client
+      .from('branches')
+      .select('store_id')
+      .eq('id', data.branch_id)
+      .single();
+      
+    if (branchResponse.error) {
+      return {
+        data: null,
+        error: branchResponse.error,
+        success: false
+      };
+    }
+    
+    const storeId = branchResponse.data.store_id;
+
     // Start a transaction by creating the order first
     // DB columns: start_date, end_date, event_date (all DATE type)
     const orderResponse = await this.client
@@ -180,7 +197,7 @@ export class OrderRepository extends BaseRepository {
       .insert({
         customer_id: data.customer_id,
         branch_id: data.branch_id,
-        store_id: data.branch_id, // TODO: resolve store from branch
+        store_id: storeId,
         status: 'pending',
         start_date: startDate.toISOString().split('T')[0],
         end_date: endDate.toISOString().split('T')[0],
