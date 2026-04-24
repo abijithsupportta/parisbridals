@@ -77,6 +77,11 @@ function isVideoType(type: string): boolean {
   return type.startsWith("video/");
 }
 
+function isHeicFile(file: File): boolean {
+  const fileName = file.name.toLowerCase();
+  return fileName.endsWith(".heic") || fileName.endsWith(".heif");
+}
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -185,7 +190,12 @@ const FileUpload = React.forwardRef<HTMLDivElement, FileUploadProps>(
               }
               return file.type === type;
             });
-            if (!matches) {
+
+            // Allow HEIC files by extension even if MIME type is not recognized
+            const isHeic = isHeicFile(file);
+            const isImageAccept = acceptTypes.some(t => t === "image/*" || t === "image/heic" || t === "image/heif");
+
+            if (!matches && !(isHeic && isImageAccept)) {
               errors.push(`"${file.name}" is not an accepted file type`);
               continue;
             }
@@ -445,9 +455,9 @@ const FileUpload = React.forwardRef<HTMLDivElement, FileUploadProps>(
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
                     {accept === "image/*"
-                      ? "PNG, JPG, WebP"
+                      ? "PNG, JPG, WebP, HEIC"
                       : accept === "image/*,video/*"
-                      ? "PNG, JPG, WebP, MP4"
+                      ? "PNG, JPG, WebP, HEIC, MP4"
                       : accept}{" "}
                     up to {formatFileSize(maxSize)}
                     {multiple && ` · Max ${maxFiles} files`}

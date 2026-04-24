@@ -33,6 +33,18 @@ export class BannerRepository extends BaseRepository {
       query = query.eq('redirect_type', params.redirect_type);
     }
 
+    if (params?.banner_type) {
+      query = query.eq('banner_type', params.banner_type);
+    }
+
+    // Order by banner_type, then position (if exists), then priority
+    query = query.order('banner_type', { ascending: true });
+    
+    if (params?.banner_type) {
+      // If filtering by type, order by position then priority
+      query = query.order('position', { ascending: true, nullsFirst: false });
+    }
+    
     query = query.order('priority', { ascending: false });
 
     if (params?.limit) {
@@ -123,8 +135,61 @@ export class BannerRepository extends BaseRepository {
       query = query.eq('redirect_type', params.redirect_type);
     }
 
+    if (params?.banner_type) {
+      query = query.eq('banner_type', params.banner_type);
+    }
+
     const response = await query;
     
+    if (response.error) {
+      return {
+        success: false,
+        data: null,
+        error: response.error,
+      };
+    }
+    
+    return {
+      success: true,
+      data: response.count || 0,
+      error: null,
+    };
+  }
+
+  /**
+   * Count banners by type
+   */
+  async countByType(bannerType: string): Promise<RepositoryResult<number>> {
+    const response = await this.client
+      .from(this.tableName)
+      .select('*', { count: 'exact', head: true })
+      .eq('banner_type', bannerType);
+
+    if (response.error) {
+      return {
+        success: false,
+        data: null,
+        error: response.error,
+      };
+    }
+    
+    return {
+      success: true,
+      data: response.count || 0,
+      error: null,
+    };
+  }
+
+  /**
+   * Count banners by type and position
+   */
+  async countByTypeAndPosition(bannerType: string, position: string): Promise<RepositoryResult<number>> {
+    const response = await this.client
+      .from(this.tableName)
+      .select('*', { count: 'exact', head: true })
+      .eq('banner_type', bannerType)
+      .eq('position', position);
+
     if (response.error) {
       return {
         success: false,

@@ -229,13 +229,13 @@ export default function CategoryForm({
             label="Category Image"
             accept="image/*"
             multiple={false}
-            maxSize={2 * 1024 * 1024}
+            maxSize={5 * 1024 * 1024}
             folder="categories"
             value={formData.image_url ? [formData.image_url] : []}
             onChange={(urls) =>
               setFormData((prev) => ({ ...prev, image_url: urls[0] || "" }))
             }
-            helperText="Upload a category image (max 2MB)"
+            helperText="Upload a category image (max 5MB)"
           />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -11,7 +11,11 @@ import {
   Banner, 
   CreateBannerDTO, 
   UpdateBannerDTO,
-  BannerSearchParams
+  BannerSearchParams,
+  BannerType,
+  BannerPosition,
+  BANNER_TYPE_LIMITS,
+  validateBannerPosition
 } from '@/domain';
 import { bannerRepository } from '@/repository';
 
@@ -58,6 +62,61 @@ export class BannerService {
       };
     }
 
+    // Set default banner type to hero if not provided
+    const bannerType = data.banner_type || BannerType.HERO;
+
+    // Check banner type limit
+    const countResult = await bannerRepository.countByType(bannerType);
+    if (!countResult.success) {
+      return countResult as any;
+    }
+
+    const currentCount = countResult.data || 0;
+    const maxLimit = BANNER_TYPE_LIMITS[bannerType];
+
+    if (currentCount >= maxLimit) {
+      return {
+        data: null,
+        error: {
+          message: `${bannerType.charAt(0).toUpperCase() + bannerType.slice(1)} banner limit reached (${maxLimit}/${maxLimit}). Delete an existing ${bannerType} banner to add a new one.`,
+          code: 'LIMIT_EXCEEDED'
+        } as any,
+        success: false,
+      };
+    }
+
+    // Validate position for split banners
+    if (bannerType === BannerType.SPLIT && data.position) {
+      const positionCountResult = await bannerRepository.countByTypeAndPosition(bannerType, data.position);
+      if (!positionCountResult.success) {
+        return positionCountResult as any;
+      }
+
+      if (positionCountResult.data && positionCountResult.data > 0) {
+        return {
+          data: null,
+          error: {
+            message: `Split banner already has a ${data.position} position. Choose '${data.position === BannerPosition.LEFT ? BannerPosition.RIGHT : BannerPosition.LEFT}' or delete the existing ${data.position} banner.`,
+            code: 'POSITION_TAKEN'
+          } as any,
+          success: false,
+        };
+      }
+    }
+
+    // Validate position based on banner type
+    const positionValidation = validateBannerPosition(bannerType, data.position || null);
+    if (!positionValidation.valid) {
+      return {
+        data: null,
+        error: {
+          message: positionValidation.error || 'Invalid position',
+          code: 'VALIDATION_ERROR'
+        } as any,
+        success: false,
+      };
+    }
+
     // Validate redirect configuration
     if (data.redirect_type === 'url') {
       if (!data.redirect_url) {
@@ -83,7 +142,10 @@ export class BannerService {
       }
     }
 
-    return await bannerRepository.create(data);
+    return await bannerRepository.create({
+      ...data,
+      banner_type: bannerType,
+    });
   }
 
   /**
@@ -98,6 +160,68 @@ export class BannerService {
         error: {
           message: 'Banner not found',
           code: 'BANNER_NOT_FOUND'
+        } as any,
+        success: false,
+      };
+    }
+
+    const currentBanner = existingBanner.data;
+    const newBannerType = data.banner_type || currentBanner.banner_type;
+    const newPosition = data.position !== undefined ? data.position : currentBanner.position;
+
+    // Check if banner type is being changed
+    if (data.banner_type && data.banner_type !== currentBanner.banner_type) {
+      // Check if new type has available slots
+      const countResult = await bannerRepository.countByType(newBannerType);
+      if (!countResult.success) {
+        return countResult as any;
+      }
+
+      const currentCount = countResult.data || 0;
+      const maxLimit = BANNER_TYPE_LIMITS[newBannerType];
+
+      // Subtract 1 if we're moving from the same type (we're replacing, not adding)
+      const effectiveCount = currentBanner.banner_type === newBannerType ? currentCount : currentCount + 1;
+
+      if (effectiveCount > maxLimit) {
+        return {
+          data: null,
+          error: {
+            message: `${newBannerType.charAt(0).toUpperCase() + newBannerType.slice(1)} banner limit reached (${maxLimit}/${maxLimit}). Delete an existing ${newBannerType} banner to change the type.`,
+            code: 'LIMIT_EXCEEDED'
+          } as any,
+          success: false,
+        };
+      }
+    }
+
+    // Validate position for split banners if position is being changed
+    if (newBannerType === BannerType.SPLIT && data.position && data.position !== currentBanner.position) {
+      const positionCountResult = await bannerRepository.countByTypeAndPosition(newBannerType, data.position);
+      if (!positionCountResult.success) {
+        return positionCountResult as any;
+      }
+
+      if (positionCountResult.data && positionCountResult.data > 0) {
+        return {
+          data: null,
+          error: {
+            message: `Split banner already has a ${data.position} position. Choose '${data.position === BannerPosition.LEFT ? BannerPosition.RIGHT : BannerPosition.LEFT}' or delete the existing ${data.position} banner.`,
+            code: 'POSITION_TAKEN'
+          } as any,
+          success: false,
+        };
+      }
+    }
+
+    // Validate position based on banner type
+    const positionValidation = validateBannerPosition(newBannerType, newPosition);
+    if (!positionValidation.valid) {
+      return {
+        data: null,
+        error: {
+          message: positionValidation.error || 'Invalid position',
+          code: 'VALIDATION_ERROR'
         } as any,
         success: false,
       };
@@ -156,6 +280,66 @@ export class BannerService {
    */
   async countBanners(params?: BannerSearchParams): Promise<RepositoryResult<number>> {
     return await bannerRepository.count(params);
+  }
+
+  /**
+   * Get remaining slots for each banner type
+   */
+  async getRemainingSlots(): Promise<RepositoryResult<Record<BannerType, number>>> {
+    const heroCount = await bannerRepository.countByType(BannerType.HERO);
+    const editorialCount = await bannerRepository.countByType(BannerType.EDITORIAL);
+    const splitCount = await bannerRepository.countByType(BannerType.SPLIT);
+
+    if (!heroCount.success || !editorialCount.success || !splitCount.success) {
+      return {
+        data: null,
+        error: {
+          message: 'Failed to fetch banner counts',
+          code: 'FETCH_ERROR'
+        } as any,
+        success: false,
+      };
+    }
+
+    return {
+      success: true,
+      data: {
+        [BannerType.HERO]: BANNER_TYPE_LIMITS[BannerType.HERO] - (heroCount.data || 0),
+        [BannerType.EDITORIAL]: BANNER_TYPE_LIMITS[BannerType.EDITORIAL] - (editorialCount.data || 0),
+        [BannerType.SPLIT]: BANNER_TYPE_LIMITS[BannerType.SPLIT] - (splitCount.data || 0),
+      },
+      error: null,
+    };
+  }
+
+  /**
+   * Check if a banner type can be created
+   */
+  async canCreateBanner(bannerType: BannerType): Promise<RepositoryResult<{ canCreate: boolean; reason?: string }>> {
+    const countResult = await bannerRepository.countByType(bannerType);
+    if (!countResult.success) {
+      return countResult as any;
+    }
+
+    const currentCount = countResult.data || 0;
+    const maxLimit = BANNER_TYPE_LIMITS[bannerType];
+
+    if (currentCount >= maxLimit) {
+      return {
+        success: true,
+        data: {
+          canCreate: false,
+          reason: `${bannerType.charAt(0).toUpperCase() + bannerType.slice(1)} banner limit reached (${maxLimit}/${maxLimit})`,
+        },
+        error: null,
+      };
+    }
+
+    return {
+      success: true,
+      data: { canCreate: true },
+      error: null,
+    };
   }
 }
 
