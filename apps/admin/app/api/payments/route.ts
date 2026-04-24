@@ -6,13 +6,13 @@
 
 import { NextRequest } from 'next/server';
 import { paymentService } from '@/services/paymentService';
-import { adminOnly } from '@/lib/apiGuard';
+import { apiGuard } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
 import { apiSuccess, apiRepositoryError, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(request: NextRequest) {
   try {
-    const guard = await adminOnly(request);
+    const guard = await apiGuard(request, 'orders');
     if (guard.error) return guard.error;
 
     const { searchParams } = new URL(request.url);
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const guard = await adminOnly(request);
+    const guard = await apiGuard(request, 'orders');
     if (guard.error) return guard.error;
 
     const authUser = await getAuthUser(request);
