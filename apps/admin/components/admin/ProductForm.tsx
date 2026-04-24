@@ -296,24 +296,28 @@ export default function ProductForm({
           return;
         }
 
-        // Persist branch inventory
+        // Persist branch inventory — all calls in parallel for speed
         try {
-          for (const rid of removedInventoryIds) {
-            await fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" });
-          }
-          for (const entry of branchStocks) {
-            if (entry.id) {
-              await fetch(`/api/branch-inventory/${entry.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  quantity: entry.quantity,
-                  available_quantity: entry.quantity,
-                  low_stock_threshold: 0,
-                }),
-              });
-            } else if (entry.quantity > 0) {
-              await fetch("/api/branch-inventory", {
+          const deletePromises = removedInventoryIds.map((rid) =>
+            fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" })
+          );
+          await Promise.all(deletePromises);
+
+          const upsertPromises = branchStocks
+            .filter((entry) => entry.id || entry.quantity > 0)
+            .map((entry) => {
+              if (entry.id) {
+                return fetch(`/api/branch-inventory/${entry.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    quantity: entry.quantity,
+                    available_quantity: entry.quantity,
+                    low_stock_threshold: 0,
+                  }),
+                });
+              }
+              return fetch("/api/branch-inventory", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -324,8 +328,8 @@ export default function ProductForm({
                   low_stock_threshold: 0,
                 }),
               });
-            }
-          }
+            });
+          await Promise.all(upsertPromises);
         } catch (invErr) {
           console.error("Branch inventory save error:", invErr);
           showError(

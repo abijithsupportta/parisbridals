@@ -133,7 +133,10 @@ export default function ProductsPage() {
   const getStockAtBranch = (productId: string) => {
     const rows = inventoryByProduct[productId] || [];
     if (!selectedBranchId) {
-      return { quantity: 0, available: 0, threshold: 0, hasStock: false };
+      // No branch selected — aggregate across all branches
+      const totalQty = rows.reduce((sum, r) => sum + (r.quantity || 0), 0);
+      const totalAvail = rows.reduce((sum, r) => sum + (r.available_quantity || 0), 0);
+      return { quantity: totalQty, available: totalAvail, threshold: 0, hasStock: rows.length > 0 };
     }
     const row = rows.find((r) => r.branch_id === selectedBranchId);
     return {
@@ -281,7 +284,6 @@ export default function ProductsPage() {
   };
 
   // ── Render ───────────────────────────────────────────────────────
-  const noBranchSelected = !selectedBranchId;
   const showShimmer = isLoading || isLoadingInventory;
 
   return (
@@ -403,14 +405,6 @@ export default function ProductsPage() {
                 </div>
               </div>
             ))}
-          </div>
-        ) : noBranchSelected ? (
-          <div className="p-16 text-center">
-            <Store className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-slate-900 mb-1">Select a Branch</h3>
-            <p className="text-sm text-slate-500 max-w-sm mx-auto">
-              Please select a branch from the top-right switcher to view localized product inventory.
-            </p>
           </div>
         ) : visibleProducts.length === 0 ? (
           <div className="p-16 text-center">

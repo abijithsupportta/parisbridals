@@ -270,20 +270,21 @@ const FileUpload = React.forwardRef<HTMLDivElement, FileUploadProps>(
           return;
         }
 
-        // Immediate upload mode
+        // Immediate upload mode — upload ALL files in parallel
         const fileNames = valid.map((f) => f.name);
         setUploadingFiles(fileNames);
 
-        const uploadedUrls: string[] = [];
+        const results = await Promise.all(
+          valid.map(async (file) => {
+            const url = await uploadToR2(file);
+            if (!url) {
+              setError(`Failed to upload "${file.name}"`);
+            }
+            return url;
+          })
+        );
 
-        for (const file of valid) {
-          const url = await uploadToR2(file);
-          if (url) {
-            uploadedUrls.push(url);
-          } else {
-            setError(`Failed to upload "${file.name}"`);
-          }
-        }
+        const uploadedUrls = results.filter(Boolean) as string[];
 
         setUploadingFiles([]);
 
