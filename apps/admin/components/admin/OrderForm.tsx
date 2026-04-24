@@ -5,14 +5,16 @@ import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
 import {
   Search, Plus, Minus, Trash2, Calendar, User, Package,
-  ArrowLeft, ArrowRight
+  ArrowLeft, ArrowRight, ShieldCheck
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCustomers, useProducts, useCreateOrder, useUpdateOrder, useCreateCustomer } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
+import { PaymentMethod } from "@/domain/types/order";
 
 interface OrderFormProps {
   initialData?: any;
@@ -62,6 +64,11 @@ export default function OrderForm({ initialData }: OrderFormProps) {
 
   // Notes
   const [notes, setNotes] = useState(initialData?.notes || "");
+
+  // Deposit State
+  const [depositCollected, setDepositCollected] = useState(initialData?.deposit_collected || false);
+  const [depositAmount, setDepositAmount] = useState<number>(initialData?.security_deposit || 0);
+  const [depositPaymentMethod, setDepositPaymentMethod] = useState<string>(initialData?.deposit_payment_method || PaymentMethod.CASH);
 
   // Close dropdowns when clicking outside
   const customerRef = useRef<HTMLDivElement>(null);
@@ -175,6 +182,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       rental_start_date: startDate.toISOString(),
       rental_end_date: endDate.toISOString(),
       notes: notes || undefined,
+      deposit_collected: depositCollected,
+      security_deposit: depositCollected ? depositAmount : 0,
+      deposit_payment_method: depositCollected ? depositPaymentMethod : undefined,
+      deposit_collected_at: depositCollected ? new Date().toISOString() : undefined,
       items: cartItems.map(item => ({
         product_id: item.product.id,
         quantity: item.quantity,
@@ -183,7 +194,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     };
 
     if (isEditing) {
-      updateOrder({ id: initialData.id, data: payload }, {
+      updateOrder({ id: initialData.id, data: payload as any }, {
         onSuccess: () => {
           showSuccess("Order updated successfully");
           router.push("/dashboard/orders");
@@ -395,6 +406,58 @@ export default function OrderForm({ initialData }: OrderFormProps) {
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
               rows={3}
             />
+          </div>
+
+          {/* Security Deposit */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-slate-400" />
+                Security Deposit
+              </h3>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={depositCollected}
+                  onChange={(e) => setDepositCollected(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-200 peer-focus:ring-2 peer-focus:ring-slate-900/20 rounded-full peer peer-checked:bg-slate-900 transition-colors"></div>
+                <div className={`absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${depositCollected ? 'translate-x-4' : 'translate-x-0'}`}></div>
+              </label>
+            </div>
+
+            {depositCollected && (
+              <div className="space-y-3 pt-1">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Amount Collected (₹)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-sm">₹</span>
+                    <Input
+                      type="number"
+                      value={depositAmount || ""}
+                      onChange={(e) => setDepositAmount(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      className="h-10 pl-7 border-slate-200 focus:border-slate-900 font-bold text-lg"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Payment Method</label>
+                  <Select value={depositPaymentMethod} onValueChange={setDepositPaymentMethod}>
+                    <SelectTrigger className="h-10 border-slate-200 focus:border-slate-900">
+                      <SelectValue placeholder="Select method" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={PaymentMethod.CASH}>Cash</SelectItem>
+                      <SelectItem value={PaymentMethod.UPI}>UPI / QR</SelectItem>
+                      <SelectItem value={PaymentMethod.CARD}>Card</SelectItem>
+                      <SelectItem value={PaymentMethod.BANK_TRANSFER}>Bank Transfer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

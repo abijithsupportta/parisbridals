@@ -191,8 +191,11 @@ export class OrderRepository extends BaseRepository {
         pickup_address: data.pickup_address || null,
         subtotal,
         gst_amount: gstAmount,
-        security_deposit: 0,
+        security_deposit: (data as any).security_deposit || 0,
         total_amount: totalAmount,
+        deposit_collected: (data as any).deposit_collected || false,
+        deposit_payment_method: (data as any).deposit_payment_method || null,
+        deposit_collected_at: (data as any).deposit_collected_at || null,
         notes: data.notes || null,
       })
       .select()
