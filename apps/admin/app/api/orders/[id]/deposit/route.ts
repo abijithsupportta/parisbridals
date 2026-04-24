@@ -4,19 +4,14 @@
  * Routes:
  *   PATCH  /api/orders/:id/deposit   Mark deposit as returned
  *
- * Responses:
- *   200 { order }
- *   400 { error }    (invalid status)
- *   404 { error }    (order not found)
- *   500 { error }    (server/database failure)
- *
  * @module app/api/orders/[id]/deposit/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { orderService } from "@/services/orderService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiRepositoryError, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -35,11 +30,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const result = await orderService.markDepositReturned(id);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to mark deposit as returned');
     }
-    return NextResponse.json({ order: result.data });
+    return apiSuccess(result.data, { message: 'Deposit marked as returned' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

@@ -9,18 +9,14 @@
  * @module app/api/products/[id]/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { Product, CreateProductDTO, UpdateProductDTO, ProductSearchSchema, CreateProductSchema, UpdateProductSchema } from '@/domain';
+import { NextRequest } from 'next/server';
+import { CreateProductDTO, UpdateProductDTO, UpdateProductSchema } from '@/domain';
 import { productService } from '@/services';
 import { z } from 'zod';
+import { apiSuccess, apiRepositoryError, apiBadRequest, apiZodError, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * GET /api/products/[id]
- * 
- * Path parameters:
- * - id: Product ID
- * 
- * Returns a single product with relations.
  */
 export async function GET(
   request: NextRequest,
@@ -29,59 +25,26 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // Validate ID format
     if (!id || typeof id !== 'string') {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid product ID' 
-        },
-        { status: 400 }
-      );
+      return apiBadRequest('Invalid product ID');
     }
 
     const result = await productService.getProductById(id);
 
     if (!result.success) {
-      const status = result.error?.code === 'PRODUCT_NOT_FOUND' ? 404 : 500;
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: result.error?.message || 'Failed to fetch product',
-          error: result.error 
-        },
-        { status }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch product');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      message: 'Product retrieved successfully',
-    });
+    return apiSuccess(result.data);
 
   } catch (error) {
     console.error('Product API - GET Error:', error);
-    
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Internal server error' 
-      },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }
 
 /**
  * PATCH /api/products/[id]
- * 
- * Path parameters:
- * - id: Product ID
- * 
- * Request body: UpdateProductDTO
- * 
- * Updates an existing product with validation.
  */
 export async function PATCH(
   request: NextRequest,
@@ -91,15 +54,8 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    // Validate ID format
     if (!id || typeof id !== 'string') {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid product ID' 
-        },
-        { status: 400 }
-      );
+      return apiBadRequest('Invalid product ID');
     }
 
     // Validate request body
@@ -116,57 +72,24 @@ export async function PATCH(
     const result = await productService.updateProduct(id, updateData);
 
     if (!result.success) {
-      const status = result.error?.code === 'PRODUCT_NOT_FOUND' ? 404 : 400;
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: result.error?.message || 'Failed to update product',
-          error: result.error 
-        },
-        { status }
-      );
+      return apiRepositoryError(result.error, 'Failed to update product');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      message: 'Product updated successfully',
-    });
+    return apiSuccess(result.data, { message: 'Product updated successfully' });
 
   } catch (error) {
     console.error('Product API - PATCH Error:', error);
     
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid request body',
-          errors: error.issues.reduce((acc, issue) => {
-            acc[issue.path.join('.')] = issue.message;
-            return acc;
-          }, {} as Record<string, string>) 
-        },
-        { status: 400 }
-      );
+      return apiZodError(error);
     }
 
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Internal server error' 
-      },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }
 
 /**
  * DELETE /api/products/[id]
- * 
- * Path parameters:
- * - id: Product ID
- * 
- * Deletes a product with safety checks.
  */
 export async function DELETE(
   request: NextRequest,
@@ -175,46 +98,20 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    // Validate ID format
     if (!id || typeof id !== 'string') {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid product ID' 
-        },
-        { status: 400 }
-      );
+      return apiBadRequest('Invalid product ID');
     }
 
     const result = await productService.deleteProduct(id);
 
     if (!result.success) {
-      const status = result.error?.code === 'PRODUCT_NOT_FOUND' ? 404 : 
-                    result.error?.code === 'CANNOT_DELETE' ? 409 : 500;
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: result.error?.message || 'Failed to delete product',
-          error: result.error 
-        },
-        { status }
-      );
+      return apiRepositoryError(result.error, 'Failed to delete product');
     }
 
-    return NextResponse.json({
-      success: true,
-      message: 'Product deleted successfully',
-    });
+    return apiSuccess(null, { message: 'Product deleted successfully' });
 
   } catch (error) {
     console.error('Product API - DELETE Error:', error);
-    
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Internal server error' 
-      },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

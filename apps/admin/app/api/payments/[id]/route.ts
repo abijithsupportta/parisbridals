@@ -5,10 +5,11 @@
  * DELETE /api/payments/:id — delete a payment
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { paymentService } from '@/services/paymentService';
 import { adminOnly } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
+import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(
   request: NextRequest,
@@ -20,19 +21,13 @@ export async function GET(
 
     const { id } = await params;
     const result = await paymentService.getPayment(id);
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to fetch payment' },
-        { status: 404 }
-      );
+    if (!result.success || !result.data) {
+      return apiNotFound('Payment');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (error: any) {
     console.error('[API] GET /api/payments/:id error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }
 
@@ -52,18 +47,12 @@ export async function PATCH(
     const result = await paymentService.updatePayment(id, body);
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to update payment' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to update payment');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data, { message: 'Payment updated successfully' });
   } catch (error: any) {
     console.error('[API] PATCH /api/payments/:id error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }
 
@@ -79,17 +68,11 @@ export async function DELETE(
     const result = await paymentService.deletePayment(id);
 
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to delete payment' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to delete payment');
     }
-    return NextResponse.json({ success: true });
+    return apiSuccess(null, { message: 'Payment deleted successfully' });
   } catch (error: any) {
     console.error('[API] DELETE /api/payments/:id error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }

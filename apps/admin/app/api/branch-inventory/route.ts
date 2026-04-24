@@ -6,9 +6,10 @@
  * @module app/api/branch-inventory/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { branchInventoryService } from '@/services';
 import { apiGuard } from '@/lib/apiGuard';
+import { apiSuccess, apiRepositoryError, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * GET /api/branch-inventory
@@ -33,21 +34,12 @@ export async function GET(request: NextRequest) {
     }
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error?.message || 'Failed to fetch inventory' },
-        { status: 500 }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch inventory');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-    });
+    return apiSuccess(result.data);
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }
 
@@ -64,20 +56,11 @@ export async function POST(request: NextRequest) {
     const result = await branchInventoryService.createBranchInventory(body);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error?.message || 'Failed to create inventory' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to create inventory');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-    }, { status: 201 });
+    return apiSuccess(result.data, { status: 201, message: 'Inventory created successfully' });
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

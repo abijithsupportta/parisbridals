@@ -10,7 +10,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { paymentService } from '@/services/paymentService';
 import { 
   Payment, 
   CreatePaymentDTO, 
@@ -19,6 +18,7 @@ import {
 } from '@/domain/types/payment';
 import { queryUtils } from '@/lib/query-client';
 import { useAppStore } from '@/stores';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 // Query keys
 const queryKeys = {
@@ -34,7 +34,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -45,7 +45,16 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export function usePayments(params: PaymentSearchParams = {}) {
   return useQuery({
     queryKey: [...queryKeys.payments, params],
-    queryFn: () => paymentService.getAllPayments(params),
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      if (params.order_id) qs.set('order_id', params.order_id);
+      if (params.payment_type) qs.set('payment_type', params.payment_type);
+      if (params.payment_mode) qs.set('payment_mode', params.payment_mode);
+      if (params.limit) qs.set('limit', String(params.limit));
+      if (params.offset) qs.set('offset', String(params.offset));
+      const response = await apiFetch<ApiSuccessResponse<Payment[]>>(`/api/payments?${qs.toString()}`);
+      return response.data;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
@@ -56,7 +65,10 @@ export function usePayments(params: PaymentSearchParams = {}) {
 export function usePayment(id: string) {
   return useQuery({
     queryKey: queryKeys.payment(id),
-    queryFn: () => paymentService.getPayment(id),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<Payment>>(`/api/payments/${id}`);
+      return response.data;
+    },
     enabled: !!id,
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -68,7 +80,10 @@ export function usePayment(id: string) {
 export function useOrderPayments(orderId: string) {
   return useQuery({
     queryKey: queryKeys.orderPayments(orderId),
-    queryFn: () => paymentService.getPaymentsByOrder(orderId),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<Payment[]>>(`/api/payments?order_id=${orderId}`);
+      return response.data;
+    },
     enabled: !!orderId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -82,8 +97,10 @@ export function useCreatePayment() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (data: CreatePaymentDTO) =>
-      apiFetch<Payment>('/api/payments', { method: 'POST', body: JSON.stringify(data) }),
+    mutationFn: async (data: CreatePaymentDTO) => {
+      const response = await apiFetch<ApiSuccessResponse<Payment>>('/api/payments', { method: 'POST', body: JSON.stringify(data) });
+      return response.data;
+    },
     onSuccess: (result) => {
       queryUtils.invalidatePayments();
       if (result.order_id) {
@@ -109,16 +126,16 @@ export function useUpdatePayment() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdatePaymentDTO }) => 
-      paymentService.updatePayment(id, data),
+    mutationFn: async ({ id, data }: { id: string; data: UpdatePaymentDTO }) => {
+      const response = await apiFetch<ApiSuccessResponse<Payment>>(`/api/payments/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+      return response.data;
+    },
     onSuccess: (result) => {
-      if (result.success && result.data) {
-        queryUtils.invalidatePayments();
-        queryUtils.invalidatePayment(result.data.id);
-        showSuccess('Payment updated successfully');
-      } else {
-        showError('Failed to update payment', result.error?.message);
+      queryUtils.invalidatePayments();
+      if (result?.id) {
+        queryUtils.invalidatePayment(result.id);
       }
+      showSuccess('Payment updated successfully');
     },
     onError: (error) => {
       showError('Failed to update payment', error.message);
@@ -140,14 +157,11 @@ export function useDeletePayment() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (id: string) => paymentService.deletePayment(id),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryUtils.invalidatePayments();
-        showSuccess('Payment deleted successfully');
-      } else {
-        showError('Failed to delete payment', result.error?.message);
-      }
+    mutationFn: (id: string) =>
+      apiFetch(`/api/payments/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryUtils.invalidatePayments();
+      showSuccess('Payment deleted successfully');
     },
     onError: (error) => {
       showError('Failed to delete payment', error.message);

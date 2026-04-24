@@ -23,6 +23,7 @@ import {
   UpdateCustomerDTO,
 } from '@/domain';
 import { useAppStore } from '@/stores';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 // ── Query keys ────────────────────────────────────────────────────────
 const customerKeys = {
@@ -41,7 +42,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -57,7 +58,8 @@ export function useCustomers(params?: CustomerSearchParams) {
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.sort_by) qs.set('sort_by', params.sort_by);
       if (params?.sort_order) qs.set('sort_order', params.sort_order);
-      return apiFetch<CustomerSearchResult>(`/api/customers?${qs.toString()}`);
+      const response = await apiFetch<ApiSuccessResponse<CustomerSearchResult>>(`/api/customers?${qs.toString()}`);
+      return response.data;
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -76,9 +78,12 @@ export function useCustomers(params?: CustomerSearchParams) {
 
 // ── useCustomer — single customer detail ──────────────────────────────
 export function useCustomer(id: string) {
-  return useQuery<{ customer: Customer }>({
+  return useQuery<Customer>({
     queryKey: customerKeys.detail(id),
-    queryFn: () => apiFetch<{ customer: Customer }>(`/api/customers/${id}`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<Customer>>(`/api/customers/${id}`);
+      return response.data;
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
   });
@@ -89,9 +94,8 @@ export function useCustomerByPhone(phone: string, enabled: boolean = true) {
   return useQuery<Customer | null>({
     queryKey: ['customers', 'phone', phone],
     queryFn: async () => {
-      const res = await fetch(`/api/customers?query=${encodeURIComponent(phone)}&limit=1`);
-      const data = await res.json();
-      const match = data?.customers?.find((c: Customer) => c.phone === phone);
+      const response = await apiFetch<ApiSuccessResponse<CustomerSearchResult>>(`/api/customers?query=${encodeURIComponent(phone)}&limit=1`);
+      const match = response.data?.customers?.find((c: Customer) => c.phone === phone);
       return match || null;
     },
     enabled: enabled && phone.length >= 10,
@@ -106,7 +110,7 @@ export function useCreateCustomer() {
 
   const mutation = useMutation({
     mutationFn: (data: CreateCustomerDTO) =>
-      apiFetch<{ customer: Customer }>('/api/customers', {
+      apiFetch<ApiSuccessResponse<Customer>>('/api/customers', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -132,7 +136,7 @@ export function useUpdateCustomer() {
 
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateCustomerDTO }) =>
-      apiFetch<{ customer: Customer }>(`/api/customers/${id}`, {
+      apiFetch<ApiSuccessResponse<Customer>>(`/api/customers/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),

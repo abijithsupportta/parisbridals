@@ -2,7 +2,7 @@
  * Orders REST API — Collection Endpoint
  *
  * Routes:
- *   GET    /api/orders   Fetch all orders
+ *   GET    /api/orders   Fetch all orders (paginated)
  *   POST   /api/orders   Create a new order
  *
  * GET Query Params:
@@ -11,24 +11,19 @@
  *   - status: string (optional)
  *   - query: string (optional)
  *   - limit: number (optional)
- *   - offset: number (optional)
+ *   - page: number (optional)
  *
  * POST body (JSON): CreateOrderDTO
- *
- * Responses:
- *   200 { orders: OrderWithRelations[] } | { order: OrderWithRelations }
- *   400 { error }    (invalid payload)
- *   500 { error }    (server/database failure)
  *
  * @module app/api/orders/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { orderService } from "@/services/orderService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
-
 import { CreateOrderSchema } from "@/domain";
+import { apiSuccess, apiRepositoryError, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
 /** GET /api/orders — fetch all orders */
 export async function GET(request: NextRequest) {
@@ -56,25 +51,25 @@ export async function GET(request: NextRequest) {
     const countResult = await orderService.countOrders(params);
 
     if (!result.success || !countResult.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 500 });
+      return apiRepositoryError(result.error, 'Failed to fetch orders');
     }
 
     const total = countResult.data || 0;
     const totalPages = Math.ceil(total / limit);
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      total,
-      totalPages,
-      page,
-      limit,
-      hasNext: page < totalPages,
-      hasPrev: page > 1
+    return apiSuccess(result.data, {
+      meta: {
+        total,
+        totalPages,
+        page,
+        limit,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -92,20 +87,17 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const validatedData = CreateOrderSchema.safeParse(body);
     if (!validatedData.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: validatedData.error.format() },
-        { status: 400 }
-      );
+      return apiBadRequest('Validation failed', validatedData.error.format());
     }
 
     const result = await orderService.createOrder(validatedData.data);
     
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to create order');
     }
-    return NextResponse.json({ order: result.data });
+    return apiSuccess(result.data, { status: 201, message: 'Order created successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

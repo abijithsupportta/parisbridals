@@ -8,17 +8,17 @@
  *   - Sub category   → variants
  *   - Variant        → [] (variants are leaf nodes)
  *
- * Responses:
- *   200 { children: Category[], parent: Category, level: "main"|"sub"|"variant" }
- *   404 { error: "Category not found" }
- *   500 { error: string }
+ * Response:
+ *   200 { success: true, data: { children, parent, level } }
+ *   404 { success: false, error: { message, code: "NOT_FOUND" } }
  *
  * @module app/api/categories/[id]/children/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { categoryService } from "@/services/categoryService";
 import { apiGuard } from "@/lib/apiGuard";
+import { apiSuccess, apiNotFound, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -32,21 +32,21 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const parentResult = await categoryService.getCategoryById(id);
     if (!parentResult.success || !parentResult.data) {
-      return NextResponse.json({ error: "Category not found" }, { status: 404 });
+      return apiNotFound('Category');
     }
 
     const childrenResult = await categoryService.getCategoryChildren(id);
     if (!childrenResult.success) {
-      return NextResponse.json({ error: childrenResult.error?.message }, { status: 500 });
+      return apiInternalError(childrenResult.error?.message || 'Failed to fetch children');
     }
 
-    return NextResponse.json({ 
+    return apiSuccess({ 
       parent: parentResult.data, 
       children: childrenResult.data || [],
       level: parentResult.data.level 
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

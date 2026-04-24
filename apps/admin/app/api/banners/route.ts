@@ -5,26 +5,14 @@
  *   GET    /api/banners   Fetch all banners
  *   POST   /api/banners   Create a new banner
  *
- * GET Query Params:
- *   - is_active: boolean (optional)
- *   - redirect_type: string (optional)
- *   - limit: number (optional)
- *   - offset: number (optional)
- *
- * POST body (JSON): CreateBannerDTO
- *
- * Responses:
- *   200 { banners: Banner[] } | { banner: Banner }
- *   400 { error }    (invalid payload)
- *   500 { error }    (server/database failure)
- *
  * @module app/api/banners/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { bannerService } from "@/services/bannerService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiRepositoryError, apiInternalError } from "@/lib/apiResponse";
 
 /** GET /api/banners — fetch all banners */
 export async function GET(request: NextRequest) {
@@ -43,12 +31,12 @@ export async function GET(request: NextRequest) {
 
     const result = await bannerService.getAllBanners(params);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 500 });
+      return apiRepositoryError(result.error, 'Failed to fetch banners');
     }
-    return NextResponse.json({ banners: result.data });
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -65,11 +53,11 @@ export async function POST(request: NextRequest) {
     const result = await bannerService.createBanner(body);
     
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to create banner');
     }
-    return NextResponse.json({ banner: result.data });
+    return apiSuccess(result.data, { status: 201, message: 'Banner created successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

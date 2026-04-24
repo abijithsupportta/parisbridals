@@ -6,8 +6,9 @@
  * @module app/api/branch-inventory/check/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { branchInventoryRepository } from '@/repository';
+import { apiSuccess, apiBadRequest, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * GET /api/branch-inventory/check?branch_id=xxx&product_id=xxx
@@ -20,30 +21,20 @@ export async function GET(request: NextRequest) {
     const productId = searchParams.get('product_id');
 
     if (!branchId || !productId) {
-      return NextResponse.json(
-        { success: false, error: 'branch_id and product_id are required' },
-        { status: 400 }
-      );
+      return apiBadRequest('branch_id and product_id are required');
     }
 
     const result = await branchInventoryRepository.getBranchProductInventory(branchId, productId);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: 'Failed to check inventory' },
-        { status: 500 }
-      );
+      return apiInternalError('Failed to check inventory');
     }
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       exists: !!result.data,
       id: result.data?.id || null,
     });
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

@@ -8,14 +8,15 @@
  * before calling DELETE /api/categories/:id.
  *
  * Response:
- *   200 { canDelete: boolean, productCount: number, childCount: number, reason?: string }
+ *   200 { success: true, data: { canDelete, productCount, childCount, reason? } }
  *
  * @module app/api/categories/[id]/can-delete/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { categoryService } from "@/services/categoryService";
 import { apiGuard } from "@/lib/apiGuard";
+import { apiSuccess, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const result = await categoryService.canDeleteCategory(id);
     
     if (!result.success) {
-      return NextResponse.json({ 
+      return apiSuccess({ 
         canDelete: false, 
         reason: result.error?.message,
         productCount: 0,
@@ -38,9 +39,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       });
     }
 
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

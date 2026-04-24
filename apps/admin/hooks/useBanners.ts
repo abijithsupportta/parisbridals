@@ -9,6 +9,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Banner, CreateBannerDTO, UpdateBannerDTO, BannerSearchParams } from '@/domain';
 import { useAppStore } from '@/stores';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 // Query keys
 const bannerKeys = {
@@ -23,7 +24,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -35,8 +36,8 @@ export function useBanners(params?: BannerSearchParams) {
   return useQuery({
     queryKey: bannerKeys.all,
     queryFn: async () => {
-      const response = await apiFetch<{ banners: Banner[] }>('/api/banners');
-      return response.banners || [];
+      const response = await apiFetch<ApiSuccessResponse<Banner[]>>('/api/banners');
+      return response.data || [];
     },
     staleTime: 0, // Always consider data stale
     refetchOnWindowFocus: false,
@@ -51,8 +52,8 @@ export function useBanner(id: string) {
   return useQuery({
     queryKey: bannerKeys.detail(id),
     queryFn: async () => {
-      const response = await apiFetch<{ banner: Banner }>(`/api/banners/${id}`);
-      return response.banner;
+      const response = await apiFetch<ApiSuccessResponse<Banner>>(`/api/banners/${id}`);
+      return response.data;
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
@@ -70,11 +71,11 @@ export function useCreateBanner() {
 
   return useMutation({
     mutationFn: (data: CreateBannerDTO) =>
-      apiFetch('/api/banners', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: async (result: any) => {
+      apiFetch<ApiSuccessResponse<Banner>>('/api/banners', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: async (result) => {
       // Optimistically update cache with new banner
       queryClient.setQueryData(bannerKeys.all, (old: Banner[] = []) => {
-        return [result.banner, ...old];
+        return [result.data, ...old];
       });
       showSuccess('Banner created successfully');
     },
@@ -93,13 +94,13 @@ export function useUpdateBanner() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateBannerDTO }) =>
-      apiFetch(`/api/banners/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    onSuccess: async (result: any, variables) => {
+      apiFetch<ApiSuccessResponse<Banner>>(`/api/banners/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: async (result, variables) => {
       // Optimistically update cache
       queryClient.setQueryData(bannerKeys.all, (old: Banner[] = []) => {
-        return old.map(banner => banner.id === variables.id ? result.banner : banner);
+        return old.map(banner => banner.id === variables.id ? result.data : banner);
       });
-      queryClient.setQueryData(bannerKeys.detail(variables.id), result.banner);
+      queryClient.setQueryData(bannerKeys.detail(variables.id), result.data);
       showSuccess('Banner updated successfully');
     },
     onError: (error) => {

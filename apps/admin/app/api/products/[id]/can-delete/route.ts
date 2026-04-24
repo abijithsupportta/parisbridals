@@ -10,9 +10,10 @@
  * @module app/api/products/[id]/can-delete/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { productRepository } from '@/repository';
 import { apiGuard } from '@/lib/apiGuard';
+import { apiSuccess, apiBadRequest, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * GET /api/products/[id]/can-delete
@@ -33,35 +34,23 @@ export async function GET(
     const { id } = await params;
 
     if (!id || typeof id !== 'string') {
-      return NextResponse.json(
-        { success: false, message: 'Invalid product ID' },
-        { status: 400 }
-      );
+      return apiBadRequest('Invalid product ID');
     }
 
     // Read-only check — does NOT delete anything
     const result = await productRepository.canDelete(id);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, message: result.error?.message || 'Failed to check deletion safety' },
-        { status: 500 }
-      );
+      return apiInternalError(result.error?.message || 'Failed to check deletion safety');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        canDelete: result.data?.canDelete ?? false,
-        reason: result.data?.reason,
-        relatedData: result.data?.relatedData || {},
-      },
+    return apiSuccess({
+      canDelete: result.data?.canDelete ?? false,
+      reason: result.data?.reason,
+      relatedData: result.data?.relatedData || {},
     });
   } catch (error) {
     console.error('Product Can Delete API - GET Error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

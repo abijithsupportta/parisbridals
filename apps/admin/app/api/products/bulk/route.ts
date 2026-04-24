@@ -12,11 +12,12 @@
  * @module app/api/products/bulk/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { productService } from '@/services';
 import { BulkProductOperationSchema } from '@/domain';
 import { z } from 'zod';
 import { apiGuard } from '@/lib/apiGuard';
+import { apiSuccess, apiRepositoryError, apiZodError, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * POST /api/products/bulk
@@ -38,45 +39,18 @@ export async function POST(request: NextRequest) {
     const result = await productService.performBulkOperation(validatedData);
 
     if (!result.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: result.error?.message || 'Bulk operation failed',
-          error: result.error 
-        },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Bulk operation failed');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      message: 'Bulk operation completed successfully',
-    });
+    return apiSuccess(result.data, { message: 'Bulk operation completed successfully' });
 
   } catch (error) {
     console.error('Products Bulk API - POST Error:', error);
     
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid request body',
-          errors: error.issues.reduce((acc, issue) => {
-            acc[issue.path.join('.')] = issue.message;
-            return acc;
-          }, {} as Record<string, string>) 
-        },
-        { status: 400 }
-      );
+      return apiZodError(error);
     }
 
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Internal server error' 
-      },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

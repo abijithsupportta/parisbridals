@@ -25,6 +25,8 @@ import {
   AlertTriangle,
   Calendar,
   Package,
+  FileText,
+  XCircle,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -36,6 +38,7 @@ import Modal from "@/components/admin/Modal";
 import {
   useOrders,
   useDeleteOrder,
+  useUpdateOrder,
 } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
@@ -43,6 +46,8 @@ import { OrderStatus, type OrderWithRelations } from "@/domain";
 
 export default function OrdersPage() {
   const router = useRouter();
+  const user = useAppStore((state) => state.user);
+  const canDelete = user?.role === 'admin';
   const [searchInput, setSearchInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -80,6 +85,7 @@ export default function OrdersPage() {
   });
 
   const deleteOrder = useDeleteOrder();
+  const { updateOrder } = useUpdateOrder();
   const { showSuccess, showError } = useAppStore();
 
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -362,93 +368,121 @@ export default function OrdersPage() {
                   const itemCount = order.items?.length || 0;
 
                   return (
-                    <tr
-                      key={order.id}
-                      className={`hover:bg-slate-50 transition-colors group ${
-                        selected ? "bg-slate-50/80" : ""
-                      }`}
-                    >
-                      <td className="px-4 py-4 text-center">
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleSelection(order.id)}
-                          className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
-                        />
-                      </td>
+                      <tr
+                        key={order.id}
+                        onClick={(e) => {
+                          const target = e.target as HTMLElement;
+                          if (target.closest('button') || target.closest('input') || target.closest('a')) return;
+                          router.push(`/dashboard/orders/${order.id}`);
+                        }}
+                        className={`hover:bg-slate-50 transition-colors group cursor-pointer ${
+                          selected ? "bg-slate-50/80" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleSelection(order.id)}
+                            className="rounded border-slate-300 text-slate-900 focus:ring-slate-900"
+                          />
+                        </td>
 
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 text-slate-600 font-bold">
-                            {order.customer?.name?.charAt(0).toUpperCase() || "C"}
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 text-slate-600 font-bold">
+                              {order.customer?.name?.charAt(0).toUpperCase() || "C"}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900 group-hover:text-slate-600 transition-colors">
+                                {order.customer?.name || "Unknown Customer"}
+                              </p>
+                              <p className="text-xs text-slate-400 font-mono mt-0.5">
+                                ID: {order.id.slice(0, 8)}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-semibold text-slate-900 group-hover:text-slate-600 transition-colors">
-                              {order.customer?.name || "Unknown Customer"}
-                            </p>
-                            <p className="text-xs text-slate-400 font-mono mt-0.5">
-                              ID: {order.id.slice(0, 8)}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-4 py-4">
-                        <div className="flex flex-col gap-1 text-xs">
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col gap-1 text-xs">
+                            <div className="flex items-center gap-1.5 text-slate-600">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                              {format(new Date(order.start_date), "MMM d, yyyy")}
+                            </div>
+                            <div className="text-slate-400 ml-5 flex items-center gap-1">
+                              to <span className="font-medium text-slate-600">{format(new Date(order.end_date), "MMM d, yyyy")}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4">
                           <div className="flex items-center gap-1.5 text-slate-600">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            {format(new Date(order.start_date), "MMM d, yyyy")}
+                            <Package className="w-4 h-4 text-slate-400" />
+                            <span className="font-medium">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
                           </div>
-                          <div className="text-slate-400 ml-5 flex items-center gap-1">
-                            to <span className="font-medium text-slate-600">{format(new Date(order.end_date), "MMM d, yyyy")}</span>
-                          </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-1.5 text-slate-600">
-                          <Package className="w-4 h-4 text-slate-400" />
-                          <span className="font-medium">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-900">
-                            {formatCurrency(order.total_amount)}
-                          </span>
-                          {order.deposit_collected && (
-                            <span className="text-[10px] text-emerald-600 font-medium">
-                              Deposit Paid
+                        <td className="px-4 py-4">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-900">
+                              {formatCurrency(order.total_amount)}
                             </span>
-                          )}
-                        </div>
-                      </td>
+                            {order.deposit_collected && (
+                              <span className="text-[10px] text-emerald-600 font-medium">
+                                Deposit Paid
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                      <td className="px-4 py-4">
-                        {getStatusBadge(order.status)}
-                      </td>
+                        <td className="px-4 py-4">
+                          {getStatusBadge(order.status)}
+                        </td>
 
-                      <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-400 hover:text-slate-900" asChild>
-                            <Link href={`/dashboard/orders/${order.id}`}>
-                              <Eye className="w-4 h-4" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-400 hover:text-slate-900" asChild>
-                            <Link href={`/dashboard/orders/${order.id}/edit`}>
-                              <Edit className="w-4 h-4" />
-                            </Link>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="w-8 h-8 text-red-400 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => openDeleteModal(order)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="w-8 h-8 text-slate-400 hover:text-slate-900" 
+                              onClick={(e) => { e.stopPropagation(); window.open(`/api/orders/${order.id}/invoice?type=final`, '_blank'); }}
+                              title="Download Invoice"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </Button>
+                            
+                            {order.status === 'scheduled' && (
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="w-8 h-8 text-slate-400 hover:text-orange-600" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateOrder({ id: order.id, data: { status: OrderStatus.CANCELLED } });
+                                }}
+                                title="Cancel Order"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </Button>
+                            )}
+
+                            <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-400 hover:text-slate-900" asChild>
+                              <Link href={`/dashboard/orders/${order.id}/edit`}>
+                                <Edit className="w-4 h-4" />
+                              </Link>
+                            </Button>
+                            
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="w-8 h-8 text-red-400 hover:text-red-700 hover:bg-red-50"
+                                onClick={(e) => { e.stopPropagation(); openDeleteModal(order); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                         </div>
                       </td>
                     </tr>

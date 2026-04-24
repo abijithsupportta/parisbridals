@@ -6,21 +6,14 @@
  *   PATCH  /api/banners/:id   Update a banner
  *   DELETE /api/banners/:id   Delete a banner
  *
- * PATCH body (JSON): any subset of UpdateBannerDTO fields.
- *
- * Responses:
- *   200 { banner } | { success: true }
- *   400 { error }    (invalid id / payload)
- *   404 { error }    (not found)
- *   500 { error }    (server/database failure)
- *
  * @module app/api/banners/[id]/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { bannerService } from "@/services/bannerService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -35,12 +28,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const result = await bannerService.getBannerById(id);
     if (!result.success || !result.data) {
-      return NextResponse.json({ error: result.error?.message || "Banner not found" }, { status: 404 });
+      return apiNotFound('Banner');
     }
-    return NextResponse.json({ banner: result.data });
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -58,12 +51,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const result = await bannerService.updateBanner(id, body);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to update banner');
     }
-    return NextResponse.json({ banner: result.data });
+    return apiSuccess(result.data, { message: 'Banner updated successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -80,11 +73,11 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
     const result = await bannerService.deleteBanner(id);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to delete banner');
     }
-    return NextResponse.json({ success: true });
+    return apiSuccess(null, { message: 'Banner deleted successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

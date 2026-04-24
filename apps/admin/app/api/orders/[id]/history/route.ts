@@ -4,18 +4,13 @@
  * Routes:
  *   GET    /api/orders/:id/history   Fetch order status history
  *
- * Responses:
- *   200 { history: OrderStatusHistory[] }
- *   400 { error }    (invalid id / payload)
- *   404 { error }    (not found)
- *   500 { error }    (server/database failure)
- *
  * @module app/api/orders/[id]/history/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { orderService } from "@/services/orderService";
 import { apiGuard } from "@/lib/apiGuard";
+import { apiSuccess, apiNotFound, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -30,11 +25,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const result = await orderService.getOrderStatusHistory(id);
     if (!result.success || !result.data) {
-      return NextResponse.json({ error: result.error?.message || "History not found" }, { status: 404 });
+      return apiNotFound('Order history');
     }
-    return NextResponse.json({ history: result.data });
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

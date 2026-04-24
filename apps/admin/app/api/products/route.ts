@@ -8,12 +8,13 @@
  * @module app/api/products/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { productService } from '@/services';
-import { Product, CreateProductDTO, ProductSearchSchema, CreateProductSchema } from '@/domain';
+import { CreateProductDTO, ProductSearchSchema, CreateProductSchema } from '@/domain';
 import { z } from 'zod';
 import { apiGuard } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
+import { apiSuccess, apiRepositoryError, apiZodError, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * GET /api/products
@@ -64,46 +65,19 @@ export async function GET(request: NextRequest) {
     const result = await productService.getProducts(params);
 
     if (!result.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: result.error?.message || 'Failed to fetch products',
-          error: result.error 
-        },
-        { status: 500 }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch products');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      message: 'Products retrieved successfully',
-    });
+    return apiSuccess(result.data);
 
   } catch (error) {
     console.error('Products API - GET Error:', error);
     
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid query parameters',
-          errors: error.issues.reduce((acc, issue) => {
-            acc[issue.path.join('.')] = issue.message;
-            return acc;
-          }, {} as Record<string, string>)
-        },
-        { status: 400 }
-      );
+      return apiZodError(error);
     }
 
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Internal server error' 
-      },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }
 
@@ -143,45 +117,18 @@ export async function POST(request: NextRequest) {
     const result = await productService.createProduct(productData, authUser?.role || 'staff');
 
     if (!result.success) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: result.error?.message || 'Failed to create product',
-          error: result.error 
-        },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to create product');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-      message: 'Product created successfully',
-    }, { status: 201 });
+    return apiSuccess(result.data, { status: 201, message: 'Product created successfully' });
 
   } catch (error) {
     console.error('Products API - POST Error:', error);
     
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'Invalid product data',
-          errors: error.issues.reduce((acc, issue) => {
-            acc[issue.path.join('.')] = issue.message;
-            return acc;
-          }, {} as Record<string, string>)
-        },
-        { status: 400 }
-      );
+      return apiZodError(error);
     }
 
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Internal server error' 
-      },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

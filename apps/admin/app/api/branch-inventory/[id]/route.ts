@@ -6,9 +6,10 @@
  * @module app/api/branch-inventory/[id]/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { branchInventoryService } from '@/services';
 import { apiGuard } from '@/lib/apiGuard';
+import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from '@/lib/apiResponse';
 
 /**
  * GET /api/branch-inventory/[id]
@@ -25,22 +26,13 @@ export async function GET(
     const { id } = await params;
     const result = await branchInventoryService.getBranchInventoryById(id);
 
-    if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error?.message || 'Failed to fetch inventory' },
-        { status: 404 }
-      );
+    if (!result.success || !result.data) {
+      return apiNotFound('Branch inventory');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-    });
+    return apiSuccess(result.data);
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }
 
@@ -61,21 +53,12 @@ export async function PATCH(
     const result = await branchInventoryService.updateBranchInventory(id, body);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error?.message || 'Failed to update inventory' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to update inventory');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: result.data,
-    });
+    return apiSuccess(result.data, { message: 'Inventory updated successfully' });
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }
 
@@ -95,20 +78,11 @@ export async function DELETE(
     const result = await branchInventoryService.deleteBranchInventory(id);
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error?.message || 'Failed to delete inventory' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to delete inventory');
     }
 
-    return NextResponse.json({
-      success: true,
-      data: null,
-    });
+    return apiSuccess(null, { message: 'Inventory deleted successfully' });
   } catch (error) {
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

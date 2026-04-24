@@ -216,6 +216,8 @@ export class OrderRepository extends BaseRepository {
         deposit_collected: (data as any).deposit_collected || false,
         deposit_payment_method: (data as any).deposit_payment_method || null,
         deposit_collected_at: (data as any).deposit_collected_at || null,
+        amount_paid: (data as any).amount_paid || 0,
+        payment_status: (data as any).payment_status || 'pending',
         notes: data.notes || null,
       })
       .select()

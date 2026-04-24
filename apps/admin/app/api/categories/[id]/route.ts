@@ -13,20 +13,21 @@
  *     via category_id, subcategory_id, or subvariant_id.
  *   - Refuses to delete if any child categories are nested under it.
  *
- * Responses:
- *   200 { category } | { success: true }
- *   400 { error }    (invalid id / payload)
- *   404 { error }    (not found)
- *   409 { error, reason, productCount, childCount }  (delete blocked by safety check)
- *   500 { error }    (server/database failure)
+ * Responses (standardised envelope):
+ *   200 { success: true, data: Category }
+ *   400 { success: false, error: { message, code } }
+ *   404 { success: false, error: { message, code: "NOT_FOUND" } }
+ *   409 { success: false, error: { message, code: "CANNOT_DELETE", details } }
+ *   500 { success: false, error: { message, code } }
  *
  * @module app/api/categories/[id]/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { categoryService } from "@/services/categoryService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -41,12 +42,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const result = await categoryService.getCategoryById(id);
     if (!result.success || !result.data) {
-      return NextResponse.json({ error: result.error?.message || "Category not found" }, { status: 404 });
+      return apiNotFound('Category');
     }
-    return NextResponse.json({ category: result.data });
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -64,12 +65,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const result = await categoryService.updateCategory(id, body);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to update category');
     }
-    return NextResponse.json({ category: result.data });
+    return apiSuccess(result.data, { message: 'Category updated successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -86,22 +87,11 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
     const result = await categoryService.deleteCategory(id);
     if (!result.success) {
-      const error = result.error as any;
-      if (error.code === 'CANNOT_DELETE') {
-        return NextResponse.json(
-          {
-            error: error.message,
-            productCount: error.details?.productCount || 0,
-            childCount: error.details?.childCount || 0,
-          },
-          { status: 409 }
-        );
-      }
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to delete category');
     }
-    return NextResponse.json({ success: true });
+    return apiSuccess(null, { message: 'Category deleted successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

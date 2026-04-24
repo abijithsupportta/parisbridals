@@ -179,7 +179,12 @@ export default function ProductsPage() {
     if (isLoadingInventory) return [];
     return products.filter((p) => {
       const rows = inventoryByProduct[p.id] || [];
-      return rows.some((r) => r.branch_id === selectedBranchId);
+      // If there are explicit inventory rows, check if selected branch is included
+      if (rows.length > 0) {
+        return rows.some((r) => r.branch_id === selectedBranchId);
+      }
+      // If no explicit rows exist yet, show the product (it uses fallback base quantities)
+      return true;
     });
   }, [products, inventoryByProduct, selectedBranchId, isLoadingInventory]);
 

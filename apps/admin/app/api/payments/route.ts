@@ -4,10 +4,11 @@
  * POST /api/payments — create a new payment (admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { paymentService } from '@/services/paymentService';
-import { apiGuard, adminOnly } from '@/lib/apiGuard';
+import { adminOnly } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
+import { apiSuccess, apiRepositoryError, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,18 +26,12 @@ export async function GET(request: NextRequest) {
 
     const result = await paymentService.getAllPayments(params);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to fetch payments' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch payments');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (error: any) {
     console.error('[API] GET /api/payments error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }
 
@@ -52,17 +47,11 @@ export async function POST(request: NextRequest) {
     const result = await paymentService.createPayment(body);
     
     if (!result.success || !result.data) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to create payment' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to create payment');
     }
-    return NextResponse.json(result.data, { status: 201 });
+    return apiSuccess(result.data, { status: 201, message: 'Payment recorded successfully' });
   } catch (error: any) {
     console.error('[API] POST /api/payments error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }

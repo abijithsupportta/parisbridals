@@ -5,25 +5,14 @@
  *   GET    /api/customers   Fetch all customers
  *   POST   /api/customers   Create a new customer
  *
- * GET Query Params:
- *   - query: string (optional)
- *   - limit: number (optional)
- *   - offset: number (optional)
- *
- * POST body (JSON): CreateCustomerDTO
- *
- * Responses:
- *   200 { customers: Customer[] } | { customer: Customer }
- *   400 { error }    (invalid payload)
- *   500 { error }    (server/database failure)
- *
  * @module app/api/customers/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { customerService } from "@/services/customerService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiRepositoryError, apiInternalError } from "@/lib/apiResponse";
 
 /** GET /api/customers — fetch all customers */
 export async function GET(request: NextRequest) {
@@ -43,14 +32,14 @@ export async function GET(request: NextRequest) {
 
     const result = await customerService.getAllCustomers(params);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 500 });
+      return apiRepositoryError(result.error, 'Failed to fetch customers');
     }
     
     // Result.data is already CustomerSearchResult containing { customers, total, page, etc. }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -67,11 +56,11 @@ export async function POST(request: NextRequest) {
     const result = await customerService.createCustomer(body);
     
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to create customer');
     }
-    return NextResponse.json({ customer: result.data });
+    return apiSuccess(result.data, { status: 201, message: 'Customer created successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

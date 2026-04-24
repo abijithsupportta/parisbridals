@@ -5,10 +5,11 @@
  * POST /api/staff         — create staff with Supabase Auth user (super_admin and admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { branchService } from '@/services/branchService';
 import { adminOnly } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
+import { apiSuccess, apiRepositoryError, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,25 +22,19 @@ export async function GET(request: NextRequest) {
     if (branchId) {
       const result = await branchService.getStaffByBranch(branchId);
       if (!result.success) {
-        return NextResponse.json(
-          { error: result.error?.message || 'Failed to fetch staff' },
-          { status: 400 }
-        );
+        return apiRepositoryError(result.error, 'Failed to fetch staff');
       }
-      return NextResponse.json(result.data);
+      return apiSuccess(result.data);
     }
 
     const result = await branchService.getStaff();
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to fetch staff' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch staff');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (error: any) {
     console.error('[API] GET /api/staff error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiInternalError(error.message);
   }
 }
 
@@ -58,14 +53,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const result = await branchService.createStaff(body);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to create staff' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to create staff');
     }
-    return NextResponse.json(result.data, { status: 201 });
+    return apiSuccess(result.data, { status: 201, message: 'Staff member created successfully' });
   } catch (error: any) {
     console.error('[API] POST /api/staff error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiInternalError(error.message);
   }
 }

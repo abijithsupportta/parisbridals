@@ -5,9 +5,10 @@
  * DELETE /api/branches/[id] — delete branch (admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { branchService } from '@/services/branchService';
 import { apiGuard, adminOnly } from '@/lib/apiGuard';
+import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(
   request: NextRequest,
@@ -20,15 +21,12 @@ export async function GET(
     const { id } = await params;
     const result = await branchService.getBranchById(id);
     if (!result.success || !result.data) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Branch not found' },
-        { status: 404 }
-      );
+      return apiNotFound('Branch');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (error: any) {
     console.error('[API] GET /api/branches/[id] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiInternalError(error.message);
   }
 }
 
@@ -44,15 +42,12 @@ export async function PATCH(
     const body = await request.json();
     const result = await branchService.updateBranch(id, body);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to update branch' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to update branch');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data, { message: 'Branch updated successfully' });
   } catch (error: any) {
     console.error('[API] PATCH /api/branches/[id] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiInternalError(error.message);
   }
 }
 
@@ -67,14 +62,11 @@ export async function DELETE(
     const { id } = await params;
     const result = await branchService.deleteBranch(id);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to delete branch' },
-        { status: result.error?.code === 'DELETE_BLOCKED' ? 409 : 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to delete branch');
     }
-    return NextResponse.json({ success: true });
+    return apiSuccess(null, { message: 'Branch deleted successfully' });
   } catch (error: any) {
     console.error('[API] DELETE /api/branches/[id] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return apiInternalError(error.message);
   }
 }

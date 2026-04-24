@@ -10,9 +10,10 @@
  * @module app/api/products/[id]/orders/route
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/server';
 import { apiGuard } from '@/lib/apiGuard';
+import { apiSuccess, apiBadRequest, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(
   request: NextRequest,
@@ -25,10 +26,7 @@ export async function GET(
     const { id } = await params;
 
     if (!id || typeof id !== 'string') {
-      return NextResponse.json(
-        { success: false, message: 'Invalid product ID' },
-        { status: 400 }
-      );
+      return apiBadRequest('Invalid product ID');
     }
 
     const supabase = createAdminClient();
@@ -63,10 +61,7 @@ export async function GET(
       .order('created_at', { ascending: false });
 
     if (error) {
-      return NextResponse.json(
-        { success: false, message: error.message },
-        { status: 500 }
-      );
+      return apiInternalError(error.message);
     }
 
     const rows = items || [];
@@ -109,26 +104,20 @@ export async function GET(
       else if (COMPLETED_STATUSES.has(status)) completedOrders += 1;
     }
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        items: rows,
-        analytics: {
-          totalOrders: rows.length,
-          totalUnitsRented,
-          totalRevenue: Math.round(totalRevenue * 100) / 100,
-          activeOrders,
-          completedOrders,
-          cancelledOrders,
-          uniqueCustomers: uniqueCustomers.size,
-        },
+    return apiSuccess({
+      items: rows,
+      analytics: {
+        totalOrders: rows.length,
+        totalUnitsRented,
+        totalRevenue: Math.round(totalRevenue * 100) / 100,
+        activeOrders,
+        completedOrders,
+        cancelledOrders,
+        uniqueCustomers: uniqueCustomers.size,
       },
     });
   } catch (err) {
     console.error('Product orders analytics error:', err);
-    return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError();
   }
 }

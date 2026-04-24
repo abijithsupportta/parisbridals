@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores';
 import type { StaffWithBranch, Staff, CreateStaffDTO, UpdateStaffDTO } from '@/domain/types/branch';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 const staffKeys = {
   all: ['staff'] as const,
@@ -26,7 +27,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -34,7 +35,10 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export function useStaff() {
   const query = useQuery({
     queryKey: staffKeys.all,
-    queryFn: () => apiFetch<StaffWithBranch[]>('/api/staff'),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<StaffWithBranch[]>>('/api/staff');
+      return response.data;
+    },
     staleTime: 2 * 60 * 1000,
   });
 
@@ -48,7 +52,10 @@ export function useStaff() {
 export function useStaffByBranch(branchId: string) {
   const query = useQuery({
     queryKey: staffKeys.byBranch(branchId),
-    queryFn: () => apiFetch<Staff[]>(`/api/staff?branch=${branchId}`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<Staff[]>>(`/api/staff?branch=${branchId}`);
+      return response.data;
+    },
     enabled: !!branchId,
     staleTime: 2 * 60 * 1000,
   });
@@ -63,7 +70,10 @@ export function useStaffByBranch(branchId: string) {
 export function useStaffMember(id: string) {
   const query = useQuery({
     queryKey: staffKeys.detail(id),
-    queryFn: () => apiFetch<StaffWithBranch>(`/api/staff/${id}`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<StaffWithBranch>>(`/api/staff/${id}`);
+      return response.data;
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
   });

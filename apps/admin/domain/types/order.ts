@@ -22,6 +22,13 @@ export enum OrderStatus {
   LATE_RETURN = 'late_return',
 }
 
+// Payment Status Enum
+export enum PaymentStatus {
+  PENDING = 'pending',
+  PARTIAL = 'partial',
+  PAID = 'paid',
+}
+
 // Payment Method Enum
 export enum PaymentMethod {
   CASH = 'cash',
@@ -77,6 +84,8 @@ export interface Order {
   subtotal: number;
   gst_amount: number;
   security_deposit: number;
+  amount_paid: number;
+  payment_status: PaymentStatus;
   notes: string | null;
   deposit_collected?: boolean;
   deposit_collected_at?: string;
@@ -155,6 +164,8 @@ export interface UpdateOrderDTO {
   deposit_collected?: boolean;
   deposit_collected_at?: string;
   deposit_payment_method?: PaymentMethod;
+  amount_paid?: number;
+  payment_status?: PaymentStatus | string;
 }
 
 // Return Order DTO

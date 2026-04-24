@@ -4,10 +4,11 @@
  * POST /api/branches — create a new branch (super_admin and admin only)
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { branchService } from '@/services/branchService';
-import { apiGuard, adminOnly } from '@/lib/apiGuard';
+import { adminOnly, apiGuard } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
+import { apiSuccess, apiRepositoryError, apiInternalError } from '@/lib/apiResponse';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,18 +18,12 @@ export async function GET(request: NextRequest) {
 
     const result = await branchService.getBranches();
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to fetch branches' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch branches');
     }
-    return NextResponse.json(result.data);
+    return apiSuccess(result.data);
   } catch (error: any) {
     console.error('[API] GET /api/branches error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }
 
@@ -47,17 +42,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const result = await branchService.createBranch(body);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to create branch' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to create branch');
     }
-    return NextResponse.json(result.data, { status: 201 });
+    return apiSuccess(result.data, { status: 201, message: 'Branch created successfully' });
   } catch (error: any) {
     console.error('[API] POST /api/branches error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
-    );
+    return apiInternalError(error.message || 'Internal server error');
   }
 }

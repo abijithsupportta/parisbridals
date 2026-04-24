@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO, OrderStatusHistory } from '@/domain/types/order';
 import { useAppStore } from '@/stores';
+import type { ApiSuccessResponse, PaginationMeta } from '@/lib/apiResponse';
 
 // Query keys
 const orderKeys = {
@@ -30,9 +31,9 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    let errorMessage = body.error || `Request failed (${res.status})`;
-    if (body.details) {
-      errorMessage += `: ${JSON.stringify(body.details)}`;
+    let errorMessage = body.error?.message || body.error || `Request failed (${res.status})`;
+    if (body.error?.details) {
+      errorMessage += `: ${JSON.stringify(body.error.details)}`;
     }
     throw new Error(errorMessage);
   }
@@ -42,12 +43,14 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 interface PaginatedResponse<T> {
   success: boolean;
   data: T[];
-  total: number;
-  totalPages: number;
-  page: number;
-  limit: number;
-  hasNext: boolean;
-  hasPrev: boolean;
+  meta?: PaginationMeta;
+  // Backwards compat — these are now in meta
+  total?: number;
+  totalPages?: number;
+  page?: number;
+  limit?: number;
+  hasNext?: boolean;
+  hasPrev?: boolean;
   error?: any;
 }
 
@@ -72,7 +75,19 @@ export function useOrders(params?: OrderSearchParams & { page?: number; limit?: 
       const queryString = searchParams.toString();
       const url = `/api/orders${queryString ? `?${queryString}` : ''}`;
       
-      return await apiFetch<PaginatedResponse<OrderWithRelations>>(url);
+      const raw = await apiFetch<ApiSuccessResponse<OrderWithRelations[]> & { meta?: PaginationMeta }>(url);
+
+      // Normalise to the shape the UI expects
+      return {
+        success: raw.success,
+        data: raw.data,
+        total: raw.meta?.total ?? 0,
+        totalPages: raw.meta?.totalPages ?? 0,
+        page: raw.meta?.page ?? 1,
+        limit: raw.meta?.limit ?? 25,
+        hasNext: raw.meta?.hasNext ?? false,
+        hasPrev: raw.meta?.hasPrev ?? false,
+      };
     },
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -87,8 +102,8 @@ export function useOrder(id: string) {
   return useQuery<{ success: boolean; data?: OrderWithRelations; error?: any }>({
     queryKey: orderKeys.detail(id),
     queryFn: async () => {
-      const res = await apiFetch<{ order: OrderWithRelations }>(`/api/orders/${id}`);
-      return { success: true, data: res.order };
+      const res = await apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${id}`);
+      return { success: true, data: res.data };
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
@@ -102,8 +117,8 @@ export function useOrderStatusHistory(id: string, enabled: boolean = true) {
   return useQuery<{ success: boolean; data?: OrderStatusHistory[]; error?: any }>({
     queryKey: orderKeys.history(id),
     queryFn: async () => {
-      const res = await apiFetch<{ history: OrderStatusHistory[] }>(`/api/orders/${id}/history`);
-      return { success: true, data: res.history };
+      const res = await apiFetch<ApiSuccessResponse<OrderStatusHistory[]>>(`/api/orders/${id}/history`);
+      return { success: true, data: res.data };
     },
     enabled: enabled && !!id,
     staleTime: 5 * 60 * 1000,
@@ -119,7 +134,7 @@ export function useCreateOrder() {
 
   const mutation = useMutation({
     mutationFn: (data: CreateOrderDTO) =>
-      apiFetch<{ order: OrderWithRelations }>('/api/orders', { method: 'POST', body: JSON.stringify(data) }),
+      apiFetch<ApiSuccessResponse<OrderWithRelations>>('/api/orders', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       showSuccess('Order created successfully');
@@ -143,7 +158,7 @@ export function useUpdateOrder() {
 
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateOrderDTO }) => 
-      apiFetch<{ order: OrderWithRelations }>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       queryClient.invalidateQueries({ queryKey: orderKeys.details() });
@@ -169,10 +184,10 @@ export function useDeleteOrder() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (id: string) => apiFetch<{ success: boolean }>(`/api/orders/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiFetch<ApiSuccessResponse<null>>(`/api/orders/${id}`, { method: 'DELETE' }),
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: orderKeys.lists() });
-      const previousOrders = queryClient.getQueryData<{ success: boolean, data: OrderWithRelations[] }>(orderKeys.lists());
+      const previousOrders = queryClient.getQueryData<PaginatedResponse<OrderWithRelations>>(orderKeys.lists());
       
       if (previousOrders?.data) {
         queryClient.setQueryData(
@@ -211,7 +226,7 @@ export function useProcessOrderReturn() {
 
   const mutation = useMutation({
     mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) => 
-      apiFetch<{ order: OrderWithRelations }>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
+      apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       queryClient.invalidateQueries({ queryKey: orderKeys.details() });
@@ -237,7 +252,7 @@ export function useMarkDepositReturned() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (orderId: string) => apiFetch<{ order: OrderWithRelations }>(`/api/orders/${orderId}/deposit`, { method: 'PATCH' }),
+    mutationFn: (orderId: string) => apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/deposit`, { method: 'PATCH' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       queryClient.invalidateQueries({ queryKey: orderKeys.details() });

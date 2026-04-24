@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores';
 import type { BranchWithStaffCount, CreateBranchDTO, UpdateBranchDTO } from '@/domain/types/branch';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 const branchKeys = {
   all: ['branches'] as const,
@@ -25,7 +26,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -33,7 +34,10 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 export function useBranches() {
   const query = useQuery({
     queryKey: branchKeys.all,
-    queryFn: () => apiFetch<BranchWithStaffCount[]>('/api/branches'),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<BranchWithStaffCount[]>>('/api/branches');
+      return response.data;
+    },
     staleTime: 5 * 60 * 1000, // 5 minutes - increased from 2
     gcTime: 10 * 60 * 1000, // 10 minutes cache
     refetchOnWindowFocus: false, // Don't refetch on window focus
@@ -50,7 +54,10 @@ export function useBranches() {
 export function useBranch(id: string) {
   const query = useQuery({
     queryKey: branchKeys.detail(id),
-    queryFn: () => apiFetch<BranchWithStaffCount>(`/api/branches/${id}`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<BranchWithStaffCount>>(`/api/branches/${id}`);
+      return response.data;
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
@@ -70,7 +77,7 @@ export function useCreateBranch() {
 
   return useMutation({
     mutationFn: (data: Omit<CreateBranchDTO, 'store_id'>) =>
-      apiFetch('/api/branches', { method: 'POST', body: JSON.stringify(data) }),
+      apiFetch<ApiSuccessResponse<BranchWithStaffCount>>('/api/branches', { method: 'POST', body: JSON.stringify(data) }),
     onMutate: async (newBranch) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: branchKeys.all });
@@ -115,7 +122,7 @@ export function useUpdateBranch() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateBranchDTO }) =>
-      apiFetch(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      apiFetch<ApiSuccessResponse<BranchWithStaffCount>>(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onMutate: async ({ id, data }) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: branchKeys.all });

@@ -19,6 +19,7 @@ import {
 } from '@/domain';
 import { useAppStore } from '@/stores';
 import { useCallback } from 'react';
+import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 const categoryKeys = {
   all: ['categories'] as const,
@@ -34,7 +35,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
+    throw new Error(body.error?.message || body.error || `Request failed (${res.status})`);
   }
   return res.json();
 }
@@ -46,8 +47,8 @@ export function useCategories() {
   const query = useQuery({
     queryKey: categoryKeys.all,
     queryFn: async () => {
-      const response = await apiFetch<{ categories: Category[] }>('/api/categories');
-      return response.categories;
+      const response = await apiFetch<ApiSuccessResponse<Category[]>>('/api/categories');
+      return response.data;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
   });
@@ -65,7 +66,10 @@ export function useCategories() {
 export function useCategory(id: string) {
   const query = useQuery({
     queryKey: categoryKeys.detail(id),
-    queryFn: () => apiFetch<Category>(`/api/categories/${id}`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<Category>>(`/api/categories/${id}`);
+      return response.data;
+    },
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -83,7 +87,10 @@ export function useCategory(id: string) {
 export function useCategoryChildren(parentId: string) {
   const query = useQuery({
     queryKey: categoryKeys.children(parentId),
-    queryFn: () => apiFetch<Category[]>(`/api/categories/${parentId}/children`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<{ children: Category[]; parent: Category; level: string }>>(`/api/categories/${parentId}/children`);
+      return response.data.children;
+    },
     enabled: !!parentId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -174,7 +181,10 @@ export function useDeleteCategory() {
 export function useCanDeleteCategory(id: string) {
   const query = useQuery({
     queryKey: ['category-can-delete', id],
-    queryFn: () => apiFetch<{ canDelete: boolean; reason?: string }>(`/api/categories/${id}/can-delete`),
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<{ canDelete: boolean; reason?: string }>>(`/api/categories/${id}/can-delete`);
+      return response.data;
+    },
     enabled: !!id,
   });
 

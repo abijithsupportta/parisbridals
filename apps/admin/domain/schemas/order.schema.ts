@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { OrderStatus, ConditionRating, DeliveryMethod, PaymentMethod } from "../types/order";
+import { OrderStatus, ConditionRating, DeliveryMethod, PaymentMethod, PaymentStatus } from "../types/order";
 
 const orderItemSchema = z.object({
   product_id: z.string().uuid("Invalid product ID"),
@@ -25,6 +25,8 @@ export const CreateOrderSchema = z.object({
   security_deposit: z.number().nonnegative().optional(),
   deposit_collected_at: z.string().datetime().optional(),
   deposit_payment_method: z.nativeEnum(PaymentMethod).optional(),
+  amount_paid: z.number().nonnegative().optional(),
+  payment_status: z.nativeEnum(PaymentStatus).optional(),
 }).refine((data) => {
   const start = new Date(data.rental_start_date);
   const end = new Date(data.rental_end_date);
@@ -46,6 +48,8 @@ export const UpdateOrderSchema = z.object({
   deposit_collected: z.boolean().optional(),
   deposit_collected_at: z.string().datetime().optional(),
   deposit_payment_method: z.nativeEnum(PaymentMethod).optional(),
+  amount_paid: z.number().nonnegative().optional(),
+  payment_status: z.nativeEnum(PaymentStatus).optional(),
 }).refine((data) => {
   if (data.rental_start_date && data.rental_end_date) {
     const start = new Date(data.rental_start_date);

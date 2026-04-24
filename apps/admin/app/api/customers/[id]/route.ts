@@ -6,21 +6,16 @@
  *   PATCH  /api/customers/:id   Update a customer
  *   DELETE /api/customers/:id   Delete a customer
  *
- * PATCH body (JSON): any subset of UpdateCustomerDTO fields.
- *
- * Responses:
- *   200 { customer } | { success: true }
- *   400 { error }    (invalid id / payload)
- *   404 { error }    (not found)
- *   500 { error }    (server/database failure)
- *
  * @module app/api/customers/[id]/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { customerService } from "@/services/customerService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { UpdateCustomerSchema } from "@/domain";
+import { z } from "zod";
+import { apiSuccess, apiRepositoryError, apiNotFound, apiZodError, apiInternalError } from "@/lib/apiResponse";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -35,17 +30,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const result = await customerService.getCustomerById(id);
     if (!result.success || !result.data) {
-      return NextResponse.json({ error: result.error?.message || "Customer not found" }, { status: 404 });
+      return apiNotFound('Customer');
     }
-    return NextResponse.json({ customer: result.data });
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
-
-import { UpdateCustomerSchema } from "@/domain";
-import { z } from "zod";
 
 /** PATCH /api/customers/:id — update a customer */
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
@@ -63,21 +55,15 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
     const result = await customerService.updateCustomer(id, validatedData);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to update customer');
     }
-    return NextResponse.json({ customer: result.data });
+    return apiSuccess(result.data, { message: 'Customer updated successfully' });
   } catch (err) {
     if (err instanceof z.ZodError) {
-      return NextResponse.json(
-        { 
-          error: 'Invalid request body',
-          details: err.issues.map(i => `${i.path.join('.')}: ${i.message}`) 
-        },
-        { status: 400 }
-      );
+      return apiZodError(err);
     }
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -94,11 +80,11 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
     const result = await customerService.deleteCustomer(id);
     if (!result.success) {
-      return NextResponse.json({ error: result.error?.message }, { status: 400 });
+      return apiRepositoryError(result.error, 'Failed to delete customer');
     }
-    return NextResponse.json({ success: true });
+    return apiSuccess(null, { message: 'Customer deleted successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

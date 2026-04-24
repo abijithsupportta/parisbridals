@@ -17,19 +17,20 @@
  *     sort_order?: number       (default: 0)
  *   }
  *
- * Responses:
- *   200 { categories: Category[] }      (GET)
- *   201 { category: Category }          (POST)
- *   400 { error: string }               (validation failure)
- *   500 { error: string }               (server/database failure)
+ * Responses (standardised envelope):
+ *   200 { success: true, data: Category[] }             (GET)
+ *   201 { success: true, data: Category }               (POST)
+ *   400 { success: false, error: { message, code } }    (validation failure)
+ *   500 { success: false, error: { message, code } }    (server/database failure)
  *
  * @module app/api/categories/route
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { categoryService } from "@/services/categoryService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
+import { apiSuccess, apiRepositoryError, apiInternalError } from "@/lib/apiResponse";
 
 /** GET /api/categories — list all categories */
 export async function GET(request: NextRequest) {
@@ -40,15 +41,12 @@ export async function GET(request: NextRequest) {
 
     const result = await categoryService.getAllCategories();
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to fetch categories' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to fetch categories');
     }
-    return NextResponse.json({ categories: result.data });
+    return apiSuccess(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }
 
@@ -69,14 +67,11 @@ export async function POST(request: NextRequest) {
 
     const result = await categoryService.createCategory(body);
     if (!result.success) {
-      return NextResponse.json(
-        { error: result.error?.message || 'Failed to create category' },
-        { status: 400 }
-      );
+      return apiRepositoryError(result.error, 'Failed to create category');
     }
-    return NextResponse.json({ category: result.data }, { status: 201 });
+    return apiSuccess(result.data, { status: 201, message: 'Category created successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError(message);
   }
 }

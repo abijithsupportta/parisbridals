@@ -158,13 +158,23 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           </div>
         </div>
         {order.status === OrderStatus.SCHEDULED && (
-          <Button
-            onClick={handleStartOrder}
-            disabled={isUpdating}
-            className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold h-9 px-4 shadow-sm"
-          >
-            {isUpdating ? "Starting..." : "Start Order Today"}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => updateOrder({ id: order.id, data: { status: OrderStatus.CANCELLED } })}
+              disabled={isUpdating}
+              variant="outline"
+              className="border-slate-200 text-slate-700 hover:text-red-600 hover:bg-red-50 font-semibold h-9 px-4"
+            >
+              Cancel Order
+            </Button>
+            <Button
+              onClick={handleStartOrder}
+              disabled={isUpdating}
+              className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold h-9 px-4 shadow-sm"
+            >
+              {isUpdating ? "Starting..." : "Start Order Today"}
+            </Button>
+          </div>
         )}
       </div>
 
@@ -312,6 +322,58 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
         {/* RIGHT COLUMN (1/3) — Settlement + History */}
         <div className="space-y-6">
+
+          {/* Payments & Deposit */}
+          <div className="bg-white border border-slate-200 rounded-lg">
+            <div className="p-5 border-b border-slate-200">
+              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                <span className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold">₹</span>
+                Payments & Deposit
+              </h3>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-500 font-medium">Security Deposit</span>
+                {order.deposit_collected ? (
+                  <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Collected ({formatCurrency(order.security_deposit)})</span>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium"
+                    onClick={() => updateOrder({ id: order.id, data: { deposit_collected: true, deposit_collected_at: new Date().toISOString() } })}
+                    disabled={isUpdating}
+                  >
+                    Collect {formatCurrency(order.security_deposit)}
+                  </Button>
+                )}
+              </div>
+              
+              <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 font-medium">Total Amount Due</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}</span>
+                </div>
+                
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500 font-medium">Payment Status</span>
+                  {(order as any).payment_status === 'paid' ? (
+                    <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Paid in Full</span>
+                  ) : (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-7 text-xs border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
+                      onClick={() => updateOrder({ id: order.id, data: { payment_status: 'paid', amount_paid: order.total_amount } })}
+                      disabled={isUpdating}
+                    >
+                      Mark Full Paid
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Settlement */}
           {isReturnable && (
