@@ -342,8 +342,8 @@ export default function ProductForm({
         };
         inventorySync(); // fire and forget — don't await
 
-        // Invalidate product cache so list page shows fresh data
-        queryClient.invalidateQueries({ queryKey: ["products"] });
+        // Wipe product cache so list page fetches completely fresh data
+        queryClient.removeQueries({ queryKey: ["products"] });
 
         showSuccess(isEdit ? "Product updated" : "Product created");
 
