@@ -142,23 +142,6 @@ export const UpdateStoreSchema = z.object({
 
 // (Customer schemas moved to customer.schema.ts)
 
-// Order schemas
-export const CreateOrderSchema = z.object({
-  customer_id: uuidSchema,
-  items: z.array(z.object({
-    product_id: uuidSchema,
-    quantity: z.number().int().min(1),
-    price_per_day: positiveNumber,
-  })).min(1, 'At least one item is required'),
-  rental_period: DateRangeSchema,
-  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
-});
-
-export const UpdateOrderSchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']).optional(),
-  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
-});
-
 // API Response schemas
 export const ApiResponseSchema = <T>(dataSchema: z.ZodType<T>) => z.object({
   data: dataSchema,
@@ -210,5 +193,4 @@ export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 export type CreateStoreInput = z.infer<typeof CreateStoreSchema>;
 export type UpdateStoreInput = z.infer<typeof UpdateStoreSchema>;
-export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
-export type UpdateOrderInput = z.infer<typeof UpdateOrderSchema>;
+

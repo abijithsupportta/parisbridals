@@ -28,6 +28,8 @@ import { orderService } from "@/services/orderService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
 
+import { CreateOrderSchema } from "@/domain";
+
 /** GET /api/orders — fetch all orders */
 export async function GET(request: NextRequest) {
   try {
@@ -35,20 +37,41 @@ export async function GET(request: NextRequest) {
     if (guard.error) return guard.error;
 
     const searchParams = request.nextUrl.searchParams;
+    const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1;
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 25;
+    
     const params = {
       customer_id: searchParams.get('customer_id') || undefined,
       branch_id: searchParams.get('branch_id') || undefined,
       status: searchParams.get('status') as any || undefined,
       query: searchParams.get('query') || undefined,
-      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
-      offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined,
+      date_filter: searchParams.get('date_filter') as any || undefined,
+      date_from: searchParams.get('date_from') || undefined,
+      date_to: searchParams.get('date_to') || undefined,
+      limit,
+      offset: (page - 1) * limit,
     };
 
     const result = await orderService.getAllOrders(params);
-    if (!result.success) {
+    const countResult = await orderService.countOrders(params);
+
+    if (!result.success || !countResult.success) {
       return NextResponse.json({ error: result.error?.message }, { status: 500 });
     }
-    return NextResponse.json({ orders: result.data });
+
+    const total = countResult.data || 0;
+    const totalPages = Math.ceil(total / limit);
+
+    return NextResponse.json({
+      success: true,
+      data: result.data,
+      total,
+      totalPages,
+      page,
+      limit,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -65,7 +88,17 @@ export async function POST(request: NextRequest) {
     orderService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
 
     const body = await request.json();
-    const result = await orderService.createOrder(body);
+    
+    // Validate request body
+    const validatedData = CreateOrderSchema.safeParse(body);
+    if (!validatedData.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: validatedData.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const result = await orderService.createOrder(validatedData.data);
     
     if (!result.success) {
       return NextResponse.json({ error: result.error?.message }, { status: 400 });

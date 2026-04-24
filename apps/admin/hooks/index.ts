@@ -97,7 +97,6 @@ export {
   useCreateOrder,
   useUpdateOrder,
   useDeleteOrder,
-  useOrderCount,
   useProcessOrderReturn,
   useMarkDepositReturned,
 } from './useOrders';

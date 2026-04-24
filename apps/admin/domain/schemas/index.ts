@@ -51,8 +51,6 @@ export {
   UpdateUserSchema,
   CreateStoreSchema,
   UpdateStoreSchema,
-  CreateOrderSchema,
-  UpdateOrderSchema,
   ApiResponseSchema,
   PaginatedResponseSchema,
   validateSlug,
@@ -73,8 +71,6 @@ export type {
   UpdateUserInput,
   CreateStoreInput,
   UpdateStoreInput,
-  CreateOrderInput,
-  UpdateOrderInput,
 } from './common.schema';
 
 // Customer schemas
@@ -101,3 +97,10 @@ export type {
   UpdateBranchInventoryInput,
   InventoryAdjustmentInput,
 } from './branch-inventory.schema';
+
+// Order schemas
+export {
+  CreateOrderSchema,
+  UpdateOrderSchema,
+  ReturnOrderSchema,
+} from './order.schema';

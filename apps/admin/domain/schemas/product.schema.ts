@@ -101,6 +101,7 @@ export const ProductSearchSchema = z.object({
   query: z.string().optional(),
   category_id: z.string().optional(),
   store_id: z.string().optional(),
+  branch_id: z.string().optional(),
   status: z.nativeEnum(ProductStatus).optional(),
   is_featured: z.boolean().optional(),
   min_price: positiveNumber.optional(),

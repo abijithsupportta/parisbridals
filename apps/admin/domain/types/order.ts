@@ -10,12 +10,25 @@
 export enum OrderStatus {
   PENDING = 'pending',
   CONFIRMED = 'confirmed',
+  SCHEDULED = 'scheduled',
   DELIVERED = 'delivered',
   IN_USE = 'in_use',
+  ONGOING = 'ongoing',
+  PARTIAL = 'partial',
   RETURNED = 'returned',
   COMPLETED = 'completed',
   CANCELLED = 'cancelled',
+  FLAGGED = 'flagged',
   LATE_RETURN = 'late_return',
+}
+
+// Payment Method Enum
+export enum PaymentMethod {
+  CASH = 'cash',
+  UPI = 'upi',
+  BANK_TRANSFER = 'bank_transfer',
+  CARD = 'card',
+  OTHER = 'other',
 }
 
 // Condition Rating Enum
@@ -44,38 +57,37 @@ export interface OrderItem {
   condition_rating?: ConditionRating;
   damage_description?: string;
   damage_charges?: number;
+  is_returned?: boolean;
+  returned_at?: string;
+  returned_quantity?: number;
   readonly created_at: string;
 }
 
 // Order Entity
 export interface Order {
   readonly id: string;
+  readonly store_id: string;
   readonly customer_id: string;
   readonly branch_id: string;
   status: OrderStatus;
-  rental_start_date: string;
-  rental_end_date: string;
-  pickup_time?: string;
-  return_time?: string;
-  pickup_branch_id?: string;
+  start_date: string;
+  end_date: string;
+  event_date: string;
   total_amount: number;
   subtotal: number;
   gst_amount: number;
-  gst_percentage: number;
+  security_deposit: number;
   notes: string | null;
+  deposit_collected?: boolean;
+  deposit_collected_at?: string;
+  deposit_payment_method?: PaymentMethod;
   deposit_returned: boolean;
   deposit_returned_at?: string;
   delivery_method?: DeliveryMethod;
   delivery_address?: string;
   pickup_address?: string;
-  event_date?: string;
   readonly created_at: string;
   readonly updated_at?: string;
-  // Audit fields
-  readonly created_by: string | null;
-  readonly created_at_branch_id: string | null;
-  readonly updated_by: string | null;
-  readonly updated_at_branch_id: string | null;
 }
 
 // Order with Relations
@@ -123,9 +135,6 @@ export interface CreateOrderDTO {
   }[];
   rental_start_date: string;
   rental_end_date: string;
-  pickup_time?: string;
-  return_time?: string;
-  pickup_branch_id?: string;
   event_date?: string;
   delivery_method?: DeliveryMethod;
   delivery_address?: string;
@@ -136,13 +145,16 @@ export interface CreateOrderDTO {
 // Order Update DTO
 export interface UpdateOrderDTO {
   status?: OrderStatus;
-  rental_start_date?: string;
-  rental_end_date?: string;
+  start_date?: string;
+  end_date?: string;
   notes?: string;
   delivery_method?: DeliveryMethod;
   delivery_address?: string;
   pickup_address?: string;
   event_date?: string;
+  deposit_collected?: boolean;
+  deposit_collected_at?: string;
+  deposit_payment_method?: PaymentMethod;
 }
 
 // Return Order DTO
@@ -150,6 +162,7 @@ export interface ReturnOrderDTO {
   order_id: string;
   items: {
     item_id: string;
+    returned_quantity: number;
     condition_rating: ConditionRating;
     damage_description?: string;
     damage_charges?: number;
@@ -163,6 +176,9 @@ export interface OrderSearchParams {
   branch_id?: string;
   status?: OrderStatus;
   query?: string;
+  date_filter?: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'custom';
+  date_from?: string;
+  date_to?: string;
   limit?: number;
   offset?: number;
 }

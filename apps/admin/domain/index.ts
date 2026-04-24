@@ -27,6 +27,9 @@ export {
   CreateCustomerSchema,
   UpdateCustomerSchema,
   CustomerSearchSchema,
+  CreateOrderSchema,
+  UpdateOrderSchema,
+  ReturnOrderSchema,
 } from './schemas';
 
 export type {

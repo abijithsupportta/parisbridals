@@ -124,6 +124,7 @@ export interface ProductSearchParams {
   query?: string;
   category_id?: string;
   store_id?: string;
+  branch_id?: string;
   status?: ProductStatus;
   is_featured?: boolean;
   min_price?: number;

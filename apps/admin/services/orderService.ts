@@ -182,12 +182,16 @@ export class OrderService {
 
       // Define allowed transitions
       const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-        [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
-        [OrderStatus.CONFIRMED]: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
-        [OrderStatus.DELIVERED]: [OrderStatus.IN_USE, OrderStatus.CANCELLED],
-        [OrderStatus.IN_USE]: [OrderStatus.RETURNED, OrderStatus.LATE_RETURN, OrderStatus.CANCELLED],
+        [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.SCHEDULED, OrderStatus.CANCELLED],
+        [OrderStatus.CONFIRMED]: [OrderStatus.DELIVERED, OrderStatus.SCHEDULED, OrderStatus.CANCELLED],
+        [OrderStatus.SCHEDULED]: [OrderStatus.DELIVERED, OrderStatus.ONGOING, OrderStatus.CANCELLED],
+        [OrderStatus.DELIVERED]: [OrderStatus.IN_USE, OrderStatus.ONGOING, OrderStatus.CANCELLED],
+        [OrderStatus.IN_USE]: [OrderStatus.RETURNED, OrderStatus.LATE_RETURN, OrderStatus.PARTIAL, OrderStatus.FLAGGED, OrderStatus.CANCELLED],
+        [OrderStatus.ONGOING]: [OrderStatus.RETURNED, OrderStatus.LATE_RETURN, OrderStatus.PARTIAL, OrderStatus.FLAGGED, OrderStatus.CANCELLED],
+        [OrderStatus.PARTIAL]: [OrderStatus.RETURNED, OrderStatus.COMPLETED, OrderStatus.FLAGGED],
+        [OrderStatus.FLAGGED]: [OrderStatus.RETURNED, OrderStatus.COMPLETED],
         [OrderStatus.RETURNED]: [OrderStatus.COMPLETED],
-        [OrderStatus.LATE_RETURN]: [OrderStatus.COMPLETED],
+        [OrderStatus.LATE_RETURN]: [OrderStatus.COMPLETED, OrderStatus.FLAGGED],
         [OrderStatus.COMPLETED]: [],
         [OrderStatus.CANCELLED]: [],
       };
@@ -205,9 +209,9 @@ export class OrderService {
     }
 
     // Validate rental dates if provided
-    if (data.rental_start_date && data.rental_end_date) {
-      const startDate = new Date(data.rental_start_date);
-      const endDate = new Date(data.rental_end_date);
+    if (data.start_date && data.end_date) {
+      const startDate = new Date(data.start_date);
+      const endDate = new Date(data.end_date);
       
       if (startDate >= endDate) {
         return {

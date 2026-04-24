@@ -32,9 +32,8 @@ export class OrderRepository extends BaseRepository {
       .select(`
         *,
         customer:customer_id(id, name, phone, email),
-        items:order_items(*),
-        branch:branch_id(id, name),
-        store:branch_id!inner(store_id(id, name, address, phone, email, gstin))
+        items:order_items(*, product:product_id(id, name, images)),
+        branch:branch_id(id, name)
       `)
       .order('created_at', { ascending: false });
 
@@ -52,6 +51,39 @@ export class OrderRepository extends BaseRepository {
 
     if (params?.query) {
       query = query.or(`customer.name.ilike.%${params.query}%,customer.phone.ilike.%${params.query}%`);
+    }
+
+    if (params?.date_filter || params?.date_from || params?.date_to) {
+      if (params?.date_filter === 'custom' || (!params?.date_filter && (params?.date_from || params?.date_to))) {
+        if (params?.date_from) query = query.gte('created_at', params.date_from);
+        if (params?.date_to) query = query.lte('created_at', params.date_to);
+      } else if (params?.date_filter) {
+        const now = new Date();
+        let startDate, endDate;
+        switch (params.date_filter) {
+          case 'today':
+            startDate = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+            endDate = new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
+            query = query.gte('created_at', startDate).lte('created_at', endDate);
+            break;
+          case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = new Date(yesterday.setHours(0, 0, 0, 0)).toISOString();
+            endDate = new Date(yesterday.setHours(23, 59, 59, 999)).toISOString();
+            query = query.gte('created_at', startDate).lte('created_at', endDate);
+            break;
+          case 'this_week':
+            const firstDay = new Date(now.setDate(now.getDate() - now.getDay()));
+            startDate = new Date(firstDay.setHours(0, 0, 0, 0)).toISOString();
+            query = query.gte('created_at', startDate);
+            break;
+          case 'this_month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            query = query.gte('created_at', startDate);
+            break;
+        }
+      }
     }
 
     if (params?.limit) {
@@ -115,9 +147,8 @@ export class OrderRepository extends BaseRepository {
       .select(`
         *,
         customer:customer_id(id, name, phone, email),
-        items:order_items(*),
-        branch:branch_id(id, name),
-        store:branch_id!inner(store_id(id, name, address, phone, email, gstin))
+        items:order_items(*, product:product_id(id, name, images)),
+        branch:branch_id(id, name)
       `)
       .eq('id', id)
       .single();
@@ -144,28 +175,25 @@ export class OrderRepository extends BaseRepository {
     const totalAmount = subtotal + gstAmount;
 
     // Start a transaction by creating the order first
+    // DB columns: start_date, end_date, event_date (all DATE type)
     const orderResponse = await this.client
       .from(this.tableName)
       .insert({
         customer_id: data.customer_id,
         branch_id: data.branch_id,
+        store_id: data.branch_id, // TODO: resolve store from branch
         status: 'pending',
-        rental_start_date: data.rental_start_date,
-        rental_end_date: data.rental_end_date,
-        pickup_time: data.pickup_time || null,
-        return_time: data.return_time || null,
-        pickup_branch_id: data.pickup_branch_id || null,
-        event_date: data.event_date || null,
-        delivery_method: data.delivery_method || null,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        event_date: data.event_date ? new Date(data.event_date).toISOString().split('T')[0] : startDate.toISOString().split('T')[0],
+        delivery_method: data.delivery_method || 'pickup',
         delivery_address: data.delivery_address || null,
         pickup_address: data.pickup_address || null,
         subtotal,
         gst_amount: gstAmount,
-        gst_percentage: gstPercentage,
+        security_deposit: 0,
         total_amount: totalAmount,
         notes: data.notes || null,
-        created_by: this.currentUserId,
-        created_at_branch_id: this.currentBranchId,
       })
       .select()
       .single();
@@ -197,14 +225,44 @@ export class OrderRepository extends BaseRepository {
       return this.handleResponse<OrderWithRelations>(itemsResponse);
     }
 
+    // Deduct inventory
+    for (const item of data.items) {
+      const { data: inv } = await this.client
+        .from('product_inventory')
+        .select('available_quantity')
+        .eq('product_id', item.product_id)
+        .eq('branch_id', data.branch_id)
+        .single();
+        
+      if (inv) {
+        await this.client
+          .from('product_inventory')
+          .update({ available_quantity: Math.max(0, inv.available_quantity - item.quantity) })
+          .eq('product_id', item.product_id)
+          .eq('branch_id', data.branch_id);
+      }
+      
+      const { data: prod } = await this.client
+        .from('products')
+        .select('available_quantity')
+        .eq('id', item.product_id)
+        .single();
+        
+      if (prod) {
+        await this.client
+          .from('products')
+          .update({ available_quantity: Math.max(0, prod.available_quantity - item.quantity) })
+          .eq('id', item.product_id);
+      }
+    }
+
     // Create initial status history
     await this.client
       .from(this.orderStatusHistoryTable)
       .insert({
         order_id: order.id,
         status: 'pending',
-        changed_by: this.currentUserId,
-        changed_at_branch_id: this.currentBranchId,
+        changed_by: null,
       });
 
     // Fetch the complete order with relations
@@ -219,8 +277,6 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .update({
         ...data,
-        updated_by: this.currentUserId,
-        updated_at_branch_id: this.currentBranchId,
       })
       .eq('id', id)
       .select()
@@ -233,8 +289,7 @@ export class OrderRepository extends BaseRepository {
         .insert({
           order_id: id,
           status: data.status,
-          changed_by: this.currentUserId,
-          changed_at_branch_id: this.currentBranchId,
+          changed_by: null,
         });
     }
 
@@ -296,6 +351,39 @@ export class OrderRepository extends BaseRepository {
       query = query.or(`customer.name.ilike.%${params.query}%,customer.phone.ilike.%${params.query}%`);
     }
 
+    if (params?.date_filter || params?.date_from || params?.date_to) {
+      if (params?.date_filter === 'custom' || (!params?.date_filter && (params?.date_from || params?.date_to))) {
+        if (params?.date_from) query = query.gte('created_at', params.date_from);
+        if (params?.date_to) query = query.lte('created_at', params.date_to);
+      } else if (params?.date_filter) {
+        const now = new Date();
+        let startDate, endDate;
+        switch (params.date_filter) {
+          case 'today':
+            startDate = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
+            endDate = new Date(new Date().setHours(23, 59, 59, 999)).toISOString();
+            query = query.gte('created_at', startDate).lte('created_at', endDate);
+            break;
+          case 'yesterday':
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            startDate = new Date(yesterday.setHours(0, 0, 0, 0)).toISOString();
+            endDate = new Date(yesterday.setHours(23, 59, 59, 999)).toISOString();
+            query = query.gte('created_at', startDate).lte('created_at', endDate);
+            break;
+          case 'this_week':
+            const firstDay = new Date(now.setDate(now.getDate() - now.getDay()));
+            startDate = new Date(firstDay.setHours(0, 0, 0, 0)).toISOString();
+            query = query.gte('created_at', startDate);
+            break;
+          case 'this_month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            query = query.gte('created_at', startDate);
+            break;
+        }
+      }
+    }
+
     const response = await query;
     
     if (response.error) {
@@ -322,8 +410,6 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .update({
         status: 'returned',
-        updated_by: this.currentUserId,
-        updated_at_branch_id: this.currentBranchId,
       })
       .eq('id', orderId)
       .select()
@@ -338,11 +424,53 @@ export class OrderRepository extends BaseRepository {
       await this.client
         .from(this.orderItemsTable)
         .update({
+          is_returned: true,
+          returned_at: new Date().toISOString(),
+          returned_quantity: item.returned_quantity,
           condition_rating: item.condition_rating,
           damage_description: item.damage_description || null,
           damage_charges: item.damage_charges || 0,
         })
         .eq('id', item.item_id);
+
+      // Increment inventory
+      const { data: orderItem } = await this.client
+        .from(this.orderItemsTable)
+        .select('product_id, order(branch_id)')
+        .eq('id', item.item_id)
+        .single();
+
+      if (orderItem && orderItem.product_id) {
+        const branchId = (orderItem as any).order?.branch_id || (orderItem as any).order?.[0]?.branch_id;
+        
+        const { data: inv } = await this.client
+          .from('product_inventory')
+          .select('available_quantity')
+          .eq('product_id', orderItem.product_id)
+          .eq('branch_id', branchId)
+          .single();
+          
+        if (inv) {
+          await this.client
+            .from('product_inventory')
+            .update({ available_quantity: inv.available_quantity + item.returned_quantity })
+            .eq('product_id', orderItem.product_id)
+            .eq('branch_id', branchId);
+        }
+        
+        const { data: prod } = await this.client
+          .from('products')
+          .select('available_quantity')
+          .eq('id', orderItem.product_id)
+          .single();
+          
+        if (prod) {
+          await this.client
+            .from('products')
+            .update({ available_quantity: prod.available_quantity + item.returned_quantity })
+            .eq('id', orderItem.product_id);
+        }
+      }
     }
 
     // Add to status history
@@ -352,8 +480,7 @@ export class OrderRepository extends BaseRepository {
         order_id: orderId,
         status: 'returned',
         notes: returnData.notes || null,
-        changed_by: this.currentUserId,
-        changed_at_branch_id: this.currentBranchId,
+        changed_by: null,
       });
 
     return this.findById(orderId);
@@ -368,8 +495,6 @@ export class OrderRepository extends BaseRepository {
       .update({
         deposit_returned: true,
         deposit_returned_at: new Date().toISOString(),
-        updated_by: this.currentUserId,
-        updated_at_branch_id: this.currentBranchId,
       })
       .eq('id', orderId)
       .select()

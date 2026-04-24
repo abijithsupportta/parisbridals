@@ -30,6 +30,7 @@ export default function OrderReturnModal({ orderId, orderItems, orderDetails, on
   const [returnItems, setReturnItems] = useState(
     orderItems.map(item => ({
       item_id: item.id,
+      returned_quantity: 1,
       condition_rating: ConditionRating.EXCELLENT,
       damage_description: "",
       damage_charges: 0,
