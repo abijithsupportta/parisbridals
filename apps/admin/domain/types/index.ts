@@ -48,6 +48,7 @@ export type {
   CreateCategoryDTO,
   UpdateCategoryDTO,
   CategoryValidationResult,
+  CategoryValidationError,
 } from './category';
 
 export {
@@ -138,6 +139,15 @@ export type {
   UpdateProductInventoryDTO,
   ProductInventorySearchParams,
 } from './inventory';
+
+// Branch inventory types
+export type {
+  BranchInventory,
+  CreateBranchInventoryDTO,
+  UpdateBranchInventoryDTO,
+  BranchInventoryWithRelations,
+  InventoryAdjustment,
+} from './branch-inventory';
 
 // Order types
 export type {

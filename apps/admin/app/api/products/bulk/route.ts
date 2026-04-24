@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { productService } from '@/services';
 import { BulkProductOperationSchema } from '@/domain';
 import { z } from 'zod';
+import { apiGuard } from '@/lib/apiGuard';
 
 /**
  * POST /api/products/bulk
@@ -26,6 +27,9 @@ import { z } from 'zod';
  */
 export async function POST(request: NextRequest) {
   try {
+    const guard = await apiGuard(request, 'products');
+    if (guard.error) return guard.error;
+
     const body = await request.json();
     
     // Validate request body

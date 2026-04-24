@@ -68,8 +68,13 @@ export default function Sidebar() {
     <aside className="w-72 bg-gradient-to-b from-slate-900 to-slate-800 min-h-screen flex flex-col sticky top-0 h-screen">
       {/* Logo */}
       <div className="p-6 border-b border-slate-700">
-        <h1 className="text-2xl font-bold text-white tracking-tight">Paris Bridals</h1>
-        <p className="text-sm text-slate-400 mt-1">Admin Dashboard</p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.svg" alt="Paris Bridals" className="w-10 h-10" />
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-tight">Paris Bridals</h1>
+            <p className="text-xs text-slate-400">Admin Dashboard</p>
+          </div>
+        </div>
       </div>
       
       {/* Navigation */}

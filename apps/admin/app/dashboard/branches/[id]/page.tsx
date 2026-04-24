@@ -91,6 +91,7 @@ export default function BranchDetailPage() {
   const openEdit = (s: Staff) => { setEditStaff(s); setRole(s.role); setStaffBranch(s.branch_id); setShowModal(true); };
 
   const roleColors: Record<StaffRole, string> = {
+    super_admin: "bg-purple-100 text-purple-700",
     admin: "bg-red-100 text-red-700",
     manager: "bg-amber-100 text-amber-700",
     staff: "bg-blue-100 text-blue-700",

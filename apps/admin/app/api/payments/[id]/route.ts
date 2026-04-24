@@ -12,13 +12,14 @@ import { getAuthUser } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
 
-    const result = await paymentService.getPayment(params.id);
+    const { id } = await params;
+    const result = await paymentService.getPayment(id);
     if (!result.success) {
       return NextResponse.json(
         { error: result.error?.message || 'Failed to fetch payment' },
@@ -37,7 +38,7 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const guard = await adminOnly(request);
@@ -46,10 +47,11 @@ export async function PATCH(
     const authUser = await getAuthUser(request);
     paymentService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
 
+    const { id } = await params;
     const body = await request.json();
-    const result = await paymentService.updatePayment(params.id, body);
-    
-    if (!result.success || !result.data) {
+    const result = await paymentService.updatePayment(id, body);
+
+    if (!result.success) {
       return NextResponse.json(
         { error: result.error?.message || 'Failed to update payment' },
         { status: 400 }
@@ -67,14 +69,15 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
 
-    const result = await paymentService.deletePayment(params.id);
-    
+    const { id } = await params;
+    const result = await paymentService.deletePayment(id);
+
     if (!result.success) {
       return NextResponse.json(
         { error: result.error?.message || 'Failed to delete payment' },

@@ -17,7 +17,7 @@ export default function StoreForm() {
     is_active: true,
   });
 
-  const { createBranch, isLoading } = useCreateBranch();
+  const { mutate: createBranch, isPending: isLoading } = useCreateBranch();
 
   const clearZeroOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === "0") {

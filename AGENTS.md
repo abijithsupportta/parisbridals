@@ -638,3 +638,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 - Update `README.md` in each app when adding new modules
 - Document new API endpoints, models, and providers
 - Keep `AGENTS.md` updated with new rules as they emerge
+
+## 26. Mandatory Post-Work Verification
+1. ALWAYS check the build for type issues (pnpm lint or 	sc --noEmit) after every significant change.
+2. If any runtime issues (e.g. React.Children.only Slot errors) or build issues are found, solve them PROPERLY before concluding the task.

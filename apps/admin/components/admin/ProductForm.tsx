@@ -1,14 +1,9 @@
 /**
- * ProductForm Component
+ * ProductForm Component (Standalone Page)
  *
- * Standalone page form for creating or editing jewellery rental products.
- * Fields match the modal dialog form exactly. Features:
- *   - R2 image upload via FileUpload component
- *   - Cascading category selectors (Main → Sub → Variant)
- *   - Branch selector
- *   - Barcode generation
- *   - Slug auto-generation from name
- *   - Create / Edit mode (determined by `product` prop)
+ * Multi-branch product form: shared rent price, per-branch stock counts.
+ * Flow: select a branch from dropdown → enter stock count → click Add.
+ * Repeat for each branch that should carry this product.
  *
  * @component
  */
@@ -16,17 +11,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, RefreshCw, Store, X, Plus } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/domain/types/category";
-import { useRouter } from "next/navigation";
-import { AlertCircle, RefreshCw, Download } from "lucide-react";
 import { useAppStore } from "@/stores";
 import { useCreateProduct, useUpdateProduct } from "@/hooks";
 
 const DEFAULT_STORE_ID = "00000000-0000-0000-0000-000000000001";
+const MAX_IMAGES = 5;
 
 interface Branch {
   id: string;
@@ -35,12 +33,15 @@ interface Branch {
   is_active?: boolean;
 }
 
+interface BranchStockEntry {
+  id?: string; // branch_inventory row id when loaded from DB
+  branch_id: string;
+  quantity: number;
+}
+
 interface ProductFormProps {
-  /** Existing product for edit mode; omit for create mode */
   product?: any;
-  /** All categories for the category dropdown */
   categories?: Category[];
-  /** All branches for the branch dropdown */
   branches?: Branch[];
 }
 
@@ -53,32 +54,20 @@ export default function ProductForm({
   const isEdit = !!product;
   const { showError, showSuccess } = useAppStore();
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-  const [userRole, setUserRole] = useState<string>("staff");
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
 
-  // Fetch current user role
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.role) {
-          setUserRole(data.role);
-        }
-      })
-      .catch(() => {
-        setUserRole("staff");
-      });
-  }, []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-  // Extract existing image URLs from product
+  // Existing images
   const existingImages = (product?.images || []).map((img: any) =>
     typeof img === "string" ? img : img.url
   );
+  const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
 
+  // Core form fields (shared across all branches)
   const [formData, setFormData] = useState({
     name: product?.name || "",
     slug: product?.slug || "",
@@ -88,34 +77,51 @@ export default function ProductForm({
     category_id: product?.category_id || "",
     subcategory_id: product?.subcategory_id || "",
     subvariant_id: product?.subvariant_id || "",
-    branch_id: product?.branch_id || "",
     price_per_day: product?.price_per_day || 0,
-    security_deposit: product?.security_deposit || 0,
-    quantity: product?.quantity || 0,
-    low_stock_threshold: product?.low_stock_threshold ?? 5,
-    track_inventory: product?.track_inventory ?? true,
     is_active: product?.is_active ?? true,
-    is_featured: product?.is_featured ?? false,
   });
 
-  // Set default branch_id to "all" for admin/super admin in create mode
+  // Per-branch stock state
+  const [branchStocks, setBranchStocks] = useState<BranchStockEntry[]>([]);
+  const [removedInventoryIds, setRemovedInventoryIds] = useState<string[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [newStockQty, setNewStockQty] = useState<number>(0);
+  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+
+  // Load existing branch inventory when editing
   useEffect(() => {
-    if (!isEdit && (userRole === 'admin' || userRole === 'super_admin')) {
-      setFormData((prev) => ({ ...prev, branch_id: 'all' }));
-    }
-  }, [isEdit, userRole]);
+    if (!product?.id) return;
+    const load = async () => {
+      setIsLoadingInventory(true);
+      try {
+        const res = await fetch(`/api/branch-inventory?product_id=${product.id}`);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          setBranchStocks(
+            json.data.map((inv: any) => ({
+              id: inv.id,
+              branch_id: inv.branch_id,
+              quantity: inv.quantity ?? 0,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load branch inventory:", err);
+      } finally {
+        setIsLoadingInventory(false);
+      }
+    };
+    load();
+  }, [product?.id]);
 
-  const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
-
-  // ── Slug auto-generation ──────────────────────────────────────────
-  const generateSlug = (name: string): string => {
-    return name
+  // Slug auto-generation
+  const generateSlug = (name: string): string =>
+    name
       .toLowerCase()
       .trim()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
       .replace(/--+/g, "-");
-  };
 
   useEffect(() => {
     if (!slugManuallyEdited) {
@@ -123,17 +129,20 @@ export default function ProductForm({
     }
   }, [formData.name, slugManuallyEdited]);
 
-  // ── Barcode generation ────────────────────────────────────────────
+  // Barcode generation
   const generateBarcode = () => {
-    const barcode = `PB${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const barcode = `PB${Date.now().toString(36).toUpperCase()}${Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase()}`;
     setFormData((prev) => ({ ...prev, barcode }));
   };
 
-  // ── UX: Clear zero on focus, prevent scroll on number inputs ──────
   const clearZeroOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === "0") e.target.value = "";
   };
 
+  // Prevent scroll on number inputs
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.target instanceof HTMLInputElement && e.target.type === "number") {
@@ -144,27 +153,69 @@ export default function ProductForm({
     return () => document.removeEventListener("wheel", handleWheel);
   }, []);
 
-  // ── Category hierarchy ────────────────────────────────────────────
+  // Category hierarchy
   const mains = categories.filter((c) => !c.parent_id);
   const subs = categories.filter((c) => c.parent_id === formData.category_id);
-  const variants = categories.filter((c) => c.parent_id === formData.subcategory_id);
+  const variants = categories.filter(
+    (c) => c.parent_id === formData.subcategory_id
+  );
 
-  // Reset child dropdowns when parent changes
-  const handleMainCategoryChange = (value: string) => {
+  const handleMainCategoryChange = (value: string) =>
     setFormData((prev) => ({
       ...prev,
       category_id: value,
       subcategory_id: "",
       subvariant_id: "",
     }));
+
+  const handleSubCategoryChange = (value: string) =>
+    setFormData((prev) => ({ ...prev, subcategory_id: value, subvariant_id: "" }));
+
+  // ── Branch Stock Handlers ────────────────────────────────────────
+  const activeBranches = branches.filter((b) => b.is_active !== false);
+  const availableBranches = activeBranches.filter(
+    (b) => !branchStocks.some((s) => s.branch_id === b.id)
+  );
+  const totalBranchQuantity = branchStocks.reduce(
+    (sum, s) => sum + (s.quantity || 0),
+    0
+  );
+  const getBranchName = (id: string) =>
+    branches.find((b) => b.id === id)?.name || "Unknown";
+
+  const handleAddBranchStock = () => {
+    if (!selectedBranchId) {
+      showError("Select a branch first");
+      return;
+    }
+    if (newStockQty < 0) {
+      showError("Stock count cannot be negative");
+      return;
+    }
+    if (branchStocks.some((s) => s.branch_id === selectedBranchId)) {
+      showError("This branch is already added");
+      return;
+    }
+    setBranchStocks((prev) => [
+      ...prev,
+      { branch_id: selectedBranchId, quantity: newStockQty },
+    ]);
+    setSelectedBranchId("");
+    setNewStockQty(0);
   };
 
-  const handleSubCategoryChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      subcategory_id: value,
-      subvariant_id: "",
-    }));
+  const handleUpdateStockQty = (branchId: string, qty: number) => {
+    setBranchStocks((prev) =>
+      prev.map((s) => (s.branch_id === branchId ? { ...s, quantity: qty } : s))
+    );
+  };
+
+  const handleRemoveBranchStock = (branchId: string) => {
+    setBranchStocks((prev) => {
+      const entry = prev.find((s) => s.branch_id === branchId);
+      if (entry?.id) setRemovedInventoryIds((ids) => [...ids, entry.id!]);
+      return prev.filter((s) => s.branch_id !== branchId);
+    });
   };
 
   // ── Submit ────────────────────────────────────────────────────────
@@ -174,6 +225,12 @@ export default function ProductForm({
     setError("");
 
     try {
+      if (branchStocks.length === 0) {
+        showError("Add stock for at least one branch");
+        setLoading(false);
+        return;
+      }
+
       const images = imageUrls.map((url, index) => ({
         url,
         alt_text: formData.name,
@@ -188,36 +245,77 @@ export default function ProductForm({
         category_id: formData.category_id || null,
         subcategory_id: formData.subcategory_id || null,
         subvariant_id: formData.subvariant_id || null,
-        branch_id: formData.branch_id || null,
-        available_quantity: formData.quantity,
+        // Branch-specific: no top-level branch_id; stock lives in branch_inventory.
+        branch_id: null,
+        security_deposit: 0, // not used
+        is_featured: false, // not used
+        track_inventory: true, // always tracked
+        low_stock_threshold: 0, // not used at product level
+        quantity: totalBranchQuantity, // auto-summed across branches
+        available_quantity: totalBranchQuantity,
         sku: formData.sku || undefined,
         barcode: formData.barcode || undefined,
         description: formData.description || undefined,
       };
 
+      let productId: string;
       let result: any;
       if (isEdit && product) {
         result = await updateProduct.mutateAsync({ id: product.id, data: payload });
+        productId = product.id;
       } else {
         result = await createProduct.mutateAsync(payload);
+        productId = result?.data?.id;
       }
 
-      if (!result.success) {
-        // Map error codes to user-friendly messages
-        let errorMessage = result.error?.message || 'Request failed';
-        
-        if (result.error?.code === 'SLUG_EXISTS') {
-          errorMessage = 'A product with this slug already exists. Please change the product name or slug.';
-        } else if (result.error?.code === 'VALIDATION_ERROR') {
-          errorMessage = 'Please check all required fields and try again.';
-        } else if (result.error?.code === 'INVALID_CATEGORY') {
-          errorMessage = 'Invalid category selected.';
+      if (!result?.success) {
+        let msg = result?.error?.message || "Request failed";
+        if (result?.error?.code === "SLUG_EXISTS") {
+          msg = "A product with this slug already exists.";
+        } else if (result?.error?.code === "VALIDATION_ERROR") {
+          msg = "Please check all required fields.";
         }
-        
-        showError(errorMessage);
+        showError(msg);
+        setLoading(false);
         return;
       }
 
+      // Persist branch inventory
+      try {
+        for (const rid of removedInventoryIds) {
+          await fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" });
+        }
+        for (const entry of branchStocks) {
+          if (entry.id) {
+            await fetch(`/api/branch-inventory/${entry.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                quantity: entry.quantity,
+                available_quantity: entry.quantity,
+                low_stock_threshold: 0,
+              }),
+            });
+          } else {
+            await fetch("/api/branch-inventory", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                branch_id: entry.branch_id,
+                product_id: productId,
+                quantity: entry.quantity,
+                available_quantity: entry.quantity,
+                low_stock_threshold: 0,
+              }),
+            });
+          }
+        }
+      } catch (invErr) {
+        console.error("Branch inventory save error:", invErr);
+        showError("Product saved, but some branch stock may not have been persisted");
+      }
+
+      showSuccess(isEdit ? "Product updated" : "Product created");
       router.push("/dashboard/products");
     } catch (err) {
       const message =
@@ -238,13 +336,12 @@ export default function ProductForm({
         </CardTitle>
         <p className="text-slate-100 text-sm mt-1">
           {isEdit
-            ? "Update product details"
-            : "Add a new jewellery item to your inventory"}
+            ? "Update product details and per-branch stock"
+            : "Add a new item and assign stock to each branch"}
         </p>
       </CardHeader>
       <CardContent className="p-8">
         <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Error banner */}
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -252,7 +349,7 @@ export default function ProductForm({
             </div>
           )}
 
-          {/* ── Section 1: Product Images ─────────────────────────── */}
+          {/* ── Product Images ─────────────────────────────────────── */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
               Product Images
@@ -260,16 +357,16 @@ export default function ProductForm({
             <FileUpload
               accept="image/*"
               multiple={true}
-              maxFiles={10}
+              maxFiles={MAX_IMAGES}
               maxSize={5 * 1024 * 1024}
               folder="products"
               value={imageUrls}
               onChange={setImageUrls}
-              helperText="Upload up to 10 product images (max 5MB each). First image will be the primary."
+              helperText={`Upload up to ${MAX_IMAGES} images (max 5MB each). Images are optional.`}
             />
           </div>
 
-          {/* ── Section 2: Basic Information ──────────────────────── */}
+          {/* ── Basic Information ──────────────────────────────────── */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
               Basic Information
@@ -304,12 +401,8 @@ export default function ProductForm({
                   placeholder="auto-generated-from-name"
                   className="h-12 border-slate-300 focus:border-primary"
                 />
-                <p className="text-xs text-slate-500">
-                  Auto-generated from name. Type to customize, clear to reset.
-                </p>
               </div>
             </div>
-
             <div className="space-y-2">
               <label className="text-sm font-semibold text-slate-700 block">
                 Description
@@ -326,7 +419,7 @@ export default function ProductForm({
             </div>
           </div>
 
-          {/* ── Section 3: Identifiers ────────────────────────────── */}
+          {/* ── Identifiers ────────────────────────────────────────── */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
               Identifiers
@@ -372,13 +465,12 @@ export default function ProductForm({
             </div>
           </div>
 
-          {/* ── Section 4: Categories ─────────────────────────────── */}
+          {/* ── Categories ─────────────────────────────────────────── */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
               Categories
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Main Category */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700 block">
                   Main Category
@@ -396,8 +488,6 @@ export default function ProductForm({
                   ))}
                 </select>
               </div>
-
-              {/* Subcategory */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700 block">
                   Subcategory
@@ -422,8 +512,6 @@ export default function ProductForm({
                   ))}
                 </select>
               </div>
-
-              {/* Variant */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700 block">
                   Variant
@@ -453,50 +541,12 @@ export default function ProductForm({
             </div>
           </div>
 
-          {/* ── Section 5: Branch ─────────────────────────────────── */}
+          {/* ── Rent Price (common across branches) ────────────────── */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Branch
+              Rent Price
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Available at Branch
-                </label>
-                <select
-                  value={formData.branch_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, branch_id: e.target.value })
-                  }
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
-                >
-                  {(userRole === 'admin' || userRole === 'super_admin') && !isEdit && (
-                    <option value="all">All Branches</option>
-                  )}
-                  <option value="">Select branch</option>
-                  {branches
-                    .filter((b) => b.is_active !== false)
-                    .map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                </select>
-                {(userRole === 'admin' || userRole === 'super_admin') && formData.branch_id === 'all' && (
-                  <p className="text-xs text-slate-500">
-                    Product will be available at all branches
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Section 6: Pricing & Inventory ────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Pricing & Inventory
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-700 block">
                   Rent Amount (₹) *
@@ -520,124 +570,179 @@ export default function ProductForm({
                     className="h-12 pl-7 border-slate-300 focus:border-primary"
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Security Deposit (₹)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-                    ₹
-                  </span>
-                  <Input
-                    type="number"
-                    value={formData.security_deposit}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        security_deposit: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    onFocus={clearZeroOnFocus}
-                    placeholder="0"
-                    className="h-12 pl-7 border-slate-300 focus:border-primary"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Total Quantity *
-                </label>
-                <Input
-                  type="number"
-                  value={formData.quantity}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      quantity: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  onFocus={clearZeroOnFocus}
-                  required
-                  placeholder="0"
-                  className="h-12 border-slate-300 focus:border-primary"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Low Stock Alert
-                </label>
-                <Input
-                  type="number"
-                  value={formData.low_stock_threshold}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      low_stock_threshold: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  onFocus={clearZeroOnFocus}
-                  placeholder="5"
-                  className="h-12 border-slate-300 focus:border-primary"
-                />
+                <p className="text-xs text-slate-500">
+                  Same rate applies across all branches.
+                </p>
               </div>
             </div>
           </div>
 
-          {/* ── Section 7: Status & Options ───────────────────────── */}
-          <div className="space-y-4 pt-2">
+          {/* ── Stock per Branch ───────────────────────────────────── */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <Store className="w-5 h-5 text-violet-600" />
+                Stock per Branch *
+              </h3>
+              <span className="text-sm font-semibold text-violet-700 bg-violet-50 border border-violet-200 px-3 py-1 rounded-full">
+                Total: {totalBranchQuantity}
+              </span>
+            </div>
+            <p className="text-sm text-slate-500 -mt-2">
+              Stock is tracked <strong>separately for each branch</strong>. Pick a
+              branch, enter its stock count, click Add. Then pick the next branch
+              and repeat.
+            </p>
+
+            {isLoadingInventory ? (
+              <p className="text-sm text-slate-400 text-center py-6">
+                Loading existing stock...
+              </p>
+            ) : activeBranches.length === 0 ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                No active branches. Please create a branch first.
+              </div>
+            ) : (
+              <>
+                {/* Add stock form */}
+                {availableBranches.length > 0 ? (
+                  <div className="p-5 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/40">
+                    <p className="text-xs font-semibold text-violet-700 uppercase tracking-wide mb-3">
+                      Add Stock for a Branch
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-600 font-medium">
+                          Branch
+                        </label>
+                        <select
+                          value={selectedBranchId}
+                          onChange={(e) => setSelectedBranchId(e.target.value)}
+                          className="w-full h-11 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
+                        >
+                          <option value="">Select a branch</option>
+                          {availableBranches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-slate-600 font-medium">
+                          Stock Count
+                        </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={newStockQty}
+                          onChange={(e) =>
+                            setNewStockQty(parseInt(e.target.value) || 0)
+                          }
+                          onFocus={clearZeroOnFocus}
+                          placeholder="0"
+                          className="h-11 bg-white border-slate-300 focus:border-primary"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <Button
+                          type="button"
+                          onClick={handleAddBranchStock}
+                          disabled={!selectedBranchId}
+                          className="h-11 bg-violet-600 hover:bg-violet-700 text-white gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800">
+                    Stock configured for all available branches.
+                  </div>
+                )}
+
+                {/* List of added branch stocks */}
+                {branchStocks.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4 italic">
+                    No branch stock added yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      Branches with Stock ({branchStocks.length})
+                    </p>
+                    {branchStocks.map((entry) => (
+                      <div
+                        key={entry.branch_id}
+                        className="flex items-center gap-3 p-4 rounded-lg border border-slate-200 bg-white hover:border-violet-200 transition-colors"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                          <Store className="w-5 h-5 text-violet-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">
+                            {getBranchName(entry.branch_id)}
+                          </p>
+                          <p className="text-xs text-slate-500">Branch stock</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-slate-500">Qty:</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            value={entry.quantity}
+                            onChange={(e) =>
+                              handleUpdateStockQty(
+                                entry.branch_id,
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            onFocus={clearZeroOnFocus}
+                            className="h-10 w-24 text-center font-semibold border-slate-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoveBranchStock(entry.branch_id)
+                            }
+                            className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Remove this branch"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* ── Status (Active switch only) ────────────────────────── */}
+          <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
               Status
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer">
-                <span className="text-sm font-medium text-slate-700">
-                  Active
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formData.is_active}
-                  onChange={(e) =>
-                    setFormData({ ...formData, is_active: e.target.checked })
-                  }
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
-              <label className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer">
-                <span className="text-sm font-medium text-slate-700">
-                  Featured
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formData.is_featured}
-                  onChange={(e) =>
-                    setFormData({ ...formData, is_featured: e.target.checked })
-                  }
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
-              <label className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer">
-                <span className="text-sm font-medium text-slate-700">
-                  Track Inventory
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formData.track_inventory}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      track_inventory: e.target.checked,
-                    })
-                  }
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
+            <div className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 max-w-md">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Active</p>
+                <p className="text-xs text-slate-500">
+                  Visible to customers and available for rental
+                </p>
+              </div>
+              <Switch
+                checked={formData.is_active}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, is_active: checked })
+                }
+              />
             </div>
           </div>
 
-          {/* ── Submit ────────────────────────────────────────────── */}
+          {/* ── Submit ─────────────────────────────────────────────── */}
           <div className="flex gap-4 pt-6 border-t border-slate-200">
             <Button
               type="submit"

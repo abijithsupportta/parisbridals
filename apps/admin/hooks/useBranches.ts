@@ -1,5 +1,5 @@
 /**
- * Branch Hooks
+ * Branch Hooks - Optimized
  *
  * TanStack Query hooks for branch operations.
  * All operations go through API routes (server-side, service role key).
@@ -34,7 +34,10 @@ export function useBranches() {
   const query = useQuery({
     queryKey: branchKeys.all,
     queryFn: () => apiFetch<BranchWithStaffCount[]>('/api/branches'),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes - increased from 2
+    gcTime: 10 * 60 * 1000, // 10 minutes cache
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: false, // Don't refetch on mount if data exists
   });
 
   return {
@@ -50,6 +53,8 @@ export function useBranch(id: string) {
     queryFn: () => apiFetch<BranchWithStaffCount>(`/api/branches/${id}`),
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   return {
@@ -66,11 +71,41 @@ export function useCreateBranch() {
   return useMutation({
     mutationFn: (data: Omit<CreateBranchDTO, 'store_id'>) =>
       apiFetch('/api/branches', { method: 'POST', body: JSON.stringify(data) }),
+    onMutate: async (newBranch) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: branchKeys.all });
+
+      // Snapshot previous value
+      const previousBranches = queryClient.getQueryData<BranchWithStaffCount[]>(branchKeys.all);
+
+      // Optimistically update
+      if (previousBranches) {
+        queryClient.setQueryData<BranchWithStaffCount[]>(branchKeys.all, (old) => [
+          ...(old || []),
+          { 
+            ...newBranch, 
+            id: 'temp-' + Date.now(), 
+            staff_count: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          } as BranchWithStaffCount
+        ]);
+      }
+
+      return { previousBranches };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: branchKeys.all });
+      // Only invalidate branches list, not all queries
+      queryClient.invalidateQueries({ queryKey: branchKeys.all, exact: true });
       showSuccess('Branch created successfully');
     },
-    onError: (error) => showError('Failed to create branch', error.message),
+    onError: (error, _newBranch, context) => {
+      // Rollback on error
+      if (context?.previousBranches) {
+        queryClient.setQueryData(branchKeys.all, context.previousBranches);
+      }
+      showError('Failed to create branch', error.message);
+    },
   });
 }
 
@@ -81,12 +116,45 @@ export function useUpdateBranch() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateBranchDTO }) =>
       apiFetch(`/api/branches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onMutate: async ({ id, data }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: branchKeys.all });
+      await queryClient.cancelQueries({ queryKey: branchKeys.detail(id) });
+
+      // Snapshot previous values
+      const previousBranches = queryClient.getQueryData<BranchWithStaffCount[]>(branchKeys.all);
+      const previousBranch = queryClient.getQueryData<BranchWithStaffCount>(branchKeys.detail(id));
+
+      // Optimistically update list
+      if (previousBranches) {
+        queryClient.setQueryData<BranchWithStaffCount[]>(branchKeys.all, (old) =>
+          (old || []).map((b) => b.id === id ? { ...b, ...data } : b)
+        );
+      }
+
+      // Optimistically update detail
+      if (previousBranch) {
+        queryClient.setQueryData(branchKeys.detail(id), { ...previousBranch, ...data });
+      }
+
+      return { previousBranches, previousBranch };
+    },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: branchKeys.all });
-      queryClient.invalidateQueries({ queryKey: branchKeys.detail(variables.id) });
+      // Only invalidate specific queries
+      queryClient.invalidateQueries({ queryKey: branchKeys.all, exact: true });
+      queryClient.invalidateQueries({ queryKey: branchKeys.detail(variables.id), exact: true });
       showSuccess('Branch updated successfully');
     },
-    onError: (error) => showError('Failed to update branch', error.message),
+    onError: (error, variables, context) => {
+      // Rollback on error
+      if (context?.previousBranches) {
+        queryClient.setQueryData(branchKeys.all, context.previousBranches);
+      }
+      if (context?.previousBranch) {
+        queryClient.setQueryData(branchKeys.detail(variables.id), context.previousBranch);
+      }
+      showError('Failed to update branch', error.message);
+    },
   });
 }
 
@@ -97,10 +165,33 @@ export function useDeleteBranch() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch(`/api/branches/${id}`, { method: 'DELETE' }),
+    onMutate: async (id) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: branchKeys.all });
+
+      // Snapshot previous value
+      const previousBranches = queryClient.getQueryData<BranchWithStaffCount[]>(branchKeys.all);
+
+      // Optimistically remove
+      if (previousBranches) {
+        queryClient.setQueryData<BranchWithStaffCount[]>(branchKeys.all, (old) =>
+          (old || []).filter((b) => b.id !== id)
+        );
+      }
+
+      return { previousBranches };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: branchKeys.all });
+      // Only invalidate branches list
+      queryClient.invalidateQueries({ queryKey: branchKeys.all, exact: true });
       showSuccess('Branch deleted successfully');
     },
-    onError: (error) => showError('Failed to delete branch', error.message),
+    onError: (error, _id, context) => {
+      // Rollback on error
+      if (context?.previousBranches) {
+        queryClient.setQueryData(branchKeys.all, context.previousBranches);
+      }
+      showError('Failed to delete branch', error.message);
+    },
   });
 }
