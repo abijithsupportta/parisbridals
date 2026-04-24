@@ -302,11 +302,11 @@ export class OrderService {
 
     // Validate order is in correct status for return
     const currentStatus = existingOrder.data.status;
-    if (currentStatus !== OrderStatus.IN_USE && currentStatus !== OrderStatus.LATE_RETURN) {
+    if (currentStatus !== OrderStatus.IN_USE && currentStatus !== OrderStatus.ONGOING && currentStatus !== OrderStatus.LATE_RETURN && currentStatus !== OrderStatus.PARTIAL) {
       return {
         data: null,
         error: {
-          message: 'Order must be in use or late return to process return',
+          message: 'Order must be in use, ongoing, partial, or late return to process return',
           code: 'INVALID_STATUS'
         } as any,
         success: false,

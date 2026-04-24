@@ -36,7 +36,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const [lateFee, setLateFee] = useState<number>(0);
   const [discount, setDiscount] = useState<number>(0);
 
-  const isReturnable = order?.status === OrderStatus.IN_USE || order?.status === OrderStatus.ONGOING || order?.status === OrderStatus.LATE_RETURN;
+  const isReturnable = order?.status === OrderStatus.IN_USE || order?.status === OrderStatus.ONGOING || order?.status === OrderStatus.LATE_RETURN || order?.status === OrderStatus.PARTIAL;
 
   // Initialize return state when order loads
   useMemo(() => {
