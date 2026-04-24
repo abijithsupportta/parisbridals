@@ -387,20 +387,43 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               {history.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-4">No history yet</p>
               ) : (
-                <div className="space-y-3">
-                  {history.map((h: any, i: number) => (
-                    <div key={h.id} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <div className="w-2 h-2 rounded-full bg-slate-900 mt-1.5" />
-                        {i !== history.length - 1 && <div className="w-px flex-1 bg-slate-200 my-1" />}
+                <div className="relative ml-2">
+                  {history.map((h: any, i: number) => {
+                    const isLast = i === history.length - 1;
+                    const statusColor = getStatusColor(h.status);
+                    
+                    return (
+                      <div key={h.id} className="relative pb-8 last:pb-0">
+                        {/* Seamless connecting line */}
+                        {!isLast && (
+                          <div className="absolute top-5 left-[5px] bottom-[-10px] w-0.5 bg-slate-100" />
+                        )}
+                        
+                        <div className="flex items-start gap-5">
+                          {/* Timeline Dot */}
+                          <div className="relative z-10 flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-white border-2 border-slate-300 shadow-sm" />
+                          
+                          {/* Content */}
+                          <div className="flex-1 -mt-1">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${statusColor}`}>
+                                {h.status.replace('_', ' ')}
+                              </span>
+                              <span className="text-xs text-slate-400 font-medium">
+                                {format(new Date(h.created_at), "MMM dd, yyyy · h:mm a")}
+                              </span>
+                            </div>
+                            
+                            {h.notes && (
+                              <div className="mt-2.5 bg-slate-50 border border-slate-100 rounded-md p-3 text-xs leading-relaxed text-slate-600 font-medium">
+                                {h.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="pb-3">
-                        <p className="text-sm font-medium text-slate-900 capitalize">{h.status.replace('_', ' ')}</p>
-                        <p className="text-xs text-slate-500">{format(new Date(h.created_at), "MMM dd, h:mm a")}</p>
-                        {h.notes && <p className="text-xs text-slate-400 mt-0.5">{h.notes}</p>}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
