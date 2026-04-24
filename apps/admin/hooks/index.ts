@@ -76,7 +76,7 @@ export {
   useCreateBanner,
   useUpdateBanner,
   useDeleteBanner,
-  useBannerCount,
+  useReorderBanners,
 } from './useBanners';
 
 // Customer hooks

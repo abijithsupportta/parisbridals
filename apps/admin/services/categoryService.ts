@@ -19,9 +19,7 @@ import {
   CategoryLevel 
 } from '@/domain';
 import { 
-  CategoryValidationResult,
-  CategoryValidationError
-} from '@/domain';
+  CategoryValidationResult,\n  CategoryValidationError\n} from '@/domain';
 import { generateSlug } from '@/lib/shared-utils';
 
 export class CategoryService {
@@ -527,3 +525,4 @@ export class CategoryService {
 
 // Export singleton instance
 export const categoryService = new CategoryService();
+

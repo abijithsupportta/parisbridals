@@ -48,6 +48,7 @@ export type {
   CreateCategoryDTO,
   UpdateCategoryDTO,
   CategoryValidationResult,
+  CategoryValidationError,
 } from './category';
 
 export {

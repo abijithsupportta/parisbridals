@@ -9,12 +9,13 @@ import { apiGuard } from '@/lib/apiGuard';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const guard = await apiGuard(request, 'orders');
     if (guard.error) return guard.error;
 
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const invoiceType = searchParams.get('type') || 'final';
 
@@ -25,9 +26,9 @@ export async function GET(
       );
     }
 
-    const pdfBlob = await invoiceService.generateInvoice(params.id, invoiceType as 'deposit' | 'final');
+    const pdfBlob = await invoiceService.generateInvoice(id, invoiceType as 'deposit' | 'final');
 
-    const invoiceNumber = `INV-${params.id.slice(0, 8).toUpperCase()}-${invoiceType.toUpperCase()}`;
+    const invoiceNumber = `INV-${id.slice(0, 8).toUpperCase()}-${invoiceType.toUpperCase()}`;
     const filename = `${invoiceNumber}.pdf`;
 
     return new NextResponse(pdfBlob, {

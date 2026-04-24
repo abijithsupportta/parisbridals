@@ -46,8 +46,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <Card className="border-0 shadow-xl bg-white">
           <CardHeader className="text-center space-y-3 pb-6">
-            <div className="w-12 h-12 mx-auto rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-md">
-              <span className="text-xl font-bold text-white">PB</span>
+            <div className="w-16 h-16 mx-auto">
+              <img src="/logo.svg" alt="Paris Bridals" className="w-full h-full" />
             </div>
             <div>
               <CardTitle className="text-2xl font-bold text-slate-900">Paris Bridals</CardTitle>
