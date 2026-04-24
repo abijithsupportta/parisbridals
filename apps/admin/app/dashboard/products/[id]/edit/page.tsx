@@ -7,8 +7,6 @@
  * @route /dashboard/products/[id]/edit
  */
 
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import ProductForm from "@/components/admin/ProductForm";
 import { categoryService } from "@/services";
 import { productService } from "@/services";
@@ -36,15 +34,8 @@ export default async function EditProductPage({
   const branches = branchesResult.success ? branchesResult.data || [] : [];
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 p-8">
-      <div className="max-w-6xl mx-auto space-y-4">
-        <Link
-          href="/dashboard/products"
-          className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-violet-600 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Products
-        </Link>
+    <div className="min-h-[calc(100vh-4rem)] p-6 md:p-8">
+      <div className="max-w-6xl mx-auto">
         <ProductForm
           product={productResult.data}
           categories={categories}
