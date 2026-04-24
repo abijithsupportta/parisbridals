@@ -25,13 +25,13 @@ import {
   Package,
   AlertTriangle,
   Store,
+  Plus,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import AddLinkButton from "@/components/admin/AddLinkButton";
 import Modal from "@/components/admin/Modal";
 import {
   useProducts,
@@ -288,7 +288,12 @@ export default function ProductsPage() {
             <span>• {stats.count} total items</span>
           </p>
         </div>
-        <AddLinkButton label="Add Product" href="/dashboard/products/create" />
+        <Button asChild className="gap-2">
+          <Link href="/dashboard/products/create">
+            <Plus className="w-4 h-4" />
+            Add Product
+          </Link>
+        </Button>
       </div>
 
       {/* Stat Cards */}
