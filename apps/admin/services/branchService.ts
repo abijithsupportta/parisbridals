@@ -17,7 +17,7 @@ import type {
 } from '@/domain/types/branch';
 import type { RepositoryResult } from '@/repository/supabaseClient';
 
-const DEFAULT_STORE_ID = '00000000-0000-0000-0000-000000000001';
+// No hardcoded DEFAULT_STORE_ID here anymore
 
 function validationError(message: string, code = 'VALIDATION'): RepositoryResult<any> {
   return { data: null, error: { message, code, details: null, hint: '' } as any, success: false };
@@ -26,14 +26,16 @@ function validationError(message: string, code = 'VALIDATION'): RepositoryResult
 class BranchService {
   // Current user context for audit fields
   private currentUserId: string | null = null;
+  private currentStoreId: string | null = null;
   private currentBranchId: string | null = null;
 
   /**
-   * Set current user context for audit fields
+   * Set current user context for audit fields and multi-tenancy
    */
-  setUserContext(userId: string | null, branchId: string | null) {
+  setUserContext(userId: string | null, branchId: string | null, storeId: string | null = null) {
     this.currentUserId = userId;
     this.currentBranchId = branchId;
+    this.currentStoreId = storeId;
     branchRepository.setUserContext(userId, branchId);
     staffRepository.setUserContext(userId, branchId);
   }
@@ -41,7 +43,7 @@ class BranchService {
   // ─── Branch Operations ───────────────────────────────────────────────
 
   async getBranches(): Promise<RepositoryResult<BranchWithStaffCount[]>> {
-    return branchRepository.findAllWithStaffCount(DEFAULT_STORE_ID);
+    return branchRepository.findAllWithStaffCount(this.currentStoreId || '');
   }
 
   async getBranchById(id: string): Promise<RepositoryResult<Branch>> {
@@ -51,7 +53,7 @@ class BranchService {
   async createBranch(data: Omit<CreateBranchDTO, 'store_id'>): Promise<RepositoryResult<Branch>> {
     // New branches can never be main — there can only ever be one main branch,
     // set at initial system setup. Force-clear any attempt.
-    const payload = { ...data, is_main: false, store_id: DEFAULT_STORE_ID };
+    const payload = { ...data, is_main: false, store_id: this.currentStoreId || '' };
     const validation = CreateBranchSchema.safeParse(payload);
     if (!validation.success) {
       return validationError(validation.error.issues.map(i => i.message).join(', '));
@@ -132,7 +134,7 @@ class BranchService {
   // ─── Staff Operations ────────────────────────────────────────────────
 
   async getStaff(): Promise<RepositoryResult<StaffWithBranch[]>> {
-    return staffRepository.findAll(DEFAULT_STORE_ID);
+    return staffRepository.findAll(this.currentStoreId || '');
   }
 
   async getStaffByBranch(branchId: string): Promise<RepositoryResult<Staff[]>> {
@@ -150,7 +152,7 @@ class BranchService {
    * 3. Insert staff record with user_id linked to auth user
    */
   async createStaff(data: Omit<CreateStaffDTO, 'store_id'>): Promise<RepositoryResult<Staff>> {
-    const payload = { ...data, store_id: DEFAULT_STORE_ID };
+    const payload = { ...data, store_id: this.currentStoreId || '' };
     const validation = CreateStaffSchema.safeParse(payload);
     if (!validation.success) {
       return validationError(validation.error.issues.map(i => i.message).join(', '));
@@ -172,7 +174,7 @@ class BranchService {
         name: payload.name,
         role: payload.role,
         branch_id: payload.branch_id,
-        store_id: DEFAULT_STORE_ID,
+        store_id: this.currentStoreId,
       },
     });
 

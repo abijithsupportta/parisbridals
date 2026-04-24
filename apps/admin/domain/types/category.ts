@@ -9,6 +9,7 @@
 // Core Category Entity
 export interface Category {
   readonly id: string;
+  readonly store_id: string | null;
   name: string;
   slug: string;
   description: string | null;
@@ -43,6 +44,7 @@ export interface CreateCategoryDTO {
   sort_order?: number;
   is_active?: boolean;
   is_global?: boolean;
+  store_id?: string;
 }
 
 // Category Update DTO
@@ -55,6 +57,7 @@ export interface UpdateCategoryDTO {
   sort_order?: number;
   is_active?: boolean;
   is_global?: boolean;
+  store_id?: string;
 }
 
 // Category with Relations

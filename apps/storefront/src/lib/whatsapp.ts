@@ -1,5 +1,5 @@
 // Shared WhatsApp ordering config for Paris Bridals
-export const WHATSAPP_NUMBER = "918129668157";
+export const WHATSAPP_NUMBER = "917010085577";
 
 interface OrderDetails {
   productName: string;
@@ -8,6 +8,8 @@ interface OrderDetails {
   quantity: number;
   customerName: string;
   customerPhone: string;
+  startDate: string;
+  endDate: string;
 }
 
 export function buildOrderMessage(o: OrderDetails): string {
@@ -28,6 +30,9 @@ export function buildOrderMessage(o: OrderDetails): string {
   if (o.categoryName) lines.push(`🏷️ *Category:* ${o.categoryName}`);
   lines.push(`💰 *Rental Price for Event:* ₹${o.price.toLocaleString("en-IN")}`);
   lines.push(`🔢 *Quantity:* ${o.quantity}`);
+  lines.push("");
+  lines.push(`🗓️ *Rental Start Date:* ${o.startDate}`);
+  lines.push(`⏳ *Rental End Date:* ${o.endDate}`);
   lines.push(`📅 *Enquiry Date:* ${today}`);
   lines.push("");
   lines.push("👤 *Customer Details:*");
@@ -47,6 +52,8 @@ export function buildWhatsAppUrl(message: string): string {
 interface WishlistItem {
   name: string;
   price: number;
+  startDate?: string;
+  endDate?: string;
 }
 
 export function buildWishlistMessage(items: WishlistItem[]): string {
@@ -60,9 +67,12 @@ export function buildWishlistMessage(items: WishlistItem[]): string {
   if (items.length === 0) {
     lines.push("I'm interested in browsing your collections.");
   } else {
-    lines.push("I'm interested in these items:");
+    lines.push("I'm interested in these items for my event:");
     items.forEach((item, index) => {
       lines.push(`${index + 1}. ${item.name} - ₹${item.price}/day`);
+      if (item.startDate && item.endDate) {
+        lines.push(`   🗓️ Dates: ${item.startDate} to ${item.endDate}`);
+      }
     });
   }
 

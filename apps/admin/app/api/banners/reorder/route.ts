@@ -1,6 +1,6 @@
 /**
  * Banners Reorder API
- * POST /api/banners/reorder — bulk update banner priorities
+ * POST /api/banners/reorder — bulk update banner priorities or positions
  */
 
 import { NextRequest } from "next/server";
@@ -18,14 +18,23 @@ export async function POST(request: NextRequest) {
     bannerService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
 
     const { banners } = await request.json();
-    
+
     if (!Array.isArray(banners)) {
       return apiBadRequest('Invalid payload — banners must be an array');
     }
 
-    // Update each banner's priority
+    // Update each banner's priority or position
     for (const banner of banners) {
-      await bannerService.updateBanner(banner.id, { priority: banner.priority });
+      const updateData: any = {};
+      if (banner.priority !== undefined) {
+        updateData.priority = banner.priority;
+      }
+      if (banner.position !== undefined) {
+        updateData.position = banner.position;
+      }
+      if (Object.keys(updateData).length > 0) {
+        await bannerService.updateBanner(banner.id, updateData);
+      }
     }
 
     return apiSuccess(null, { message: 'Banner order updated successfully' });

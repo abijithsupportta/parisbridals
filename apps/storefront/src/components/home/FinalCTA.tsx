@@ -9,23 +9,18 @@ export default function FinalCTA() {
 
       <div className="max-w-[1600px] mx-auto text-center relative z-10">
         <div className="animate-fadeInUp">
-          <span className="section-eyebrow justify-center after:content-[''] after:w-8 after:h-px after:bg-rosegold-light">The Final Touch</span>
+          <span className="section-eyebrow justify-center after:content-[''] after:w-8 after:h-px after:bg-rosegold-light">Your Masterpiece Awaits</span>
           <h2 className="text-3xl sm:text-5xl md:text-8xl font-serif text-heading mb-4 sm:mb-6 md:mb-8 tracking-tight leading-[1.3] md:leading-[1.2]">
-            Your Journey to <em>Brilliance</em> <br className="hidden sm:block" /> Begins Now
+            Complete Your <br className="hidden sm:block" /> <em>Bridal Ensemble</em>
           </h2>
           <p className="text-sm sm:text-lg md:text-xl text-body font-light mb-4 sm:mb-6 md:mb-8 max-w-2xl mx-auto leading-relaxed px-4">
-            Join our exclusive membership for a bespoke bridal experience, priority bookings, and treasures that define a lifetime.
+            Discover our curated collection of luxury jewellery, handcrafted to make your special day truly unforgettable. Elegance is just a click away.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 md:gap-8 animate-fadeInUp" style={{ animationDelay: '0.2s' }}>
-          <Link href="/membership">
-            <Button className="shimmer-btn w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 md:px-10 md:py-5 lg:px-12 lg:py-7 rounded-full text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold border-none shadow-2xl">
-              Become a Member
-            </Button>
-          </Link>
+        <div className="flex justify-center animate-fadeInUp" style={{ animationDelay: '0.2s' }}>
           <Link href="/collections">
-            <Button variant="outline" className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 md:px-10 md:py-5 lg:px-12 lg:py-7 rounded-full text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold border-rosegold text-rosegold hover:bg-rosegold hover:text-white transition-all duration-700 shadow-xl">
+            <Button className="shimmer-btn px-6 py-3 sm:px-8 sm:py-4 md:px-10 md:py-5 lg:px-12 lg:py-7 rounded-full text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold border-none shadow-2xl">
               Explore Collections
             </Button>
           </Link>

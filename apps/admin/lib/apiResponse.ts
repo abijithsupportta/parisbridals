@@ -16,6 +16,14 @@ import { z } from 'zod';
 
 // ─── Response Types ────────────────────────────────────────────────────
 
+/** Standard success envelope */
+export interface ApiSuccessResponse<T> {
+  success: true;
+  data: T;
+  message?: string;
+  meta?: PaginationMeta;
+}
+
 /** Pagination metadata included in list responses */
 export interface PaginationMeta {
   total: number;
@@ -24,14 +32,6 @@ export interface PaginationMeta {
   totalPages: number;
   hasNext: boolean;
   hasPrev: boolean;
-}
-
-/** Standard success envelope */
-export interface ApiSuccessResponse<T> {
-  success: true;
-  data: T;
-  message?: string;
-  meta?: PaginationMeta;
 }
 
 /** Standard error envelope */
@@ -51,9 +51,6 @@ export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 
 /**
  * Return a successful JSON response.
- *
- * @param data    - The payload (entity, array, etc.)
- * @param options - Optional status code, message, or pagination meta
  */
 export function apiSuccess<T>(
   data: T,
@@ -76,9 +73,6 @@ export function apiSuccess<T>(
 
 /**
  * Return an error JSON response.
- *
- * @param message - Human-readable error message
- * @param options - Optional status code, error code, and details
  */
 export function apiError(
   message: string,
@@ -135,7 +129,6 @@ export function apiInternalError(message = 'Internal server error') {
 
 /**
  * Convert a Zod validation error into a standardised 400 response.
- * Flattens field-level issues into `{ "field.path": "message" }` format.
  */
 export function apiZodError(error: z.ZodError) {
   const fieldErrors = error.issues.reduce<Record<string, string>>((acc, issue) => {
@@ -152,7 +145,6 @@ export function apiZodError(error: z.ZodError) {
 
 /**
  * Convert a RepositoryResult error to an API error response.
- * Maps known error codes to appropriate HTTP status codes.
  */
 export function apiRepositoryError(
   error: { message?: string; code?: string; details?: unknown } | null,
@@ -177,6 +169,8 @@ export function apiRepositoryError(
     INVALID_PARENT: 400,
     AUTH_ERROR: 400,
     AUTH_DELETE_FAILED: 400,
+    LIMIT_EXCEEDED: 409,
+    POSITION_TAKEN: 409,
   };
 
   const status = statusMap[code] ?? 400;

@@ -36,7 +36,7 @@ export default async function CollectionsPage({ searchParams }: CollectionsPageP
 
   return (
     <main className="min-h-screen bg-silk selection:bg-rosegold/20 pb-20 lg:pb-0">
-      <Header store={store} />
+      <Header store={store} categories={categories} />
       
       <CollectionsClient 
         initialProducts={products}

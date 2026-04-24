@@ -9,19 +9,13 @@ import { apiSuccess, apiUnauthorized, apiInternalError } from '@/lib/apiResponse
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const authUser = await getAuthUser(request);
     
-    if (!user) {
+    if (!authUser) {
       return apiUnauthorized('Not authenticated');
     }
 
-    return apiSuccess({
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      branch_id: user.branch_id,
-      staff_id: user.staff_id,
-    });
+    return apiSuccess({ user: authUser });
   } catch (error) {
     console.error('[API] GET /api/auth/me error:', error);
     return apiInternalError();

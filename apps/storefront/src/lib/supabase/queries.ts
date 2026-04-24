@@ -25,6 +25,28 @@ export interface Category {
   sort_order: number;
 }
 
+/** JSONB image object stored in products.images column */
+export interface ProductImage {
+  url: string;
+  key?: string;
+  is_primary?: boolean;
+}
+
+/**
+ * Safely extract image URLs from a product's images field.
+ * Handles both JSONB object format { url, key, is_primary } and legacy string[] format.
+ */
+export function getProductImageUrls(images: unknown): string[] {
+  if (!images || !Array.isArray(images)) return [];
+  return images
+    .map((img) => {
+      if (typeof img === 'string') return img;
+      if (img && typeof img === 'object' && 'url' in img) return (img as ProductImage).url;
+      return null;
+    })
+    .filter((url): url is string => !!url);
+}
+
 export interface Product {
   id: string;
   store_id: string;
@@ -37,7 +59,9 @@ export interface Product {
   security_deposit: number;
   quantity: number;
   available_quantity: number;
-  images: string[];
+  // Stored as JSONB [{url, key, is_primary}] in DB — use getProductImageUrls() to extract URLs
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  images: any[];
   sizes: string[];
   colors: string[];
   is_active: boolean;
@@ -73,6 +97,35 @@ export interface Banner {
   end_date: string | null;
   alt_text: string | null;
   created_at: string;
+}
+
+/**
+ * Resolve the correct link for a banner based on its redirect type and target ID.
+ */
+export function getBannerLink(banner: Banner): string | null {
+  if (banner.redirect_type === "none") return null;
+
+  if (banner.redirect_type === "url" && banner.redirect_url) {
+    return banner.redirect_url;
+  }
+
+  if (banner.redirect_type === "category" && banner.redirect_target_id) {
+    return `/collections?category_id=${banner.redirect_target_id}`;
+  }
+
+  if (banner.redirect_type === "product" && banner.redirect_target_id) {
+    return `/product/${banner.redirect_target_id}`;
+  }
+
+  // Fallback for subcategories/subvariants if they use the same collection view
+  if ((banner.redirect_type === "subcategory" || banner.redirect_type === "subvariant") && banner.redirect_target_id) {
+    return `/collections?category_id=${banner.redirect_target_id}`;
+  }
+
+  // Legacy fallback
+  if (banner.redirect_url) return banner.redirect_url;
+
+  return null;
 }
 
 /**

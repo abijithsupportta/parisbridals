@@ -8,33 +8,15 @@
 export interface Review {
   id: string;
   name: string;
-  occasion: string;
-  rating: number;
   text: string;
+  rating: number;
+  occasion: string;
 }
 
 export const reviews: Review[] = [
-  {
-    id: 'r1',
-    name: 'Priya Menon',
-    occasion: 'Wedding Ceremony',
-    rating: 5,
-    text: 'The jewellery set was absolutely stunning. My bridal look was incomplete without it. Paris Bridals made my special day even more beautiful.',
-  },
-  {
-    id: 'r2',
-    name: 'Anjali Nair',
-    occasion: 'Engagement',
-    rating: 5,
-    text: 'Renting from Paris Bridals was the best decision. The quality was exceptional and the pieces looked brand new. Highly recommend!',
-  },
-  {
-    id: 'r3',
-    name: 'Divya Krishnan',
-    occasion: 'Reception',
-    rating: 5,
-    text: 'From selection to return, the experience was seamless. The team helped me choose the perfect set that matched my saree beautifully.',
-  },
+  { id: "r1", name: "Anita Mathew", text: "The jewellery looked premium in every photo and the booking process was smooth from start to finish.", rating: 5, occasion: "Church Wedding, Kottayam" },
+  { id: "r2", name: "Deepa Nair", text: "The set matched my saree perfectly and everyone assumed it was custom bridal jewellery.", rating: 5, occasion: "Temple Wedding, Ernakulam" },
+  { id: "r3", name: "Fathima Rashid", text: "I booked quickly on WhatsApp, got a fast response, and the bridal set was exactly what I expected.", rating: 5, occasion: "Reception Booking, Thrissur" },
 ];
 
 // ── Editorial Banners ─────────────────────────────────────────────────
@@ -154,16 +136,14 @@ export interface HowItWorksStep {
 }
 
 export const howItWorksSteps: HowItWorksStep[] = [
-  {
-    title: 'Browse & Select',
-    desc: 'Explore our curated collection and choose the perfect pieces for your occasion.',
-  },
-  {
-    title: 'Book & Receive',
-    desc: 'Reserve your selection and pick it up at our store, fully sanitized and ready to wear.',
-  },
-  {
-    title: 'Wear & Return',
-    desc: 'Enjoy your event in style and return the jewellery within the rental period.',
-  },
+  { title: "Browse", desc: "Explore our collection of premium jewellery." },
+  { title: "Pick Dates", desc: "Select the date for your special event." },
+  { title: "WhatsApp Order", desc: "Continue your order through WhatsApp with selected date and product" },
+];
+
+export const trustBadges = [
+  { title: "Sanitized", icon: "✨" },
+  { title: "Insured", icon: "🛡️" },
+  { title: "Free Delivery", icon: "🚚" },
+  { title: "Easy Return", icon: "↩️" },
 ];

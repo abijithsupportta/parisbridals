@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Heart, Share2, ShieldCheck, Sparkles, Truck } from "lucide-react";
+import { ChevronRight, Heart, Share2, ShieldCheck, Sparkles, Truck, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import WhatsAppOrderModal from "./WhatsAppOrderModal";
 import { buildOrderMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 import { cn } from "@/lib/utils";
+import { getProductImageUrls } from "@/lib/supabase/queries";
 
 interface ProductDetailsProps {
   product: {
@@ -16,7 +17,8 @@ interface ProductDetailsProps {
     description: string | null;
     price_per_day: number;
     security_deposit: number;
-    images: string[];
+    // Stored as JSONB in DB
+    images: any[];
     category?: { id: string; name: string; slug: string } | null;
     available_quantity: number;
     track_inventory: boolean;
@@ -27,20 +29,47 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
 
-  const images = product.images && product.images.length > 0 ? product.images : [];
+  const [addedToCart, setAddedToCart] = useState(false);
+  const [addedToWishlist, setAddedToWishlist] = useState(false);
+
+  const images = getProductImageUrls(product.images);
   const mainImage = images[activeImage] || null;
   const inStock = !product.track_inventory || product.available_quantity > 0;
 
-  const handleQuickEnquire = () => {
-    const message = buildOrderMessage({
-      productName: product.name,
-      price: product.price_per_day,
-      categoryName: product.category?.name,
-      quantity: 1,
-      customerName: "(please share)",
-      customerPhone: "(please share)",
-    });
-    window.open(buildWhatsAppUrl(message), "_blank");
+  const addToCart = () => {
+    const cart = JSON.parse(localStorage.getItem("paris_cart") || "[]");
+    const exists = cart.some((item: any) => item.id === product.id);
+    if (!exists) {
+      const newItem = {
+        id: product.id,
+        name: product.name,
+        price_per_day: product.price_per_day,
+        images: images,
+      };
+      const newCart = [...cart, newItem];
+      localStorage.setItem("paris_cart", JSON.stringify(newCart));
+      window.dispatchEvent(new CustomEvent("paris_cart_updated", { detail: newCart.length }));
+    }
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2000);
+  };
+
+  const addToWishlist = () => {
+    const wishlist = JSON.parse(localStorage.getItem("paris_wishlist") || "[]");
+    const exists = wishlist.some((item: any) => item.id === product.id);
+    if (!exists) {
+      const newItem = {
+        id: product.id,
+        name: product.name,
+        price_per_day: product.price_per_day,
+        images: images,
+      };
+      const newWish = [...wishlist, newItem];
+      localStorage.setItem("paris_wishlist", JSON.stringify(newWish));
+      window.dispatchEvent(new CustomEvent("paris_wishlist_updated", { detail: newWish.length }));
+    }
+    setAddedToWishlist(true);
+    setTimeout(() => setAddedToWishlist(false), 2000);
   };
 
   return (
@@ -60,7 +89,7 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
               <>
                 <ChevronRight size={12} />
                 <Link
-                  href={`/collections?category=${product.category.slug}`}
+                  href={`/collections?category_id=${product.category.id}`}
                   className="hover:text-rosegold transition-colors whitespace-nowrap"
                 >
                   {product.category.name}
@@ -87,21 +116,6 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
                   </div>
                 )}
 
-                {/* Favorites / Share */}
-                <div className="absolute top-3 right-3 sm:top-5 sm:right-5 flex gap-2">
-                  <button
-                    aria-label="Add to favorites"
-                    className="w-10 h-10 rounded-full bg-white/85 backdrop-blur-md flex items-center justify-center text-heading hover:text-rosegold shadow-md transition-colors"
-                  >
-                    <Heart size={16} strokeWidth={1.5} />
-                  </button>
-                  <button
-                    aria-label="Share"
-                    className="w-10 h-10 rounded-full bg-white/85 backdrop-blur-md flex items-center justify-center text-heading hover:text-rosegold shadow-md transition-colors"
-                  >
-                    <Share2 size={16} strokeWidth={1.5} />
-                  </button>
-                </div>
 
                 {/* Stock badge */}
                 {!inStock && (
@@ -195,20 +209,40 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
               </div>
 
               {/* CTAs */}
-              <div className="hidden lg:flex flex-col gap-3">
+              <div className="flex flex-col gap-3">
                 <Button
                   onClick={() => setModalOpen(true)}
                   disabled={!inStock}
                   className="shimmer-btn w-full py-6 rounded-full text-xs uppercase tracking-[0.2em] font-bold border-none shadow-xl disabled:opacity-50"
                 >
-                  Order on WhatsApp
+                  Book for your Event
                 </Button>
-                <button
-                  onClick={handleQuickEnquire}
-                  className="text-xs uppercase tracking-[0.2em] font-medium text-rosegold hover:text-rosegold-dark transition-colors py-2"
-                >
-                  Or send a quick enquiry →
-                </button>
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={addToCart}
+                    className={cn(
+                      "py-6 rounded-full text-[10px] uppercase tracking-[0.1em] font-bold border-heading text-heading hover:bg-heading/5 transition-all",
+                      addedToCart && "bg-heading text-white border-none"
+                    )}
+                  >
+                    <ShoppingBag size={14} className="mr-2" />
+                    {addedToCart ? "In Cart" : "Add to Cart"}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={addToWishlist}
+                    className={cn(
+                      "py-6 rounded-full text-[10px] uppercase tracking-[0.1em] font-bold border-rosegold text-rosegold hover:bg-rosegold/5 transition-all",
+                      addedToWishlist && "bg-rosegold text-white border-none"
+                    )}
+                  >
+                    <Heart size={14} className={cn("mr-2", addedToWishlist && "fill-white")} />
+                    {addedToWishlist ? "Saved" : "Wishlist"}
+                  </Button>
+                </div>
               </div>
 
               {/* Trust note */}
@@ -245,7 +279,7 @@ export default function ProductDetails({ product }: ProductDetailsProps) {
             disabled={!inStock}
             className="shimmer-btn flex-1 py-3 rounded-full text-xs font-semibold tracking-[0.15em] text-white uppercase disabled:opacity-50"
           >
-            Order on WhatsApp
+            Book for Event
           </Button>
         </div>
       </div>

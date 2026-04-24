@@ -16,6 +16,13 @@ export async function GET(request: NextRequest) {
     const guard = await apiGuard(request, 'dashboard');
     if (guard.error) return guard.error;
 
+    // Set user context in service to ensure store-scoped fetch
+    branchService.setUserContext(
+      guard.user.staff_id, 
+      guard.user.branch_id, 
+      guard.user.store_id
+    );
+
     const result = await branchService.getBranches();
     if (!result.success) {
       return apiRepositoryError(result.error, 'Failed to fetch branches');
@@ -32,12 +39,13 @@ export async function POST(request: NextRequest) {
     // Super Admin and Admin only — managers and staff cannot create branches
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
-
-    // Get authenticated user for audit fields
-    const authUser = await getAuthUser(request);
     
     // Set user context in service
-    branchService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+    branchService.setUserContext(
+      guard.user.staff_id, 
+      guard.user.branch_id, 
+      guard.user.store_id
+    );
 
     const body = await request.json();
     const result = await branchService.createBranch(body);

@@ -48,7 +48,11 @@ export async function POST(request: NextRequest) {
     const authUser = await getAuthUser(request);
     
     // Set user context in service
-    branchService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+    branchService.setUserContext(
+      authUser?.staff_id || null, 
+      authUser?.branch_id || null, 
+      authUser?.store_id || null
+    );
 
     const body = await request.json();
     const result = await branchService.createStaff(body);

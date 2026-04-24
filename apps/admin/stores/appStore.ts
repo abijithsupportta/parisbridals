@@ -29,6 +29,9 @@ interface User {
   email: string;
   avatar?: string;
   role: 'admin' | 'manager' | 'staff';
+  store_id: string | null;
+  branch_id: string | null;
+  staff_id: string | null;
 }
 
 interface AppUIState {

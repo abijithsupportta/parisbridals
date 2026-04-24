@@ -1,7 +1,6 @@
 import Header from "@/components/home/Header";
 import Footer from "@/components/home/Footer";
 import { getParisBridalsStore } from "@/lib/actions/store";
-import Image from "next/image";
 
 export default async function AboutPage() {
   const store = await getParisBridalsStore();
@@ -12,18 +11,16 @@ export default async function AboutPage() {
       <Header store={store} />
       
       {/* Hero Section */}
-      <section className="relative h-[60vh] flex items-center justify-center overflow-hidden">
-        <Image
-          src="https://images.unsplash.com/photo-1594465919760-441fe5908ab0?q=80&w=2000"
-          alt="About Paris Bridals"
-          fill
-          className="object-cover opacity-80"
-        />
-        <div className="absolute inset-0 bg-black/30" />
-        <div className="relative text-center text-white px-4 max-w-4xl">
-          <div className="section-eyebrow text-white/80">Our Story</div>
-          <h1 className="text-5xl sm:text-7xl font-serif mb-6 leading-tight">The Paris Way</h1>
-          <p className="text-lg sm:text-xl font-light tracking-wide max-w-2xl mx-auto opacity-90">
+      <section className="relative h-[50vh] flex items-center justify-center bg-white border-b border-[var(--border-silk)]">
+        <div className="relative text-center px-4 max-w-4xl flex flex-col items-center">
+          <img 
+            src="/logo_paris.svg" 
+            alt="Paris Bridals" 
+            className="h-20 sm:h-24 md:h-28 mb-10 animate-fadeIn"
+          />
+          <div className="section-eyebrow mb-4">Our Story</div>
+          <h1 className="text-4xl sm:text-6xl font-serif text-heading mb-6 tracking-tight">The Paris Way</h1>
+          <p className="text-base sm:text-lg font-light text-body tracking-wide max-w-2xl mx-auto">
             Defining luxury bridal jewellery rental in Kerala since 2010.
           </p>
         </div>
@@ -32,8 +29,8 @@ export default async function AboutPage() {
       {/* Content Section */}
       <section className="py-20 sm:py-32 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto space-y-16">
-          <div className="grid sm:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6">
+          <div className="flex flex-col md:flex-row gap-12 items-center">
+            <div className="space-y-6 flex-1">
               <h2 className="text-3xl font-serif text-heading">A Tradition of <em className="text-rosegold italic">Excellence</em></h2>
               <p className="text-body leading-relaxed">
                 Paris Bridals was born out of a simple vision: to make every bride feel like royalty without the burden of ownership. We curated a collection that speaks to the heritage of Kerala while embracing modern sophistication.
@@ -42,13 +39,10 @@ export default async function AboutPage() {
                 From Temple jewellery that honors ancestors to Kundan sets that dazzle under the stage lights, our pieces are more than just ornaments—they are masterpieces of craftsmanship.
               </p>
             </div>
-            <div className="relative aspect-square rounded-[3rem] overflow-hidden shadow-2xl">
-              <Image
-                src="https://images.unsplash.com/photo-1515562141207-7a88fb0ce33e?q=80&w=1000"
-                alt="Craftsmanship"
-                fill
-                className="object-cover"
-              />
+            <div className="flex-1 border-l border-[var(--border-silk)] pl-12 hidden md:block">
+               <p className="text-2xl font-serif text-rosegold italic leading-relaxed">
+                 "Every piece in our collection is handpicked to ensure it carries the soul of tradition and the sparkle of high-end luxury."
+               </p>
             </div>
           </div>
 

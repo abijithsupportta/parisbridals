@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   description: "Admin dashboard for Paris Bridals jewellery rental system",
 };
 
+import AuthProvider from "@/components/providers/AuthProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.variable}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

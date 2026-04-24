@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Product, Category } from "@/lib/supabase/queries";
 import Link from "next/link";
+import { Product, Category, getProductImageUrls } from "@/lib/supabase/queries";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -125,7 +125,8 @@ export default function CollectionsClient({
  * Uses object-cover to FILL the container without distortion.
  */
 function CollectionProductCard({ product }: { product: Product }) {
-  const imageUrl = product.images && product.images.length > 0 ? product.images[0] : null;
+  const imageUrls = getProductImageUrls(product.images);
+  const imageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
 
   return (
     <Link

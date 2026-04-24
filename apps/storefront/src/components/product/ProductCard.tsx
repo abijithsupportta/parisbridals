@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Product } from '@/lib/supabase/queries';
+import { Product, getProductImageUrls } from '@/lib/supabase/queries';
 import { Badge } from '@/components/ui/badge';
 
 interface ProductCardProps {
@@ -11,7 +11,8 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, badge }: ProductCardProps) {
-  const imageUrl = product.images && product.images.length > 0 ? product.images[0] : null;
+  const imageUrls = getProductImageUrls(product.images);
+  const imageUrl = imageUrls.length > 0 ? imageUrls[0] : null;
 
   return (
     <Link
