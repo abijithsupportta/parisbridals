@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Product } from '@/lib/supabase/queries';
+import { Product, getProductImageUrls } from '@/lib/supabase/queries';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -12,6 +12,9 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product, badge }: ProductCardProps) {
+  const imageUrls = getProductImageUrls(product.images);
+  const firstImage = imageUrls[0] || null;
+
   return (
     <Link
       href={`/product/${product.id}`}
@@ -19,15 +22,15 @@ export default function ProductCard({ product, badge }: ProductCardProps) {
     >
       <Card className="relative aspect-[3/4] overflow-hidden bg-silk border-none shadow-silk hover:shadow-2xl transition-all duration-700 hover:-translate-y-1">
         <CardContent className="p-0 h-full w-full">
-          {product.images && product.images.length > 0 ? (
+          {firstImage ? (
             <img
-              src={product.images[0]}
+              src={firstImage}
               alt={product.name}
               className="w-full h-full object-fill transition-transform duration-1000 group-hover:scale-105"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-rosegold/5">
-              <span className="text-4xl opacity-20">??</span>
+              <span className="text-4xl opacity-20">💎</span>
             </div>
           )}
 

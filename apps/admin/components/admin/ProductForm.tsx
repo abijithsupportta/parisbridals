@@ -23,7 +23,6 @@ import { type Product, type CreateProductDTO, type UpdateProductDTO } from "@/do
 import { useAppStore } from "@/stores";
 import { useCreateProduct, useUpdateProduct } from "@/hooks";
 
-const DEFAULT_STORE_ID = "00000000-0000-0000-0000-000000000001";
 const MAX_IMAGES = 5;
 
 interface Branch {
@@ -68,7 +67,7 @@ export default function ProductForm({
 }: ProductFormProps) {
   const router = useRouter();
   const isEdit = !!product;
-  const { showError, showSuccess } = useAppStore();
+  const { showError, showSuccess, user } = useAppStore();
 
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -250,7 +249,7 @@ export default function ProductForm({
           name: formData.name,
           slug: formData.slug || generateSlug(formData.name),
           images,
-          store_id: DEFAULT_STORE_ID,
+          store_id: user?.store_id || undefined,
           category_id: formData.category_id || undefined,
           subcategory_id: formData.subcategory_id || undefined,
           subvariant_id: formData.subvariant_id || undefined,

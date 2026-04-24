@@ -64,7 +64,11 @@ export async function POST(request: NextRequest) {
     if (guard.error) return guard.error;
 
     const authUser = await getAuthUser(request);
-    bannerService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
+    bannerService.setUserContext(
+      authUser?.staff_id || null, 
+      authUser?.branch_id || null, 
+      authUser?.store_id || null
+    );
 
     const body = await request.json();
     const result = await bannerService.createBanner(body);

@@ -18,6 +18,7 @@ export interface AuthUser {
   id: string;
   email: string;
   role: StaffRole;
+  store_id: string | null;
   branch_id: string | null;
   staff_id: string | null;
 }
@@ -47,32 +48,35 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user) return null;
 
-    // Look up the staff record to get role + branch
+    // Look up the staff record to get role + branch + store
     const adminClient = createAdminClient();
     const { data: staff } = await adminClient
       .from('staff')
-      .select('id, role, branch_id')
+      .select('id, role, branch_id, store_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .maybeSingle();
-
+ 
     // If staff record found, use that role
     if (staff) {
       return {
         id: user.id,
         email: user.email || '',
         role: staff.role as StaffRole,
+        store_id: staff.store_id,
         branch_id: staff.branch_id,
         staff_id: staff.id,
       };
     }
-
+ 
     // If no staff record, check user_metadata for role (admin users)
     const metaRole = user.user_metadata?.role as StaffRole | undefined;
+    const metaStoreId = user.user_metadata?.store_id as string | undefined;
     return {
       id: user.id,
       email: user.email || '',
       role: metaRole || 'admin', // Default to admin if no staff record (shop owner)
+      store_id: metaStoreId || null,
       branch_id: null,
       staff_id: null,
     };

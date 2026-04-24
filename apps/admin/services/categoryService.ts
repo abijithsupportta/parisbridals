@@ -25,16 +25,17 @@ import {
 import { generateSlug } from '@/lib/shared-utils';
 
 export class CategoryService {
-  // Current user context for audit fields
   private currentUserId: string | null = null;
+  private currentStoreId: string | null = null;
   private currentBranchId: string | null = null;
-
+ 
   /**
-   * Set current user context for audit fields
+   * Set current user context for audit fields and multi-tenancy
    */
-  setUserContext(userId: string | null, branchId: string | null) {
+  setUserContext(userId: string | null, branchId: string | null, storeId: string | null = null) {
     this.currentUserId = userId;
     this.currentBranchId = branchId;
+    this.currentStoreId = storeId;
     categoryRepository.setUserContext(userId, branchId);
   }
 

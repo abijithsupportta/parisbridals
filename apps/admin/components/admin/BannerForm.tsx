@@ -10,6 +10,8 @@ import { useRouter } from "next/navigation";
 import { Banner, BannerRedirectType, BannerType, BannerPosition, BANNER_TYPE_LIMITS } from "@/domain";
 import { AlertCircle, Info } from "lucide-react";
 
+import { useAppStore } from "@/stores";
+
 interface BannerFormProps {
   mode?: "create" | "edit";
   initialData?: Banner;
@@ -17,6 +19,7 @@ interface BannerFormProps {
 
 export default function BannerForm({ mode = "create", initialData }: BannerFormProps) {
   const router = useRouter();
+  const user = useAppStore((s) => s.user);
   const isEdit = mode === "edit";
   const [error, setError] = useState("");
   const { data: remainingSlots } = useRemainingSlots();
@@ -102,6 +105,7 @@ export default function BannerForm({ mode = "create", initialData }: BannerFormP
       call_to_action: formData.call_to_action || undefined,
       position: formData.position || undefined,
       banner_type: formData.banner_type,
+      store_id: user?.store_id || undefined,
     };
 
     if (isEdit && initialData?.id) {

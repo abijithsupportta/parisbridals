@@ -10,8 +10,8 @@ const NAV_ITEMS = [
   { href: "/", label: "Home", icon: Home },
   { href: "/collections", label: "Shop", icon: LayoutGrid },
   { href: "/wishlist", label: "Wishlist", icon: Heart },
-  { href: "/contact", label: "Support", icon: User },
   { href: "/cart", label: "Cart", icon: ShoppingBag },
+  { href: "/contact", label: "Support", icon: User },
 ] as const;
 
 export default function MobileBottomNav() {

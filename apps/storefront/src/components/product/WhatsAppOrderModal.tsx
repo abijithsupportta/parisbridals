@@ -25,8 +25,10 @@ export default function WhatsAppOrderModal({
 }: WhatsAppOrderModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; startDate?: string; endDate?: string }>({});
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -52,6 +54,12 @@ export default function WhatsAppOrderModal({
     if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
       newErrors.phone = "Enter a valid 10-digit Indian mobile number";
     }
+    if (!startDate) {
+      newErrors.startDate = "Select a start date";
+    }
+    if (!endDate) {
+      newErrors.endDate = "Select an end date";
+    }
     setErrors(newErrors);
     if (Object.keys(newErrors).length > 0) return;
 
@@ -62,6 +70,8 @@ export default function WhatsAppOrderModal({
       quantity,
       customerName: name.trim(),
       customerPhone: cleanPhone,
+      startDate,
+      endDate,
     });
 
     window.open(buildWhatsAppUrl(message), "_blank");
@@ -185,6 +195,55 @@ export default function WhatsAppOrderModal({
             {errors.phone && (
               <p className="text-xs text-red-500 mt-1.5 ml-4">{errors.phone}</p>
             )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-body font-semibold block mb-2">
+                Start Date *
+              </label>
+              <input
+                type="date"
+                min={new Date().toISOString().split('T')[0]}
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  if (errors.startDate) setErrors((p) => ({ ...p, startDate: undefined }));
+                }}
+                className={cn(
+                  "w-full px-4 py-3 bg-white border rounded-full text-sm focus:outline-none transition-colors",
+                  errors.startDate
+                    ? "border-red-400 focus:border-red-500"
+                    : "border-[var(--border-silk)] focus:border-rosegold"
+                )}
+              />
+              {errors.startDate && (
+                <p className="text-[10px] text-red-500 mt-1 ml-2">{errors.startDate}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-[0.2em] text-body font-semibold block mb-2">
+                End Date *
+              </label>
+              <input
+                type="date"
+                min={startDate || new Date().toISOString().split('T')[0]}
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  if (errors.endDate) setErrors((p) => ({ ...p, endDate: undefined }));
+                }}
+                className={cn(
+                  "w-full px-4 py-3 bg-white border rounded-full text-sm focus:outline-none transition-colors",
+                  errors.endDate
+                    ? "border-red-400 focus:border-red-500"
+                    : "border-[var(--border-silk)] focus:border-rosegold"
+                )}
+              />
+              {errors.endDate && (
+                <p className="text-[10px] text-red-500 mt-1 ml-2">{errors.endDate}</p>
+              )}
+            </div>
           </div>
 
           <div>

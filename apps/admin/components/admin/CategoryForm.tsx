@@ -36,6 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type Category } from "@/domain/types/category";
 import { useRouter } from "next/navigation";
 import { AlertCircle } from "lucide-react";
+import { useAppStore } from "@/stores";
 
 interface CategoryFormProps {
   /** Existing category for edit mode; when omitted, form operates in create mode */
@@ -52,6 +53,7 @@ export default function CategoryForm({
   defaultParentId = null,
 }: CategoryFormProps) {
   const router = useRouter();
+  const user = useAppStore((s) => s.user);
 
   // Determine mode: edit when a category prop is passed, create otherwise
   const isEdit = !!category;
@@ -76,6 +78,7 @@ export default function CategoryForm({
     is_active: category?.is_active ?? true,
     is_global: category?.is_global ?? true,
     parent_id: (category?.parent_id ?? defaultParentId ?? null) as string | null,
+    store_id: user?.store_id || null,
   });
 
   /**

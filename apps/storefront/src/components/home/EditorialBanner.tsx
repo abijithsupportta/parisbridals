@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Banner } from '@/lib/supabase/queries';
+import { Banner, getBannerLink } from '@/lib/supabase/queries';
 import { Button } from '@/components/ui/button';
 
 interface EditorialBannerProps {
@@ -55,13 +55,16 @@ export default function EditorialBanner({ banners }: EditorialBannerProps) {
   return (
     <section className="py-6 sm:py-8 md:py-12 px-6 md:px-12 bg-white">
       <div className="max-w-[1600px] mx-auto">
-        {editorialBanner.redirect_url ? (
-          <Link href={editorialBanner.redirect_url} className="block">
-            {BannerContent}
-          </Link>
-        ) : (
-          BannerContent
-        )}
+        {(() => {
+          const link = getBannerLink(editorialBanner);
+          return link ? (
+            <Link href={link} className="block">
+              {BannerContent}
+            </Link>
+          ) : (
+            BannerContent
+          );
+        })()}
       </div>
     </section>
   );

@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Product, Category } from "@/lib/supabase/queries";
 import Link from "next/link";
 import Image from "next/image";
+import { Product, Category, getProductImageUrls } from "@/lib/supabase/queries";
 import { Search, SlidersHorizontal, ArrowUpDown, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -102,16 +102,19 @@ export default function CollectionsClient({
               className="group flex flex-col h-full bg-white rounded-3xl overflow-hidden border border-[var(--border-silk)] shadow-sm hover:shadow-silk transition-all duration-700 hover:-translate-y-1.5"
             >
               <div className="relative aspect-[3/4] overflow-hidden bg-silk">
-                {product.images && product.images.length > 0 ? (
-                  <Image
-                    src={product.images[0]}
-                    alt={product.name}
-                    fill
-                    className="object-cover transition-transform duration-1000 group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl opacity-10">💎</div>
-                )}
+                {(() => {
+                  const imageUrls = getProductImageUrls(product.images);
+                  return imageUrls.length > 0 ? (
+                    <Image
+                      src={imageUrls[0]}
+                      alt={product.name}
+                      fill
+                      className="object-cover transition-transform duration-1000 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-4xl opacity-10">💎</div>
+                  );
+                })()}
                 
                 {/* Overlay Tags */}
                 <div className="absolute top-3 left-3 flex flex-col gap-2">

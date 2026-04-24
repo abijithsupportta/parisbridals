@@ -21,14 +21,16 @@ import { bannerRepository } from '@/repository';
 
 export class BannerService {
   private currentUserId: string | null = null;
+  private currentStoreId: string | null = null;
   private currentBranchId: string | null = null;
-
+ 
   /**
-   * Set user context for audit logging
+   * Set user context for audit logging and multi-tenancy
    */
-  setUserContext(userId: string | null, branchId: string | null): void {
+  setUserContext(userId: string | null, branchId: string | null, storeId: string | null = null): void {
     this.currentUserId = userId;
     this.currentBranchId = branchId;
+    this.currentStoreId = storeId;
     bannerRepository.setUserContext(userId, branchId);
   }
 

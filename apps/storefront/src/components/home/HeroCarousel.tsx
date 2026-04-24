@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { Banner } from "@/lib/supabase/queries";
+import { Banner, getBannerLink } from "@/lib/supabase/queries";
 import { cn } from "@/lib/utils";
 
 interface HeroCarouselProps {
@@ -124,10 +124,12 @@ export default function HeroCarousel({ banners }: HeroCarouselProps) {
                 </div>
               );
 
+              const bannerLink = getBannerLink(banner);
+
               return (
                 <div key={banner.id} className="min-w-full h-full">
-                  {banner.redirect_url ? (
-                    <Link href={banner.redirect_url} className="block w-full h-full">
+                  {bannerLink ? (
+                    <Link href={bannerLink} className="block w-full h-full">
                       {SlideInner}
                     </Link>
                   ) : (
