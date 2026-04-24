@@ -215,21 +215,7 @@ export enum OrderStatus {
   CANCELLED = 'cancelled',
 }
 
-// Customer Types
-export interface Customer {
-  readonly id: string;
-  name: string;
-  email?: string;
-  phone: string;
-  address?: Address;
-  notes?: string;
-  created_at: string;
-  // Audit fields
-  readonly created_by: string | null;
-  readonly created_at_branch_id: string | null;
-  readonly updated_by: string | null;
-  readonly updated_at_branch_id: string | null;
-}
+// (Customer Types moved to customer.ts)
 
 // Analytics Types
 export interface Analytics {

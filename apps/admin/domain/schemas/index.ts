@@ -51,8 +51,6 @@ export {
   UpdateUserSchema,
   CreateStoreSchema,
   UpdateStoreSchema,
-  CreateCustomerSchema,
-  UpdateCustomerSchema,
   CreateOrderSchema,
   UpdateOrderSchema,
   ApiResponseSchema,
@@ -75,11 +73,21 @@ export type {
   UpdateUserInput,
   CreateStoreInput,
   UpdateStoreInput,
-  CreateCustomerInput,
-  UpdateCustomerInput,
   CreateOrderInput,
   UpdateOrderInput,
 } from './common.schema';
+
+// Customer schemas
+export {
+  CreateCustomerSchema,
+  UpdateCustomerSchema,
+  CustomerSearchSchema,
+} from './customer.schema';
+
+export type {
+  CreateCustomerInput,
+  UpdateCustomerInput,
+} from './customer.schema';
 
 // Branch inventory schemas
 export {

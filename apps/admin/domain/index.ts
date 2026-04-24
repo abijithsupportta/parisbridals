@@ -24,6 +24,9 @@ export {
   generateProductSlug,
   validateProductPricing,
   validateProductInventory,
+  CreateCustomerSchema,
+  UpdateCustomerSchema,
+  CustomerSearchSchema,
 } from './schemas';
 
 export type {

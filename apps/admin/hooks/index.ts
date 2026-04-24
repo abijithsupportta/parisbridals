@@ -87,7 +87,6 @@ export {
   useCreateCustomer,
   useUpdateCustomer,
   useDeleteCustomer,
-  useCustomerCount,
 } from './useCustomers';
 
 // Order hooks

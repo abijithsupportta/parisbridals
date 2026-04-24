@@ -140,22 +140,7 @@ export const UpdateStoreSchema = z.object({
   is_active: z.boolean().optional(),
 });
 
-// Customer schemas
-export const CreateCustomerSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
-  email: emailSchema.optional(),
-  phone: phoneSchema,
-  address: AddressSchema.optional(),
-  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
-});
-
-export const UpdateCustomerSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters').optional(),
-  email: emailSchema.optional(),
-  phone: phoneSchema.optional(),
-  address: AddressSchema.optional(),
-  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
-});
+// (Customer schemas moved to customer.schema.ts)
 
 // Order schemas
 export const CreateOrderSchema = z.object({
@@ -225,7 +210,5 @@ export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 export type CreateStoreInput = z.infer<typeof CreateStoreSchema>;
 export type UpdateStoreInput = z.infer<typeof UpdateStoreSchema>;
-export type CreateCustomerInput = z.infer<typeof CreateCustomerSchema>;
-export type UpdateCustomerInput = z.infer<typeof UpdateCustomerSchema>;
 export type CreateOrderInput = z.infer<typeof CreateOrderSchema>;
 export type UpdateOrderInput = z.infer<typeof UpdateOrderSchema>;

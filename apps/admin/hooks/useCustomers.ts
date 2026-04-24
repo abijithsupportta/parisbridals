@@ -6,25 +6,34 @@
  *
  * Flow: UI → hooks → fetch(/api/customers) → service → repository → supabase
  *
+ * Performance patterns (same as Product module):
+ *   • placeholderData: keepPreviousData — prevents blank-screen flicker on search/page change
+ *   • removeQueries — force full refetch on mutation to guarantee fresh data
+ *   • Optimistic delete — remove from cache instantly, re-add on error
+ *
  * @module hooks/useCustomers
  */
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { customerService } from '@/services';
-import { Customer } from '@/domain';
-import { CreateCustomerDTO, UpdateCustomerDTO, CustomerSearchParams } from '@/repository';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import {
+  Customer,
+  CustomerSearchParams,
+  CustomerSearchResult,
+  CreateCustomerDTO,
+  UpdateCustomerDTO,
+} from '@/domain';
 import { useAppStore } from '@/stores';
 
-// Query keys
+// ── Query keys ────────────────────────────────────────────────────────
 const customerKeys = {
   all: ['customers'] as const,
   lists: () => [...customerKeys.all, 'list'] as const,
   list: (params?: CustomerSearchParams) => [...customerKeys.lists(), params] as const,
   details: () => [...customerKeys.all, 'detail'] as const,
   detail: (id: string) => [...customerKeys.details(), id] as const,
-  phone: (phone: string) => [...customerKeys.all, 'phone', phone] as const,
 };
 
+// ── API fetch helper ──────────────────────────────────────────────────
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
@@ -37,57 +46,73 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/**
- * Fetch all customers
- */
+// ── useCustomers — paginated list with search ─────────────────────────
 export function useCustomers(params?: CustomerSearchParams) {
-  return useQuery({
+  const queryResult = useQuery<CustomerSearchResult>({
     queryKey: customerKeys.list(params),
-    queryFn: () => customerService.getAllCustomers(params),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
+    queryFn: async () => {
+      const qs = new URLSearchParams();
+      if (params?.query) qs.set('query', params.query);
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.sort_by) qs.set('sort_by', params.sort_by);
+      if (params?.sort_order) qs.set('sort_order', params.sort_order);
+      return apiFetch<CustomerSearchResult>(`/api/customers?${qs.toString()}`);
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData, // Prevents blank screen on pagination/search
   });
+
+  return {
+    ...queryResult,
+    customers: queryResult.data?.customers ?? [],
+    total: queryResult.data?.total ?? 0,
+    totalPages: queryResult.data?.total_pages ?? 0,
+    hasNext: queryResult.data?.has_next ?? false,
+    hasPrev: queryResult.data?.has_prev ?? false,
+  };
 }
 
-/**
- * Fetch a single customer by ID
- */
+// ── useCustomer — single customer detail ──────────────────────────────
 export function useCustomer(id: string) {
-  return useQuery({
+  return useQuery<{ customer: Customer }>({
     queryKey: customerKeys.detail(id),
-    queryFn: () => customerService.getCustomerById(id),
+    queryFn: () => apiFetch<{ customer: Customer }>(`/api/customers/${id}`),
     enabled: !!id,
     staleTime: 5 * 60 * 1000,
   });
 }
 
-/**
- * Fetch customer by phone
- */
+// ── useCustomerByPhone — search by phone for order form ───────────────
 export function useCustomerByPhone(phone: string, enabled: boolean = true) {
-  return useQuery({
-    queryKey: customerKeys.phone(phone),
+  return useQuery<Customer | null>({
+    queryKey: ['customers', 'phone', phone],
     queryFn: async () => {
-      const result = await customerService.getCustomerByPhone(phone);
-      return result.success ? result.data : null;
+      const res = await fetch(`/api/customers?query=${encodeURIComponent(phone)}&limit=1`);
+      const data = await res.json();
+      const match = data?.customers?.find((c: Customer) => c.phone === phone);
+      return match || null;
     },
-    enabled: enabled && !!phone,
+    enabled: enabled && phone.length >= 10,
     staleTime: 5 * 60 * 1000,
   });
 }
 
-/**
- * Create a new customer
- */
+// ── useCreateCustomer ─────────────────────────────────────────────────
 export function useCreateCustomer() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
     mutationFn: (data: CreateCustomerDTO) =>
-      apiFetch<{ customer: Customer }>('/api/customers', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
+      apiFetch<{ customer: Customer }>('/api/customers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      // Wipe all list caches for instant fresh data on navigation
+      queryClient.removeQueries({ queryKey: customerKeys.lists() });
       showSuccess('Customer created successfully');
     },
     onError: (error) => showError('Failed to create customer', error.message),
@@ -100,28 +125,23 @@ export function useCreateCustomer() {
   };
 }
 
-/**
- * Update an existing customer
- */
+// ── useUpdateCustomer ─────────────────────────────────────────────────
 export function useUpdateCustomer() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateCustomerDTO }) => 
-      customerService.updateCustomer(id, data),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: customerKeys.details() });
-        showSuccess('Customer updated successfully');
-      } else {
-        showError('Failed to update customer', result.error?.message);
-      }
+    mutationFn: ({ id, data }: { id: string; data: UpdateCustomerDTO }) =>
+      apiFetch<{ customer: Customer }>(`/api/customers/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (_result, variables) => {
+      queryClient.removeQueries({ queryKey: customerKeys.lists() });
+      queryClient.removeQueries({ queryKey: customerKeys.detail(variables.id) });
+      showSuccess('Customer updated successfully');
     },
-    onError: (error) => {
-      showError('Failed to update customer', error.message);
-    },
+    onError: (error) => showError('Failed to update customer', error.message),
   });
 
   return {
@@ -131,26 +151,68 @@ export function useUpdateCustomer() {
   };
 }
 
-/**
- * Delete a customer
- */
+// ── useDeleteCustomer — optimistic ────────────────────────────────────
 export function useDeleteCustomer() {
   const queryClient = useQueryClient();
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: (id: string) => customerService.deleteCustomer(id),
-    onSuccess: (result) => {
-      if (result.success) {
-        queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
-        queryClient.invalidateQueries({ queryKey: customerKeys.details() });
-        showSuccess('Customer deleted successfully');
-      } else {
-        showError('Failed to delete customer', result.error?.message);
+    mutationFn: async (customer: Customer) => {
+      // 1. Clean up images in background (photo + id_documents)
+      const urlsToDelete: string[] = [];
+      if (customer.photo_url) urlsToDelete.push(customer.photo_url);
+      if (customer.id_documents) {
+        for (const doc of customer.id_documents) {
+          urlsToDelete.push(doc.url);
+        }
       }
+
+      // Fire-and-forget R2 deletion
+      for (const url of urlsToDelete) {
+        fetch('/api/upload/delete', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        }).catch(() => {}); // Best effort
+      }
+
+      // 2. Delete the customer record
+      await apiFetch(`/api/customers/${customer.id}`, { method: 'DELETE' });
+      return customer;
     },
-    onError: (error) => {
-      showError('Failed to delete customer', error.message);
+    onMutate: async (customer) => {
+      // Optimistic: remove from all cached lists immediately
+      await queryClient.cancelQueries({ queryKey: customerKeys.lists() });
+      const previousLists = queryClient.getQueriesData<CustomerSearchResult>({
+        queryKey: customerKeys.lists(),
+      });
+      queryClient.setQueriesData<CustomerSearchResult>(
+        { queryKey: customerKeys.lists() },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            customers: old.customers.filter((c) => c.id !== customer.id),
+            total: old.total - 1,
+          };
+        }
+      );
+      return { previousLists };
+    },
+    onError: (_error, _customer, context) => {
+      // Rollback on failure
+      if (context?.previousLists) {
+        for (const [key, data] of context.previousLists) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      showError('Failed to delete customer', _error.message);
+    },
+    onSuccess: () => {
+      showSuccess('Customer deleted successfully');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.lists() });
     },
   });
 
@@ -159,15 +221,4 @@ export function useDeleteCustomer() {
     deleteCustomer: mutation.mutate,
     isLoading: mutation.isPending,
   };
-}
-
-/**
- * Count customers
- */
-export function useCustomerCount(params?: CustomerSearchParams) {
-  return useQuery({
-    queryKey: [...customerKeys.lists(), 'count', params],
-    queryFn: () => customerService.countCustomers(params),
-    staleTime: 5 * 60 * 1000,
-  });
 }

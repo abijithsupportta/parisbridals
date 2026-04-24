@@ -34,15 +34,20 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const params = {
       query: searchParams.get('query') || undefined,
-      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
-      offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined,
+      phone: searchParams.get('phone') || undefined,
+      page: searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1,
+      limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 20,
+      sort_by: searchParams.get('sort_by') || 'created_at',
+      sort_order: (searchParams.get('sort_order') as 'asc' | 'desc') || 'desc',
     };
 
     const result = await customerService.getAllCustomers(params);
     if (!result.success) {
       return NextResponse.json({ error: result.error?.message }, { status: 500 });
     }
-    return NextResponse.json({ customers: result.data });
+    
+    // Result.data is already CustomerSearchResult containing { customers, total, page, etc. }
+    return NextResponse.json(result.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

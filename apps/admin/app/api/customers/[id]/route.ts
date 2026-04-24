@@ -44,6 +44,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 }
 
+import { UpdateCustomerSchema } from "@/domain";
+import { z } from "zod";
+
 /** PATCH /api/customers/:id — update a customer */
 export async function PATCH(request: NextRequest, { params }: RouteContext) {
   try {
@@ -56,12 +59,23 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const body = await request.json();
 
-    const result = await customerService.updateCustomer(id, body);
+    const validatedData = UpdateCustomerSchema.parse(body);
+
+    const result = await customerService.updateCustomer(id, validatedData);
     if (!result.success) {
       return NextResponse.json({ error: result.error?.message }, { status: 400 });
     }
     return NextResponse.json({ customer: result.data });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid request body',
+          details: err.issues.map(i => `${i.path.join('.')}: ${i.message}`) 
+        },
+        { status: 400 }
+      );
+    }
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
