@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
@@ -10,10 +10,12 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder } from "@/hooks";
+import Modal from "@/components/admin/Modal";
+import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
-import { OrderStatus, ConditionRating } from "@/domain/types/order";
+import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
+import { PaymentType, PaymentMode } from "@/domain/types/payment";
 
 export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const router = useRouter();
@@ -21,7 +23,16 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const { data: historyResponse } = useOrderStatusHistory(orderId);
   const { processOrderReturn, isPending: isReturning } = useProcessOrderReturn();
   const { updateOrder, isLoading: isUpdating } = useUpdateOrder();
+  const { createPayment, isPending: isCreatingPayment } = useCreatePayment();
   const { showSuccess, showError } = useAppStore();
+
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: 0,
+    paymentMode: PaymentMode.CASH,
+    paymentType: PaymentType.FINAL,
+    notes: ""
+  });
 
   const order = orderResponse?.data;
   const history = historyResponse?.data || [];
@@ -39,7 +50,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const isReturnable = order?.status === OrderStatus.IN_USE || order?.status === OrderStatus.ONGOING || order?.status === OrderStatus.LATE_RETURN || order?.status === OrderStatus.PARTIAL;
 
   // Initialize return state when order loads
-  useMemo(() => {
+  useEffect(() => {
     if (order && Object.keys(returnItems).length === 0 && isReturnable) {
       const initial: any = {};
       order.items.forEach(item => {
@@ -83,6 +94,52 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       ...prev,
       [itemId]: { ...prev[itemId], [field]: value }
     }));
+  };
+
+  const handleCollectPayment = async () => {
+    if (!order || paymentForm.amount <= 0) {
+      showError("Validation Error", "Amount must be greater than 0");
+      return;
+    }
+
+    try {
+      createPayment(
+        {
+          order_id: order.id,
+          payment_type: paymentForm.paymentType,
+          amount: paymentForm.amount,
+          payment_mode: paymentForm.paymentMode,
+          notes: paymentForm.notes,
+        },
+        {
+          onSuccess: () => {
+            if (paymentForm.paymentType === PaymentType.DEPOSIT) {
+              updateOrder({
+                id: order.id,
+                data: {
+                  deposit_collected: true,
+                  deposit_collected_at: new Date().toISOString(),
+                },
+              });
+            } else {
+              const newAmountPaid = ((order as any).amount_paid || 0) + paymentForm.amount;
+              const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+              updateOrder({
+                id: order.id,
+                data: {
+                  amount_paid: newAmountPaid,
+                  payment_status: newStatus,
+                },
+              });
+            }
+            setIsPaymentModalOpen(false);
+            setPaymentForm({ amount: 0, paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
+          },
+        }
+      );
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const submitReturn = () => {
@@ -337,39 +394,45 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 {order.deposit_collected ? (
                   <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Collected ({formatCurrency(order.security_deposit)})</span>
                 ) : (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-7 text-xs border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium"
-                    onClick={() => updateOrder({ id: order.id, data: { deposit_collected: true, deposit_collected_at: new Date().toISOString() } })}
-                    disabled={isUpdating}
-                  >
-                    Collect {formatCurrency(order.security_deposit)}
-                  </Button>
-                )}
-              </div>
-              
-              <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 font-medium">Total Amount Due</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}</span>
-                </div>
-                
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 font-medium">Payment Status</span>
-                  {(order as any).payment_status === 'paid' ? (
-                    <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Paid in Full</span>
-                  ) : (
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="h-7 text-xs border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
-                      onClick={() => updateOrder({ id: order.id, data: { payment_status: 'paid', amount_paid: order.total_amount } })}
-                      disabled={isUpdating}
+                      className="h-7 text-xs border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium"
+                      onClick={() => {
+                        setPaymentForm({ amount: order.security_deposit, paymentMode: PaymentMode.CASH, paymentType: PaymentType.DEPOSIT, notes: "" });
+                        setIsPaymentModalOpen(true);
+                      }}
+                      disabled={isUpdating || isCreatingPayment}
                     >
-                      Mark Full Paid
+                      Collect {formatCurrency(order.security_deposit)}
                     </Button>
                   )}
+                </div>
+                
+                <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 font-medium">Total Amount Due</span>
+                    <span className="font-bold text-slate-900">{formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 font-medium">Payment Status</span>
+                    {(order as any).payment_status === 'paid' ? (
+                      <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Paid in Full</span>
+                    ) : (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-7 text-xs border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
+                        onClick={() => {
+                          setPaymentForm({ amount: Math.max(0, order.total_amount - ((order as any).amount_paid || 0)), paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
+                          setIsPaymentModalOpen(true);
+                        }}
+                        disabled={isUpdating || isCreatingPayment || Math.max(0, order.total_amount - ((order as any).amount_paid || 0)) === 0}
+                      >
+                        Collect Payment
+                      </Button>
+                    )}
                 </div>
               </div>
             </div>
@@ -492,6 +555,63 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           </div>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      <Modal
+        open={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        title={paymentForm.paymentType === PaymentType.DEPOSIT ? "Collect Security Deposit" : "Collect Payment"}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Payment Method</label>
+            <select
+              value={paymentForm.paymentMode}
+              onChange={(e) => setPaymentForm({ ...paymentForm, paymentMode: e.target.value as PaymentMode })}
+              className="w-full border-slate-200 rounded-md h-10 text-sm focus:border-slate-900 focus:ring-slate-900"
+            >
+              <option value={PaymentMode.CASH}>Cash</option>
+              <option value={PaymentMode.UPI}>UPI</option>
+              <option value={PaymentMode.CARD}>Card</option>
+              <option value={PaymentMode.BANK_TRANSFER}>Bank Transfer</option>
+              <option value={PaymentMode.CHEQUE}>Cheque</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₹)</label>
+            <Input
+              type="number"
+              value={paymentForm.amount || ""}
+              onChange={(e) => setPaymentForm({ ...paymentForm, amount: parseFloat(e.target.value) || 0 })}
+              className="w-full"
+              placeholder="0.00"
+            />
+            {paymentForm.paymentType === PaymentType.FINAL && (
+              <p className="text-xs text-slate-500 mt-1">
+                Max amount due: {formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Notes / Transaction ID (Optional)</label>
+            <Input
+              value={paymentForm.notes}
+              onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
+              className="w-full"
+              placeholder="E.g. UPI Ref #123456"
+            />
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleCollectPayment} disabled={isCreatingPayment}>
+              {isCreatingPayment ? "Saving..." : "Save Payment"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
