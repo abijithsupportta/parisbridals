@@ -83,11 +83,9 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Set Dates Quick Action
+  // Set Dates Quick Action — uses the currently selected start date
   const handleQuickDate = (days: number) => {
-    const start = new Date();
-    setStartDate(start);
-    setEndDate(addDays(start, days));
+    setEndDate(addDays(startDate, days));
   };
 
   const rentalDays = useMemo(() => {
@@ -234,11 +232,11 @@ export default function OrderForm({ initialData }: OrderFormProps) {
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Two-column layout — 50/50 split */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* LEFT COLUMN (2/3) */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* LEFT COLUMN */}
+        <div className="space-y-6">
 
           {/* Customer Section */}
           <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
@@ -362,7 +360,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                   variant="outline"
                   size="sm"
                   onClick={() => handleQuickDate(days)}
-                  className={`h-8 text-xs border-slate-200 ${rentalDays === days && startDate.toDateString() === new Date().toDateString() ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                  className={`h-8 text-xs border-slate-200 ${rentalDays === days ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-50'}`}
                 >
                   {days} {days === 1 ? 'Day' : 'Days'}
                 </Button>
@@ -461,7 +459,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
           </div>
         </div>
 
-        {/* RIGHT COLUMN (1/3) — Cart */}
+        {/* RIGHT COLUMN — Cart & Totals */}
         <div className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-lg overflow-visible">
 
@@ -532,53 +530,54 @@ export default function OrderForm({ initialData }: OrderFormProps) {
             </div>
 
             {/* Cart items */}
-            <div className="p-5 min-h-[200px]">
+            <div className="p-4 min-h-[200px] max-h-[450px] overflow-y-auto">
               {cartItems.length === 0 ? (
                 <div className="h-[200px] flex flex-col items-center justify-center text-slate-400 space-y-2">
                   <Package className="w-10 h-10 text-slate-200" />
                   <p className="text-sm">Search and add products</p>
                 </div>
               ) : (
-                <ul className="space-y-3">
+                <ul className="space-y-2">
                   {cartItems.map((item) => {
                     const imgUrl = getImageUrl(item.product);
                     return (
-                      <li key={item.product.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-white">
-                        <div className="w-10 h-10 rounded-md bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200">
-                          {imgUrl ? (
-                            <img src={imgUrl} alt={item.product.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-300">
-                              <Package className="w-4 h-4" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h5 className="font-medium text-slate-900 text-sm truncate">{item.product.name}</h5>
-                          <span className="text-xs text-slate-500">{formatCurrency(item.price_per_day)} / day</span>
-                        </div>
-
-                        <div className="flex items-center border border-slate-200 rounded-md bg-white overflow-hidden">
-                          <button type="button" onClick={() => updateCartQty(item.product.id, -1)} className="px-2 py-1 hover:bg-slate-50 text-slate-500">
-                            <Minus className="w-3 h-3" />
+                      <li key={item.product.id} className="p-3 rounded-lg border border-slate-100 bg-white">
+                        <div className="flex items-center gap-3">
+                          <div className="w-11 h-11 rounded-lg bg-slate-100 flex-shrink-0 overflow-hidden border border-slate-200">
+                            {imgUrl ? (
+                              <img src={imgUrl} alt={item.product.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <Package className="w-4 h-4" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h5 className="font-medium text-slate-900 text-sm truncate">{item.product.name}</h5>
+                            <span className="text-xs text-slate-500">{formatCurrency(item.price_per_day)} / day</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeCartItem(item.product.id)}
+                            className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors flex-shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                          <span className="px-2 py-1 text-xs font-bold text-slate-900 min-w-[28px] text-center bg-slate-50 border-x border-slate-100">{item.quantity}</span>
-                          <button type="button" onClick={() => updateCartQty(item.product.id, 1)} className="px-2 py-1 hover:bg-slate-50 text-slate-500">
-                            <Plus className="w-3 h-3" />
-                          </button>
                         </div>
-
-                        <div className="text-sm font-bold text-slate-900 w-20 text-right">
-                          {formatCurrency(item.price_per_day * item.quantity * rentalDays)}
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50">
+                          <div className="flex items-center border border-slate-200 rounded-md bg-white overflow-hidden">
+                            <button type="button" onClick={() => updateCartQty(item.product.id, -1)} className="px-2.5 py-1 hover:bg-slate-50 text-slate-500">
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="px-3 py-1 text-xs font-bold text-slate-900 min-w-[32px] text-center bg-slate-50 border-x border-slate-100">{item.quantity}</span>
+                            <button type="button" onClick={() => updateCartQty(item.product.id, 1)} className="px-2.5 py-1 hover:bg-slate-50 text-slate-500">
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="text-sm font-bold text-slate-900">
+                            {formatCurrency(item.price_per_day * item.quantity * rentalDays)}
+                          </div>
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => removeCartItem(item.product.id)}
-                          className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </li>
                     );
                   })}
