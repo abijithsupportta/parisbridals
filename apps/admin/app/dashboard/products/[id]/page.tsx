@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Edit, Trash2, Package, Tag, Box, AlertTriangle, Store,
-  XCircle, Barcode, Image as ImageIcon, Clock, IndianRupee,
-  MoreVertical, CheckCircle2
+  ArrowLeft, Edit, Trash2, Package, AlertTriangle, Store,
+  XCircle, Barcode, Image as ImageIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -62,7 +61,7 @@ export default function ProductDetailPage() {
   const productId = params.id as string;
   const { product, isLoading } = useProduct(productId);
   const deleteProduct = useDeleteProduct();
-  const { showError, showSuccess } = useAppStore();
+  const { showSuccess } = useAppStore();
 
   const [branchInventory, setBranchInventory] = useState<BranchInventoryRow[]>([]);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
@@ -115,8 +114,8 @@ export default function ProductDetailPage() {
   const handleDelete = async () => {
     if (!currentProduct) return;
     try {
-      const result = await deleteProduct.mutateAsync(currentProduct.id) as any;
-      if (result?.success) {
+      const result = await deleteProduct.mutateAsync(currentProduct.id);
+      if (result && typeof result === "object" && "success" in result && result.success) {
         showSuccess("Product deleted successfully");
         router.push("/dashboard/products");
       }
@@ -153,8 +152,6 @@ export default function ProductDetailPage() {
   const primaryImage = product.images?.find((img) => img.is_primary)?.url || product.images?.[0]?.url;
   const totalQty = product.quantity || 0;
   const availQty = product.available_quantity || 0;
-  const rentedQty = totalQty - availQty;
-  const stockPct = totalQty > 0 ? (rentedQty / totalQty) * 100 : 0;
 
   return (
     <div className="space-y-6 pb-12">
@@ -327,7 +324,7 @@ export default function ProductDetailPage() {
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center">
                         <p className="text-slate-500 font-medium">No rental history</p>
-                        <p className="text-xs text-slate-400 mt-1">This product hasn't been rented yet.</p>
+                        <p className="text-xs text-slate-400 mt-1">This product hasn&apos;t been rented yet.</p>
                       </td>
                     </tr>
                   ) : (

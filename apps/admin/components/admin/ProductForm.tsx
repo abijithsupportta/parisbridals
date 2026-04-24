@@ -40,7 +40,7 @@ interface BranchStockEntry {
 }
 
 interface ProductFormProps {
-  product?: any;
+  product?: Record<string, unknown>;
   categories?: Category[];
   branches?: Branch[];
 }
@@ -61,8 +61,7 @@ export default function ProductForm({
   const [error, setError] = useState("");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-  // Existing images
-  const existingImages = (product?.images || []).map((img: any) =>
+  const existingImages = (product?.images || []).map((img: { url?: string } | string) =>
     typeof img === "string" ? img : img.url
   );
   const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
@@ -88,7 +87,6 @@ export default function ProductForm({
   const [newStockQty, setNewStockQty] = useState<number>(0);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
-  // Load existing branch inventory when editing
   useEffect(() => {
     if (!product?.id) return;
     const load = async () => {
@@ -98,7 +96,7 @@ export default function ProductForm({
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           setBranchStocks(
-            json.data.map((inv: any) => ({
+            json.data.map((inv: { id: string; branch_id: string; quantity: number }) => ({
               id: inv.id,
               branch_id: inv.branch_id,
               quantity: inv.quantity ?? 0,
@@ -122,12 +120,6 @@ export default function ProductForm({
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
       .replace(/--+/g, "-");
-
-  useEffect(() => {
-    if (!slugManuallyEdited) {
-      setFormData((prev) => ({ ...prev, slug: generateSlug(prev.name) }));
-    }
-  }, [formData.name, slugManuallyEdited]);
 
   // Barcode generation
   const generateBarcode = () => {
@@ -238,7 +230,7 @@ export default function ProductForm({
         sort_order: index,
       }));
 
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         ...formData,
         images,
         store_id: DEFAULT_STORE_ID,
@@ -259,13 +251,13 @@ export default function ProductForm({
       };
 
       let productId: string;
-      let result: any;
+      let result: { success?: boolean; data?: { id?: string }; error?: { message?: string; code?: string } };
       if (isEdit && product) {
-        result = await updateProduct.mutateAsync({ id: product.id, data: payload });
+        result = await updateProduct.mutateAsync({ id: product.id, data: payload }) as typeof result;
         productId = product.id;
       } else {
-        result = await createProduct.mutateAsync(payload);
-        productId = result?.data?.id;
+        result = await createProduct.mutateAsync(payload) as typeof result;
+        productId = result?.data?.id as string;
       }
 
       if (!result?.success) {
@@ -378,9 +370,14 @@ export default function ProductForm({
                 </label>
                 <Input
                   value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const newName = e.target.value;
+                    setFormData((prev) => ({ 
+                      ...prev, 
+                      name: newName,
+                      slug: slugManuallyEdited ? prev.slug : generateSlug(newName)
+                    }));
+                  }}
                   required
                   placeholder="e.g., Diamond Necklace Set"
                   className="h-11 border-slate-200 focus:border-slate-900"

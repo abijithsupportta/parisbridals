@@ -25,18 +25,11 @@ import {
   Package,
   AlertTriangle,
   Store,
-  Boxes,
-  TrendingUp,
-  PackageX,
-  CircleAlert,
-  MoreVertical,
-  CheckCircle2,
-  XCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import AddLinkButton from "@/components/admin/AddLinkButton";
 import Modal from "@/components/admin/Modal";
@@ -67,7 +60,7 @@ export default function ProductsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { products, total, isLoading } = useProducts({
+  const { products, isLoading } = useProducts({
     query: searchQuery,
     limit: 100,
   });
@@ -141,7 +134,7 @@ export default function ProductsPage() {
   const visibleProducts = useMemo(() => {
     if (!selectedBranchId) return products;
     if (isLoadingInventory) return [];
-    return products.filter((p: any) => {
+    return products.filter((p: { id: string }) => {
       const rows = inventoryByProduct[p.id] || [];
       return rows.some((r) => r.branch_id === selectedBranchId);
     });
@@ -174,7 +167,7 @@ export default function ProductsPage() {
       await deleteProduct.mutateAsync(currentProduct.id);
       // onSuccess/onError already wired in the hook
       closeDeleteModal();
-    } catch (err: any) {
+    } catch {
       // Error toast already shown by the hook's onError
     }
   };
@@ -183,7 +176,7 @@ export default function ProductsPage() {
     if (selectedProducts.length === visibleProducts.length) {
       clearSelection();
     } else {
-      selectAll(visibleProducts.map((p: any) => p.id));
+      selectAll(visibleProducts.map((p: { id: string }) => p.id));
     }
   };
 
@@ -210,7 +203,7 @@ export default function ProductsPage() {
       } else {
         showError(
           "Cannot Delete",
-          (result as any)?.error?.message ||
+          (result as { error?: { message?: string } })?.error?.message ||
             "Some products have order history and cannot be deleted"
         );
       }
@@ -221,7 +214,7 @@ export default function ProductsPage() {
 
   const handleBulkDownloadBarcodes = async () => {
     const list = visibleProducts.filter(
-      (p: any) => selectedProducts.includes(p.id) && p.barcode
+      (p: { id: string; barcode?: string }) => selectedProducts.includes(p.id) && p.barcode
     );
     if (list.length === 0) {
       showError("No Barcodes", "No selected products have barcodes assigned.");
@@ -229,7 +222,7 @@ export default function ProductsPage() {
     }
     try {
       await downloadMultipleBarcodes(
-        list.map((p: any) => ({ barcode: p.barcode!, name: p.name }))
+        list.map((p: { barcode: string; name: string }) => ({ barcode: p.barcode, name: p.name }))
       );
       showSuccess("Success", `Downloaded ${list.length} barcodes`);
     } catch {
@@ -440,7 +433,7 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {visibleProducts.map((product: any) => {
+                {visibleProducts.map((product: { id: string; name: string; sku?: string; slug?: string; category?: { name: string }; price_per_day: number; images?: {url?: string}[] | string[]; is_active: boolean; barcode?: string; }) => {
                   const stock = getStockAtBranch(product.id);
                   const primaryImage = Array.isArray(product.images) && product.images.length > 0
                     ? typeof product.images[0] === "string"

@@ -11,9 +11,7 @@ import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { Product } from '@/domain';
 
-// Re-export domain Product type for store usage
-type ProductStoreProduct = Product;
-
+// Domain types are imported directly
 interface ProductFilters {
   search: string;
   category: string;
@@ -57,7 +55,7 @@ interface ProductStore extends ProductUIState {
   // Filter Actions
   setFilters: (filters: Partial<ProductFilters>) => void;
   resetFilters: () => void;
-  updateFilter: (key: keyof ProductFilters, value: any) => void;
+  updateFilter: <K extends keyof ProductFilters>(key: K, value: ProductFilters[K]) => void;
   
   // View Actions
   setViewMode: (mode: 'grid' | 'table') => void;
@@ -205,56 +203,5 @@ export const useProductStore = create<ProductStore>()(
     }
   )
 );
-
-// Selectors for optimized re-renders
-export const useProductSelectors = {
-  // Selection selectors
-  selectedProducts: () => useProductStore((state) => state.selectedProducts),
-  selectedCount: () => useProductStore((state) => state.selectedProducts.length),
-  isProductSelected: (id: string): boolean => 
-    useProductStore((state) => state.selectedProducts.includes(id)),
-  
-  // Filter selectors
-  filters: () => useProductStore((state) => state.filters),
-  searchQuery: () => useProductStore((state) => state.filters.search),
-  activeFiltersCount: () => {
-    const filters = useProductStore((state) => state.filters);
-    return Object.entries(filters).filter(([key, value]) => {
-      if (key === 'status' && value === 'all') return false;
-      if (key === 'featured' && value === false) return false;
-      if (key === 'inStock' && value === false) return false;
-      if (key === 'priceRange' && value[0] === 0 && value[1] === 100000) return false;
-      return value !== '' && value !== null && value !== undefined;
-    }).length;
-  },
-  
-  // View selectors
-  viewMode: () => useProductStore((state) => state.viewMode),
-  sorting: () => useProductStore((state) => ({ 
-    sortBy: state.sortBy, 
-    sortOrder: state.sortOrder 
-  })),
-  
-  // Modal selectors
-  modals: () => useProductStore((state) => ({
-    isCreateModalOpen: state.isCreateModalOpen,
-    isEditModalOpen: state.isEditModalOpen,
-    isDeleteModalOpen: state.isDeleteModalOpen,
-    isBulkDeleteModalOpen: state.isBulkDeleteModalOpen,
-    currentProduct: state.currentProduct,
-  })),
-  
-  // Bulk action selectors
-  bulkActions: () => useProductStore((state) => ({
-    bulkAction: state.bulkAction,
-    isBulkDeleteModalOpen: state.isBulkDeleteModalOpen,
-  })),
-  
-  // Loading selectors
-  loading: () => useProductStore((state) => ({
-    isExporting: state.isExporting,
-    isImporting: state.isImporting,
-  })),
-};
 
 export type { Product, ProductFilters, ProductUIState };
