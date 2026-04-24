@@ -160,49 +160,47 @@ export default function ProductDetailPage() {
   const stockPercentage = totalQty > 0 ? (rentedQty / totalQty) * 100 : 0;
   
   // Status colors
-  const statusColor = product.is_active ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700";
+  const statusColor = product.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700";
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       
       {/* 1. HERO HEADER */}
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between pb-4 border-b border-slate-100">
-        <div className="flex items-start gap-5">
-          <Button variant="outline" size="icon" onClick={() => router.push("/dashboard/products")} className="h-10 w-10 shrink-0 rounded-full bg-white shadow-sm hover:shadow-md transition-all">
-            <ArrowLeft className="h-4 w-4 text-slate-600" />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="outline" size="icon" onClick={() => router.push("/dashboard/products")} className="h-9 w-9 shrink-0 rounded-full">
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-bold tracking-tight text-slate-900">{product.name}</h1>
-              <Badge variant="secondary" className={`${statusColor} px-3 py-1 text-xs font-semibold uppercase tracking-wider`}>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{product.name}</h1>
+              <Badge variant="secondary" className={statusColor}>
                 {product.is_active ? "Active" : "Inactive"}
               </Badge>
               {product.is_featured && (
-                <Badge className="bg-gradient-to-r from-amber-200 to-amber-100 text-amber-800 border-0 px-3 py-1 text-xs font-semibold uppercase tracking-wider shadow-sm">
-                  ★ Featured
+                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">
+                  Featured
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-2 text-sm text-slate-500 font-medium">
-              {product.category?.name && <span className="bg-slate-100 px-2 py-0.5 rounded-md text-slate-600">{product.category.name}</span>}
-              <span className="text-slate-300">|</span>
-              <span className="text-slate-400">ID: {product.sku || 'N/A'}</span>
+            <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+              {product.category?.name && <span>{product.category.name}</span>}
             </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {product.barcode && (
             <Button 
-              variant="secondary" 
+              variant="outline" 
               onClick={() => downloadBarcode(product.barcode!, product.name)}
-              className="gap-2 bg-white border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-700 transition-all"
+              className="gap-2"
             >
               <Barcode className="h-4 w-4" />
               <span className="hidden sm:inline">Print Barcode</span>
             </Button>
           )}
-          <Button onClick={() => router.push(`/dashboard/products/${product.id}/edit`)} className="gap-2 shadow-sm transition-all hover:shadow-md">
+          <Button onClick={() => router.push(`/dashboard/products/${product.id}/edit`)} className="gap-2">
             <Edit className="h-4 w-4" />
             Edit
           </Button>
@@ -210,7 +208,6 @@ export default function ProductDetailPage() {
             variant="destructive" 
             size="icon"
             onClick={() => openDeleteModal(product)}
-            className="shadow-sm hover:shadow-md transition-all bg-red-50 text-red-600 border border-red-100 hover:bg-red-100"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -218,20 +215,17 @@ export default function ProductDetailPage() {
       </div>
 
       {/* 2. THE 2-SECOND ZONE (HERO STATS) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Revenue Card */}
-        <Card className="border-0 shadow-md bg-gradient-to-br from-emerald-500 to-emerald-700 text-white relative overflow-hidden rounded-2xl">
-          <div className="absolute top-0 right-0 p-6 opacity-20 transform translate-x-4 -translate-y-4">
-            <IndianRupee className="w-24 h-24 text-white" />
-          </div>
-          <CardHeader className="pb-1 relative z-10">
-            <CardTitle className="text-emerald-100 text-sm font-medium tracking-wide uppercase">Lifetime Revenue</CardTitle>
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Lifetime Revenue</CardTitle>
           </CardHeader>
-          <CardContent className="relative z-10 pt-2">
+          <CardContent>
             {isLoadingAnalytics ? (
-              <div className="h-10 w-32 bg-white/20 animate-pulse rounded-lg" />
+              <div className="h-8 w-24 bg-slate-100 animate-pulse rounded" />
             ) : (
-              <div className="text-4xl font-extrabold tracking-tight">
+              <div className="text-3xl font-bold text-emerald-600">
                 {formatCurrency(analytics?.totalRevenue || 0)}
               </div>
             )}
@@ -239,9 +233,9 @@ export default function ProductDetailPage() {
         </Card>
 
         {/* Active Rentals Card */}
-        <Card className="border border-slate-100 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
-          <CardHeader className="pb-1 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wide">Currently Rented</CardTitle>
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium text-slate-500">Currently Rented</CardTitle>
             {analytics?.activeOrders ? (
               <span className="relative flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -249,57 +243,54 @@ export default function ProductDetailPage() {
               </span>
             ) : null}
           </CardHeader>
-          <CardContent className="pt-2">
+          <CardContent>
             {isLoadingAnalytics ? (
-               <div className="h-10 w-16 bg-slate-100 animate-pulse rounded-lg" />
+               <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" />
             ) : (
               <div className="flex items-baseline gap-2">
-                <div className="text-4xl font-bold text-slate-900">{analytics?.activeOrders || 0}</div>
-                <div className="text-sm font-medium text-slate-400">active orders</div>
+                <div className="text-3xl font-bold text-slate-900">{analytics?.activeOrders || 0}</div>
+                <div className="text-sm text-slate-500">active orders</div>
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Total Times Rented */}
-        <Card className="border border-slate-100 shadow-sm hover:shadow-md transition-shadow rounded-2xl bg-white">
-          <CardHeader className="pb-1">
-            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wide">Times Rented</CardTitle>
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Total Times Rented</CardTitle>
           </CardHeader>
-          <CardContent className="pt-2">
+          <CardContent>
             {isLoadingAnalytics ? (
-              <div className="h-10 w-16 bg-slate-100 animate-pulse rounded-lg" />
+              <div className="h-8 w-16 bg-slate-100 animate-pulse rounded" />
             ) : (
-              <div className="flex items-baseline gap-2">
-                <div className="text-4xl font-bold text-slate-900">{analytics?.totalUnitsRented || 0}</div>
-                <div className="text-sm font-medium text-slate-400">total lifetime</div>
-              </div>
+              <div className="text-3xl font-bold text-slate-900">{analytics?.totalUnitsRented || 0}</div>
             )}
           </CardContent>
         </Card>
 
         {/* Availability Card */}
-        <Card className={`border shadow-sm hover:shadow-md transition-shadow rounded-2xl ${availQty === 0 ? 'border-red-200 bg-red-50/40' : 'border-slate-100 bg-white'}`}>
-          <CardHeader className="pb-1">
-            <CardTitle className={`text-sm font-medium uppercase tracking-wide ${availQty === 0 ? 'text-red-500' : 'text-slate-500'}`}>Total Inventory</CardTitle>
+        <Card className={`shadow-sm ${availQty === 0 ? 'border-red-200 bg-red-50/30' : ''}`}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Total Inventory</CardTitle>
           </CardHeader>
-          <CardContent className="pt-2">
+          <CardContent>
             <div className="flex items-end gap-2">
-              <div className={`text-4xl font-bold ${availQty === 0 ? 'text-red-600' : 'text-slate-900'}`}>
+              <div className={`text-3xl font-bold ${availQty === 0 ? 'text-red-600' : 'text-slate-900'}`}>
                 {availQty}
               </div>
-              <div className="text-sm font-medium text-slate-400 mb-1.5">/ {totalQty} available</div>
+              <div className="text-sm text-slate-500 mb-1">/ {totalQty} available</div>
             </div>
             
             {/* Visual Progress Bar */}
-            <div className="mt-4 h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+            <div className="mt-3 h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
               <div 
-                className="h-full bg-blue-500 transition-all hover:brightness-110" 
+                className="h-full bg-blue-500 transition-all" 
                 style={{ width: `${stockPercentage}%` }}
                 title={`${rentedQty} out with customers`}
               />
               <div 
-                className={`h-full transition-all hover:brightness-110 ${availQty === 0 ? 'bg-red-500' : 'bg-emerald-400'}`} 
+                className={`h-full ${availQty === 0 ? 'bg-red-500' : 'bg-emerald-500'} transition-all`} 
                 style={{ width: `${100 - stockPercentage}%` }}
                 title={`${availQty} available`}
               />
@@ -314,37 +305,29 @@ export default function ProductDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Main Content Card */}
-          <Card className="border-0 shadow-sm rounded-2xl bg-white overflow-hidden ring-1 ring-slate-100">
-            <CardContent className="p-0">
-              <div className="flex flex-col md:flex-row">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row gap-6">
                 {/* Image */}
-                <div className="md:w-1/3 bg-slate-50 p-6 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-slate-100 relative min-h-[300px]">
+                <div className="shrink-0 w-full sm:w-48 h-48 rounded-lg border bg-slate-50 overflow-hidden relative flex items-center justify-center">
                   {primaryImage ? (
-                    <div className="relative w-full h-full min-h-[250px] rounded-xl overflow-hidden shadow-sm border border-slate-200/60 bg-white">
-                      <Image src={primaryImage} alt={product.name} fill className="object-cover hover:scale-105 transition-transform duration-500" />
-                    </div>
+                    <Image src={primaryImage} alt={product.name} fill className="object-cover" />
                   ) : (
-                    <div className="w-full h-full min-h-[250px] rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400 bg-white">
-                      <ImageIcon className="h-12 w-12 mb-3 opacity-20" />
-                      <span className="text-sm font-medium">No Image</span>
-                    </div>
+                    <ImageIcon className="h-12 w-12 text-slate-300" />
                   )}
                 </div>
                 
                 {/* Pricing & Description */}
-                <div className="md:w-2/3 p-8 flex flex-col justify-center">
-                  <div className="inline-block px-5 py-4 rounded-xl bg-blue-50 text-blue-900 border border-blue-100 mb-6 w-fit shadow-sm">
-                    <p className="text-xs font-bold uppercase tracking-wider text-blue-600/80 mb-1">Rental Price</p>
-                    <div className="flex items-baseline gap-1">
-                      <p className="text-3xl font-extrabold">{formatCurrency(product.price_per_day)}</p>
-                      <span className="text-sm font-medium text-blue-600/70">/day</span>
-                    </div>
+                <div className="flex-1 space-y-4">
+                  <div className="p-4 rounded-lg bg-slate-50 border w-full sm:w-fit pr-12">
+                    <p className="text-sm text-slate-500 font-medium mb-1">Rental Price</p>
+                    <p className="text-2xl font-bold text-slate-900">{formatCurrency(product.price_per_day)} <span className="text-sm font-normal text-slate-500">/day</span></p>
                   </div>
                   
                   {product.description && (
-                    <div>
-                      <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">Product Description</h3>
-                      <p className="text-base text-slate-600 leading-relaxed whitespace-pre-wrap">
+                    <div className="pt-2">
+                      <h3 className="text-sm font-medium text-slate-900 mb-2">Description</h3>
+                      <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
                         {product.description}
                       </p>
                     </div>
@@ -355,36 +338,36 @@ export default function ProductDetailPage() {
           </Card>
 
           {/* Recent Orders Table */}
-          <Card className="border-0 shadow-sm rounded-2xl bg-white ring-1 ring-slate-100">
-            <CardHeader className="border-b border-slate-50 bg-slate-50/50 rounded-t-2xl pb-4">
-              <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                <Clock className="w-5 h-5 text-indigo-500" />
-                Recent Order History
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="w-5 h-5 text-slate-500" />
+                Recent Orders
               </CardTitle>
-              <CardDescription className="text-slate-500 font-medium">Tracking lifecycle for this specific item.</CardDescription>
+              <CardDescription>Tracing history for this specific item.</CardDescription>
             </CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-white text-slate-400 border-b border-slate-100 font-semibold uppercase text-xs tracking-wider">
+                <thead className="bg-slate-50 text-slate-500 border-y border-slate-200 font-medium">
                   <tr>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Customer</th>
-                    <th className="px-6 py-4">Duration</th>
-                    <th className="px-6 py-4">Branch</th>
-                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-3">Order Date</th>
+                    <th className="px-6 py-3">Customer</th>
+                    <th className="px-6 py-3">Rental Period</th>
+                    <th className="px-6 py-3">Branch</th>
+                    <th className="px-6 py-3">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {isLoadingAnalytics ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center">
-                        <div className="flex justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" /></div>
+                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                        <div className="flex justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>
                       </td>
                     </tr>
                   ) : orderItems.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-medium">
-                        No orders have been placed for this item yet.
+                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                        No orders found for this product.
                       </td>
                     </tr>
                   ) : (
@@ -393,32 +376,31 @@ export default function ProductDetailPage() {
                       if (!order) return null;
                       
                       const statusStyles: Record<string, string> = {
-                        pending: "bg-amber-100 text-amber-800 border-amber-200",
-                        confirmed: "bg-blue-100 text-blue-800 border-blue-200",
-                        ongoing: "bg-emerald-100 text-emerald-800 border-emerald-200",
-                        returned: "bg-slate-100 text-slate-700 border-slate-200",
-                        cancelled: "bg-red-100 text-red-800 border-red-200"
+                        pending: "bg-amber-100 text-amber-700",
+                        confirmed: "bg-blue-100 text-blue-700",
+                        ongoing: "bg-emerald-100 text-emerald-700",
+                        returned: "bg-slate-100 text-slate-700",
+                        cancelled: "bg-red-100 text-red-700"
                       };
-                      const statusStyle = statusStyles[order.status.toLowerCase()] || "bg-slate-100 text-slate-700 border-slate-200";
+                      const statusStyle = statusStyles[order.status.toLowerCase()] || "bg-slate-100 text-slate-700";
 
                       return (
-                        <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group cursor-pointer" onClick={() => router.push(`/dashboard/orders/${order.id}`)}>
-                          <td className="px-6 py-4 whitespace-nowrap text-slate-600 font-medium">
-                            {new Date(order.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        <tr key={item.id} className="hover:bg-slate-50 group cursor-pointer" onClick={() => router.push(`/dashboard/orders/${order.id}`)}>
+                          <td className="px-6 py-4 whitespace-nowrap text-slate-900 font-medium">
+                            {new Date(order.created_at).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="font-semibold text-slate-900">{order.customer?.name || 'Unknown'}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">{order.customer?.phone || 'No phone'}</div>
+                            <div className="font-medium text-slate-900">{order.customer?.name || 'Unknown'}</div>
+                            <div className="text-xs text-slate-500">{order.customer?.phone}</div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-slate-700 font-medium">{new Date(order.rental_start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
-                            <div className="text-xs text-slate-400 mt-0.5">to {new Date(order.rental_end_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
+                          <td className="px-6 py-4 text-slate-600 whitespace-nowrap">
+                            {new Date(order.rental_start_date).toLocaleDateString()} - {new Date(order.rental_end_date).toLocaleDateString()}
                           </td>
-                          <td className="px-6 py-4 text-slate-600 font-medium">
-                            {order.branch?.name || 'Unknown'}
+                          <td className="px-6 py-4 text-slate-600">
+                            {order.branch?.name || 'Unknown Branch'}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border ${statusStyle}`}>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusStyle}`}>
                               {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                             </span>
                           </td>
@@ -429,9 +411,9 @@ export default function ProductDetailPage() {
                 </tbody>
               </table>
               {orderItems.length > 10 && (
-                <div className="p-4 bg-slate-50 border-t border-slate-100 text-center rounded-b-2xl">
-                  <Button variant="link" className="text-indigo-600 font-semibold" onClick={() => router.push(`/dashboard/orders?product_id=${product.id}`)}>
-                    View all {orderItems.length} orders →
+                <div className="p-4 border-t border-slate-100 text-center">
+                  <Button variant="link" onClick={() => router.push(`/dashboard/orders?product_id=${product.id}`)}>
+                    View all {orderItems.length} orders
                   </Button>
                 </div>
               )}
@@ -444,40 +426,41 @@ export default function ProductDetailPage() {
         <div className="space-y-6">
           
           {/* Branch Breakdown */}
-          <Card className="border-0 shadow-sm rounded-2xl bg-white ring-1 ring-slate-100">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                <Store className="w-5 h-5 text-blue-500" />
-                Branch Availability
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Store className="w-5 h-5 text-slate-500" />
+                Branch Location
               </CardTitle>
             </CardHeader>
             <CardContent>
               {isLoadingInventory ? (
-                 <div className="flex justify-center p-6"><div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /></div>
+                 <div className="flex justify-center p-4"><div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>
               ) : branchInventory.length === 0 ? (
-                <div className="text-sm text-slate-400 font-medium text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  No inventory allocated.
+                <div className="text-sm text-slate-500 text-center py-4 bg-slate-50 rounded-md border border-dashed">
+                  No branch inventory found.
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {branchInventory.map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-colors shadow-sm">
+                    <div key={inv.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors">
                       <div>
-                        <div className="font-bold text-slate-800">{inv.branch?.name || 'Unknown'}</div>
-                        <div className="text-xs font-semibold text-slate-400 mt-1 flex items-center gap-1.5">
+                        <div className="font-medium text-slate-900">{inv.branch?.name || 'Unknown Branch'}</div>
+                        <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                           {inv.available_quantity <= inv.low_stock_threshold && inv.available_quantity > 0 && (
-                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                            <AlertTriangle className="h-3 w-3 text-amber-500" />
                           )}
                           {inv.available_quantity === 0 && (
-                            <XCircle className="h-3.5 w-3.5 text-red-500" />
+                            <XCircle className="h-3 w-3 text-red-500" />
                           )}
                           Threshold: {inv.low_stock_threshold}
                         </div>
                       </div>
-                      <div className="text-right bg-white px-3 py-2 rounded-lg border border-slate-100 shadow-sm">
-                        <div className={`text-xl font-black ${inv.available_quantity === 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                          {inv.available_quantity} <span className="text-xs font-bold text-slate-400">/ {inv.quantity}</span>
+                      <div className="text-right">
+                        <div className={`text-lg font-bold ${inv.available_quantity === 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                          {inv.available_quantity} <span className="text-sm font-normal text-slate-500">/ {inv.quantity}</span>
                         </div>
+                        <div className="text-xs text-slate-500">Available</div>
                       </div>
                     </div>
                   ))}
@@ -487,30 +470,30 @@ export default function ProductDetailPage() {
           </Card>
 
           {/* Technical Identifiers */}
-          <Card className="border-0 shadow-sm rounded-2xl bg-white ring-1 ring-slate-100">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-800">
-                <Tag className="w-5 h-5 text-slate-400" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Tag className="w-5 h-5 text-slate-500" />
                 Identifiers
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="group">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">SKU</div>
-                  <div className="font-mono text-sm bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-slate-700 font-medium group-hover:bg-slate-100 transition-colors">
+                <div>
+                  <div className="text-sm text-slate-500 mb-1">SKU</div>
+                  <div className="font-mono text-sm bg-slate-50 p-2 rounded border text-slate-800">
                     {product.sku || 'Not assigned'}
                   </div>
                 </div>
-                <div className="group">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Barcode</div>
-                  <div className="font-mono text-sm bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-slate-700 font-medium group-hover:bg-slate-100 transition-colors">
+                <div>
+                  <div className="text-sm text-slate-500 mb-1">Barcode</div>
+                  <div className="font-mono text-sm bg-slate-50 p-2 rounded border text-slate-800">
                     {product.barcode || 'Not assigned'}
                   </div>
                 </div>
-                <div className="group">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Database ID</div>
-                  <div className="font-mono text-xs bg-slate-50 px-3 py-2.5 rounded-lg border border-slate-100 text-slate-400 break-all group-hover:text-slate-600 transition-colors">
+                <div>
+                  <div className="text-sm text-slate-500 mb-1">Database ID</div>
+                  <div className="font-mono text-xs text-slate-400 break-all">
                     {product.id}
                   </div>
                 </div>
