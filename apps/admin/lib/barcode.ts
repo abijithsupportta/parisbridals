@@ -54,21 +54,11 @@ export function generateBarcodeSVG(barcode: string, options?: {
 export async function downloadBarcode(
   barcode: string, 
   productName: string,
-  options?: {
-    width?: number;
-    height?: number;
-  }
+  options?: { width?: number; height?: number; }
 ): Promise<void> {
   try {
-    // Create a temporary container for the barcode
-    const container = document.createElement('div');
-    container.style.padding = '20px';
-    container.style.backgroundColor = 'white';
-    container.style.display = 'inline-block';
-    
-    // Create barcode canvas
-    const canvas = document.createElement('canvas');
-    JsBarcode(canvas, barcode, {
+    const barcodeCanvas = document.createElement('canvas');
+    JsBarcode(barcodeCanvas, barcode, {
       width: options?.width || 2,
       height: options?.height || 100,
       format: 'CODE128',
@@ -77,27 +67,35 @@ export async function downloadBarcode(
       margin: 10,
     });
     
-    // Create product name label
-    const label = document.createElement('div');
-    label.textContent = productName;
-    label.style.textAlign = 'center';
-    label.style.marginTop = '10px';
-    label.style.fontSize = '12px';
-    label.style.fontFamily = 'Arial, sans-serif';
+    const finalCanvas = document.createElement('canvas');
+    const ctx = finalCanvas.getContext('2d');
+    if (!ctx) throw new Error('Could not get canvas context');
     
-    container.appendChild(canvas);
-    container.appendChild(label);
+    const padding = 20;
+    const textSpace = 30;
     
-    // Convert to image and download
-    const dataUrl = await html2canvas(container).then(canvas => canvas.toDataURL());
+    finalCanvas.width = barcodeCanvas.width + (padding * 2);
+    finalCanvas.height = barcodeCanvas.height + textSpace + (padding * 2);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+    ctx.drawImage(barcodeCanvas, padding, padding);
+    
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    
+    let displayName = productName;
+    if (displayName.length > 40) {
+      displayName = displayName.substring(0, 37) + '...';
+    }
+    
+    ctx.fillText(displayName, finalCanvas.width / 2, finalCanvas.height - padding);
     
     const link = document.createElement('a');
     link.download = `barcode-${barcode}-${productName.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
-    link.href = dataUrl;
+    link.href = finalCanvas.toDataURL('image/png');
     link.click();
-    
-    // Clean up
-    container.remove();
   } catch (error) {
     console.error('Error generating barcode:', error);
     throw new Error('Failed to generate barcode');
@@ -109,51 +107,12 @@ export async function downloadBarcode(
  */
 export async function downloadMultipleBarcodes(
   products: Array<{ barcode: string; name: string }>,
-  options?: {
-    width?: number;
-    height?: number;
-  }
+  options?: { width?: number; height?: number; }
 ): Promise<void> {
   try {
-    const container = document.createElement('div');
-    container.style.backgroundColor = 'white';
-    container.style.padding = '20px';
-    
     for (const product of products) {
-      const productContainer = document.createElement('div');
-      productContainer.style.marginBottom = '30px';
-      productContainer.style.pageBreakInside = 'avoid';
-      
-      const canvas = document.createElement('canvas');
-      JsBarcode(canvas, product.barcode, {
-        width: options?.width || 2,
-        height: options?.height || 80,
-        format: 'CODE128',
-        displayValue: true,
-        fontSize: 12,
-        margin: 10,
-      });
-      
-      const label = document.createElement('div');
-      label.textContent = product.name;
-      label.style.textAlign = 'center';
-      label.style.marginTop = '5px';
-      label.style.fontSize = '11px';
-      label.style.fontFamily = 'Arial, sans-serif';
-      
-      productContainer.appendChild(canvas);
-      productContainer.appendChild(label);
-      container.appendChild(productContainer);
+      await downloadBarcode(product.barcode, product.name, options);
     }
-    
-    const dataUrl = await html2canvas(container).then(canvas => canvas.toDataURL());
-    
-    const link = document.createElement('a');
-    link.download = `barcodes-bulk-${Date.now()}.png`;
-    link.href = dataUrl;
-    link.click();
-    
-    container.remove();
   } catch (error) {
     console.error('Error generating bulk barcodes:', error);
     throw new Error('Failed to generate bulk barcodes');

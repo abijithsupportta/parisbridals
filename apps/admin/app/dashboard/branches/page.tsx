@@ -40,11 +40,12 @@ export default function BranchesPage() {
   const handleSubmit = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    // is_main is intentionally never sent from the form — main branch is fixed
+    // at system setup and cannot be added/changed via this UI.
     const data = {
       name: fd.get("name") as string,
       address: fd.get("address") as string,
       phone: (fd.get("phone") as string) || undefined,
-      is_main: fd.get("is_main") === "on",
       is_active: true,
     };
 
@@ -158,10 +159,13 @@ export default function BranchesPage() {
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Phone</label>
               <Input name="phone" defaultValue={editBranch?.phone || ""} placeholder="+91 9876543210" className="mt-1 h-10" />
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" name="is_main" id="is_main" defaultChecked={editBranch?.is_main || false} className="rounded border-slate-300" />
-              <label htmlFor="is_main" className="text-sm text-slate-700">Main Branch</label>
-            </div>
+            {editBranch?.is_main && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-violet-50 border border-violet-100">
+                <Building2 className="w-4 h-4 text-violet-500" />
+                <span className="text-sm font-medium text-violet-700">This is the Main Branch</span>
+                <span className="ml-auto text-[10px] font-bold uppercase text-violet-500 bg-white px-2 py-0.5 rounded-full border border-violet-200">Fixed</span>
+              </div>
+            )}
             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
               <Button type="button" variant="ghost" onClick={closeModal}>Cancel</Button>
               <Button type="submit" disabled={createBranch.isPending || updateBranch.isPending} className="bg-violet-600 hover:bg-violet-700 text-white px-6">
@@ -227,7 +231,12 @@ const BranchRow = ({ branch, onEdit, onDelete }: {
         <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors" onClick={() => onEdit(branch)} title="Edit">
           <Edit className="w-4 h-4 text-slate-400" />
         </button>
-        <button className="p-2 hover:bg-red-50 rounded-lg transition-colors" onClick={() => onDelete(branch)} title="Delete">
+        <button
+          className="p-2 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+          onClick={() => onDelete(branch)}
+          disabled={branch.is_main}
+          title={branch.is_main ? "The main branch cannot be deleted" : "Delete"}
+        >
           <Trash2 className="w-4 h-4 text-red-400" />
         </button>
       </div>

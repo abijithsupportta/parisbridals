@@ -1,32 +1,30 @@
 /**
- * ProductForm Component
+ * ProductForm Component — Redesigned for Speed
  *
- * Standalone page form for creating or editing jewellery rental products.
- * Fields match the modal dialog form exactly. Features:
- *   - R2 image upload via FileUpload component
- *   - Cascading category selectors (Main → Sub → Variant)
- *   - Branch selector
- *   - Barcode generation
- *   - Slug auto-generation from name
- *   - Create / Edit mode (determined by `product` prop)
+ * Two-column layout (65/35 split). All branches shown inline with quantity
+ * inputs — no dropdown/add cycle. "Save & Add Another" for batch entry.
+ * Sticky action bar always visible.
  *
  * @component
  */
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, RefreshCw, Store, Wand2, ArrowLeft } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { type Category } from "@/domain/types/category";
-import { useRouter } from "next/navigation";
-import { AlertCircle, RefreshCw, Download } from "lucide-react";
+import { type Product, type CreateProductDTO, type UpdateProductDTO } from "@/domain/types/product";
 import { useAppStore } from "@/stores";
 import { useCreateProduct, useUpdateProduct } from "@/hooks";
 
 const DEFAULT_STORE_ID = "00000000-0000-0000-0000-000000000001";
+const MAX_IMAGES = 5;
 
 interface Branch {
   id: string;
@@ -35,13 +33,32 @@ interface Branch {
   is_active?: boolean;
 }
 
+interface BranchStockEntry {
+  id?: string;
+  branch_id: string;
+  quantity: number;
+}
+
 interface ProductFormProps {
-  /** Existing product for edit mode; omit for create mode */
-  product?: any;
-  /** All categories for the category dropdown */
+  product?: Product;
   categories?: Category[];
-  /** All branches for the branch dropdown */
   branches?: Branch[];
+}
+
+/* ── Helper: default empty form state ──────────────────────────────── */
+function emptyFormData() {
+  return {
+    name: "",
+    slug: "",
+    sku: "",
+    barcode: "",
+    description: "",
+    category_id: "",
+    subcategory_id: "",
+    subvariant_id: "",
+    price_per_day: 0,
+    is_active: true,
+  };
 }
 
 export default function ProductForm({
@@ -53,87 +70,113 @@ export default function ProductForm({
   const isEdit = !!product;
   const { showError, showSuccess } = useAppStore();
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
-  const [userRole, setUserRole] = useState<string>("staff");
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
 
-  // Fetch current user role
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.role) {
-          setUserRole(data.role);
-        }
-      })
-      .catch(() => {
-        setUserRole("staff");
-      });
-  }, []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
 
-  // Extract existing image URLs from product
-  const existingImages = (product?.images || []).map((img: any) =>
-    typeof img === "string" ? img : img.url
-  );
-
-  const [formData, setFormData] = useState({
-    name: product?.name || "",
-    slug: product?.slug || "",
-    sku: product?.sku || "",
-    barcode: product?.barcode || "",
-    description: product?.description || "",
-    category_id: product?.category_id || "",
-    subcategory_id: product?.subcategory_id || "",
-    subvariant_id: product?.subvariant_id || "",
-    branch_id: product?.branch_id || "",
-    price_per_day: product?.price_per_day || 0,
-    security_deposit: product?.security_deposit || 0,
-    quantity: product?.quantity || 0,
-    low_stock_threshold: product?.low_stock_threshold ?? 5,
-    track_inventory: product?.track_inventory ?? true,
-    is_active: product?.is_active ?? true,
-    is_featured: product?.is_featured ?? false,
-  });
-
-  // Set default branch_id to "all" for admin/super admin in create mode
-  useEffect(() => {
-    if (!isEdit && (userRole === 'admin' || userRole === 'super_admin')) {
-      setFormData((prev) => ({ ...prev, branch_id: 'all' }));
-    }
-  }, [isEdit, userRole]);
-
+  const existingImages: string[] = (product?.images || [])
+    .map((img) => (typeof img === "string" ? img : img.url))
+    .filter(Boolean) as string[];
   const [imageUrls, setImageUrls] = useState<string[]>(existingImages);
 
-  // ── Slug auto-generation ──────────────────────────────────────────
-  const generateSlug = (name: string): string => {
-    return name
+  const [formData, setFormData] = useState(() =>
+    product
+      ? {
+          name: product.name ?? "",
+          slug: product.slug ?? "",
+          sku: product.sku ?? "",
+          barcode: product.barcode ?? "",
+          description: product.description ?? "",
+          category_id: product.category_id ?? "",
+          subcategory_id: product.subcategory_id ?? "",
+          subvariant_id: product.subvariant_id ?? "",
+          price_per_day: product.price_per_day ?? 0,
+          is_active: product.is_active ?? true,
+        }
+      : emptyFormData()
+  );
+
+  // ── Branch inventory — flat map ───────────────────────────────────
+  const activeBranches = branches.filter((b) => b.is_active !== false);
+
+  // branchStocks holds quantities keyed by branch_id.
+  // For create mode: pre-populate all active branches at qty 0.
+  // For edit mode: starts empty, populated by API fetch below.
+  const [branchStocks, setBranchStocks] = useState<BranchStockEntry[]>(() =>
+    !isEdit
+      ? activeBranches.map((b) => ({ branch_id: b.id, quantity: 0 }))
+      : []
+  );
+  const [removedInventoryIds] = useState<string[]>([]);
+  const [isLoadingInventory, setIsLoadingInventory] = useState(false);
+
+  // Edit mode: load existing inventory
+  useEffect(() => {
+    if (!product?.id) return;
+    const load = async () => {
+      setIsLoadingInventory(true);
+      try {
+        const res = await fetch(`/api/branch-inventory?product_id=${product.id}`);
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const existing = json.data.map(
+            (inv: { id: string; branch_id: string; quantity: number }) => ({
+              id: inv.id,
+              branch_id: inv.branch_id,
+              quantity: inv.quantity ?? 0,
+            })
+          );
+          // Merge: show all active branches, pre-filling qty from API
+          const merged = activeBranches.map((b) => {
+            const found = existing.find(
+              (e: BranchStockEntry) => e.branch_id === b.id
+            );
+            return found || { branch_id: b.id, quantity: 0 };
+          });
+          setBranchStocks(merged);
+        }
+      } catch (err) {
+        console.error("Failed to load branch inventory:", err);
+      } finally {
+        setIsLoadingInventory(false);
+      }
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id]);
+
+  // ── Helpers ────────────────────────────────────────────────────────
+  const generateSlug = (name: string): string =>
+    name
       .toLowerCase()
       .trim()
       .replace(/\s+/g, "-")
       .replace(/[^a-z0-9-]/g, "")
       .replace(/--+/g, "-");
-  };
 
-  useEffect(() => {
-    if (!slugManuallyEdited) {
-      setFormData((prev) => ({ ...prev, slug: generateSlug(prev.name) }));
-    }
-  }, [formData.name, slugManuallyEdited]);
-
-  // ── Barcode generation ────────────────────────────────────────────
   const generateBarcode = () => {
-    const barcode = `PB${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const barcode = `PB${Date.now().toString(36).toUpperCase()}${Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase()}`;
     setFormData((prev) => ({ ...prev, barcode }));
   };
 
-  // ── UX: Clear zero on focus, prevent scroll on number inputs ──────
+  const generateSKU = () => {
+    const catName = categories.find((c) => c.id === formData.category_id)?.name;
+    const prefix = catName ? catName.substring(0, 3).toUpperCase() : "PB";
+    const random = Math.floor(1000 + Math.random() * 9000);
+    setFormData((prev) => ({ ...prev, sku: `${prefix}-${random}` }));
+  };
+
   const clearZeroOnFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     if (e.target.value === "0") e.target.value = "";
   };
 
+  // Prevent scroll on number inputs
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       if (e.target instanceof HTMLInputElement && e.target.type === "number") {
@@ -144,174 +187,253 @@ export default function ProductForm({
     return () => document.removeEventListener("wheel", handleWheel);
   }, []);
 
-  // ── Category hierarchy ────────────────────────────────────────────
+  // Category hierarchy
   const mains = categories.filter((c) => !c.parent_id);
   const subs = categories.filter((c) => c.parent_id === formData.category_id);
-  const variants = categories.filter((c) => c.parent_id === formData.subcategory_id);
+  const variants = categories.filter(
+    (c) => c.parent_id === formData.subcategory_id
+  );
 
-  // Reset child dropdowns when parent changes
-  const handleMainCategoryChange = (value: string) => {
+  const handleMainCategoryChange = (value: string) =>
     setFormData((prev) => ({
       ...prev,
       category_id: value,
       subcategory_id: "",
       subvariant_id: "",
     }));
+
+  const handleSubCategoryChange = (value: string) =>
+    setFormData((prev) => ({ ...prev, subcategory_id: value, subvariant_id: "" }));
+
+  const totalBranchQuantity = branchStocks.reduce(
+    (sum, s) => sum + (s.quantity || 0),
+    0
+  );
+
+  const handleStockChange = (branchId: string, qty: number) => {
+    setBranchStocks((prev) =>
+      prev.map((s) => (s.branch_id === branchId ? { ...s, quantity: qty } : s))
+    );
   };
 
-  const handleSubCategoryChange = (value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      subcategory_id: value,
-      subvariant_id: "",
-    }));
-  };
+  const getBranchName = (id: string) =>
+    branches.find((b) => b.id === id)?.name || "Unknown";
 
-  // ── Submit ────────────────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+  // ── Submit ─────────────────────────────────────────────────────────
+  const handleSubmit = useCallback(
+    async (continueAdding: boolean = false) => {
+      setLoading(true);
+      setError("");
 
-    try {
-      const images = imageUrls.map((url, index) => ({
-        url,
-        alt_text: formData.name,
-        is_primary: index === 0,
-        sort_order: index,
-      }));
-
-      const payload: any = {
-        ...formData,
-        images,
-        store_id: DEFAULT_STORE_ID,
-        category_id: formData.category_id || null,
-        subcategory_id: formData.subcategory_id || null,
-        subvariant_id: formData.subvariant_id || null,
-        branch_id: formData.branch_id || null,
-        available_quantity: formData.quantity,
-        sku: formData.sku || undefined,
-        barcode: formData.barcode || undefined,
-        description: formData.description || undefined,
-      };
-
-      let result: any;
-      if (isEdit && product) {
-        result = await updateProduct.mutateAsync({ id: product.id, data: payload });
-      } else {
-        result = await createProduct.mutateAsync(payload);
-      }
-
-      if (!result.success) {
-        // Map error codes to user-friendly messages
-        let errorMessage = result.error?.message || 'Request failed';
-        
-        if (result.error?.code === 'SLUG_EXISTS') {
-          errorMessage = 'A product with this slug already exists. Please change the product name or slug.';
-        } else if (result.error?.code === 'VALIDATION_ERROR') {
-          errorMessage = 'Please check all required fields and try again.';
-        } else if (result.error?.code === 'INVALID_CATEGORY') {
-          errorMessage = 'Invalid category selected.';
+      try {
+        const activeStocks = branchStocks.filter((s) => s.quantity > 0);
+        if (activeStocks.length === 0) {
+          showError("Add stock to at least one branch");
+          setLoading(false);
+          return;
         }
-        
-        showError(errorMessage);
-        return;
+
+        if (!formData.name.trim()) {
+          showError("Product name is required");
+          setLoading(false);
+          return;
+        }
+
+        const images = imageUrls.map((url, index) => ({
+          url,
+          alt_text: formData.name,
+          is_primary: index === 0,
+          sort_order: index,
+        }));
+
+        const basePayload = {
+          name: formData.name,
+          slug: formData.slug || generateSlug(formData.name),
+          images,
+          store_id: DEFAULT_STORE_ID,
+          category_id: formData.category_id || undefined,
+          subcategory_id: formData.subcategory_id || undefined,
+          subvariant_id: formData.subvariant_id || undefined,
+          branch_id: undefined,
+          security_deposit: 0,
+          is_featured: false,
+          track_inventory: true,
+          low_stock_threshold: 0,
+          price_per_day: formData.price_per_day,
+          quantity: totalBranchQuantity,
+          available_quantity: totalBranchQuantity,
+          is_active: formData.is_active,
+          sku: formData.sku || undefined,
+          barcode: formData.barcode || undefined,
+          description: formData.description || undefined,
+        };
+
+        let productId: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let result: any;
+        if (isEdit && product) {
+          result = await updateProduct.mutateAsync({
+            id: product.id,
+            data: basePayload as UpdateProductDTO,
+          });
+          productId = product.id;
+        } else {
+          result = await createProduct.mutateAsync(
+            basePayload as CreateProductDTO
+          );
+          productId = result?.data?.id;
+        }
+
+        if (!result?.success) {
+          let msg = result?.error?.message || "Request failed";
+          if (result?.error?.code === "SLUG_EXISTS") {
+            msg = "A product with this slug already exists.";
+          } else if (result?.error?.code === "VALIDATION_ERROR") {
+            msg = "Please check all required fields.";
+          }
+          showError(msg);
+          setLoading(false);
+          return;
+        }
+
+        // Persist branch inventory
+        try {
+          for (const rid of removedInventoryIds) {
+            await fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" });
+          }
+          for (const entry of branchStocks) {
+            if (entry.id) {
+              await fetch(`/api/branch-inventory/${entry.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  quantity: entry.quantity,
+                  available_quantity: entry.quantity,
+                  low_stock_threshold: 0,
+                }),
+              });
+            } else if (entry.quantity > 0) {
+              await fetch("/api/branch-inventory", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  branch_id: entry.branch_id,
+                  product_id: productId,
+                  quantity: entry.quantity,
+                  available_quantity: entry.quantity,
+                  low_stock_threshold: 0,
+                }),
+              });
+            }
+          }
+        } catch (invErr) {
+          console.error("Branch inventory save error:", invErr);
+          showError(
+            "Product saved, but some branch stock may not have been persisted"
+          );
+        }
+
+        showSuccess(isEdit ? "Product updated" : "Product created");
+
+        if (continueAdding && !isEdit) {
+          // Reset form for next product
+          setFormData(emptyFormData());
+          setImageUrls([]);
+          setSlugManuallyEdited(false);
+          setBranchStocks(
+            activeBranches.map((b) => ({ branch_id: b.id, quantity: 0 }))
+          );
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          router.push("/dashboard/products");
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "An unexpected error occurred";
+        console.error("Error saving product:", err);
+        showError(message);
+      } finally {
+        setLoading(false);
       }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      formData,
+      imageUrls,
+      branchStocks,
+      removedInventoryIds,
+      isEdit,
+      product,
+      totalBranchQuantity,
+    ]
+  );
 
-      router.push("/dashboard/products");
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred";
-      console.error("Error saving product:", err);
-      showError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Render ────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────
   return (
-    <Card className="border-0 shadow-2xl w-full max-w-6xl">
-      <CardHeader className="rounded-t-xl bg-gradient-to-r from-purple-600 to-primary text-white">
-        <CardTitle className="text-2xl text-white">
-          {isEdit ? "Edit Product" : "Create New Product"}
-        </CardTitle>
-        <p className="text-slate-100 text-sm mt-1">
-          {isEdit
-            ? "Update product details"
-            : "Add a new jewellery item to your inventory"}
-        </p>
-      </CardHeader>
-      <CardContent className="p-8">
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* Error banner */}
-          {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          {/* ── Section 1: Product Images ─────────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Product Images
-            </h3>
-            <FileUpload
-              accept="image/*"
-              multiple={true}
-              maxFiles={10}
-              maxSize={5 * 1024 * 1024}
-              folder="products"
-              value={imageUrls}
-              onChange={setImageUrls}
-              helperText="Upload up to 10 product images (max 5MB each). First image will be the primary."
-            />
+    <div className="space-y-6">
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => router.push("/dashboard/products")}
+            className="w-9 h-9 border-slate-200 text-slate-500 hover:text-slate-900 bg-white"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">
+              {isEdit ? "Edit Product" : "Add Product"}
+            </h1>
+            <p className="text-sm text-slate-500">
+              {isEdit
+                ? "Update details and stock allocation"
+                : "Fill in the essentials — you can always edit later"}
+            </p>
           </div>
+        </div>
+      </div>
 
-          {/* ── Section 2: Basic Information ──────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Basic Information
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Product Name *
-                </label>
-                <Input
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  required
-                  placeholder="e.g., Diamond Necklace Set"
-                  className="h-12 border-slate-300 focus:border-primary"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Slug *
-                </label>
-                <Input
-                  value={formData.slug}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setFormData((prev) => ({ ...prev, slug: value }));
-                    setSlugManuallyEdited(value.length > 0);
-                  }}
-                  required
-                  placeholder="auto-generated-from-name"
-                  className="h-12 border-slate-300 focus:border-primary"
-                />
-                <p className="text-xs text-slate-500">
-                  Auto-generated from name. Type to customize, clear to reset.
-                </p>
-              </div>
+      {/* Error banner */}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+          <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+          <p className="text-sm font-medium text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* ═══ Two-column layout ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ── LEFT COLUMN (2/3) ────────────────────────────────────── */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Product Name */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">
+                Product Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                value={formData.name}
+                onChange={(e) => {
+                  const newName = e.target.value;
+                  setFormData((prev) => ({
+                    ...prev,
+                    name: newName,
+                    slug: slugManuallyEdited
+                      ? prev.slug
+                      : generateSlug(newName),
+                  }));
+                }}
+                required
+                placeholder="e.g., Diamond Necklace Set"
+                className="h-11 border-slate-200 focus:border-slate-900 text-base"
+                autoFocus
+              />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700 block">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">
                 Description
               </label>
               <textarea
@@ -319,349 +441,293 @@ export default function ProductForm({
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="Materials, occasion, style details..."
+                placeholder="Materials, occasion, style details... (optional)"
                 rows={3}
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none resize-none"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
               />
             </div>
           </div>
 
-          {/* ── Section 3: Identifiers ────────────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Identifiers
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  SKU
-                </label>
-                <Input
-                  value={formData.sku}
-                  onChange={(e) =>
-                    setFormData({ ...formData, sku: e.target.value })
-                  }
-                  placeholder="PB-NK-001"
-                  className="h-12 border-slate-300 focus:border-primary font-mono text-sm"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Barcode
-                </label>
-                <div className="flex gap-2">
-                  <Input
-                    value={formData.barcode}
-                    onChange={(e) =>
-                      setFormData({ ...formData, barcode: e.target.value })
-                    }
-                    placeholder="Auto-generated"
-                    className="flex-1 h-12 border-slate-300 focus:border-primary font-mono text-sm"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={generateBarcode}
-                    className="h-12 px-3 border-slate-300"
-                    title="Generate barcode"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
+          {/* Media */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Images</h3>
+            <FileUpload
+              accept="image/*"
+              multiple={true}
+              maxFiles={MAX_IMAGES}
+              maxSize={5 * 1024 * 1024}
+              folder="products"
+              value={imageUrls}
+              onChange={setImageUrls}
+              helperText={`Drag & drop up to ${MAX_IMAGES} images. First image = primary.`}
+            />
           </div>
 
-          {/* ── Section 4: Categories ─────────────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Categories
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Main Category */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Main Category
-                </label>
-                <select
-                  value={formData.category_id}
-                  onChange={(e) => handleMainCategoryChange(e.target.value)}
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
-                >
-                  <option value="">Select category</option>
-                  {mains.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+          {/* Rent Price + Category — side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Rent Price */}
+            <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Rent Price <span className="text-red-500">*</span>
+              </h3>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold text-base">
+                  ₹
+                </span>
+                <Input
+                  type="number"
+                  value={formData.price_per_day}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      price_per_day: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  onFocus={clearZeroOnFocus}
+                  required
+                  placeholder="0"
+                  className="h-12 pl-8 border-slate-200 focus:border-slate-900 font-bold text-xl"
+                />
               </div>
+              <p className="text-xs text-slate-400">
+                Same price across all branches
+              </p>
+            </div>
 
-              {/* Subcategory */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Subcategory
-                </label>
+            {/* Categories */}
+            <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Category</h3>
+              <select
+                value={formData.category_id}
+                onChange={(e) => handleMainCategoryChange(e.target.value)}
+                className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none"
+              >
+                <option value="">Select category</option>
+                {mains.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+              {subs.length > 0 && (
                 <select
                   value={formData.subcategory_id}
                   onChange={(e) => handleSubCategoryChange(e.target.value)}
-                  disabled={!formData.category_id || subs.length === 0}
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none"
                 >
-                  <option value="">
-                    {!formData.category_id
-                      ? "← Pick category"
-                      : subs.length === 0
-                      ? "None available"
-                      : "Select subcategory"}
-                  </option>
+                  <option value="">Select subcategory</option>
                   {subs.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              {/* Variant */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Variant
-                </label>
+              )}
+              {variants.length > 0 && (
                 <select
                   value={formData.subvariant_id}
                   onChange={(e) =>
                     setFormData({ ...formData, subvariant_id: e.target.value })
                   }
-                  disabled={!formData.subcategory_id || variants.length === 0}
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none"
                 >
-                  <option value="">
-                    {!formData.subcategory_id
-                      ? "← Pick subcategory"
-                      : variants.length === 0
-                      ? "None available"
-                      : "Select variant"}
-                  </option>
+                  <option value="">Select variant</option>
                   {variants.map((v) => (
                     <option key={v.id} value={v.id}>
                       {v.name}
                     </option>
                   ))}
                 </select>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN (1/3) ───────────────────────────────────── */}
+        <div className="space-y-6">
+          {/* Status Toggle */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  Active Listing
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Visible in storefront
+                </p>
               </div>
+              <Switch
+                checked={formData.is_active}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, is_active: checked })
+                }
+              />
             </div>
           </div>
 
-          {/* ── Section 5: Branch ─────────────────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Branch
+          {/* Identifiers: SKU + Barcode */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Identifiers
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Available at Branch
-                </label>
-                <select
-                  value={formData.branch_id}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                SKU
+              </label>
+              <div className="flex gap-1.5">
+                <Input
+                  value={formData.sku}
                   onChange={(e) =>
-                    setFormData({ ...formData, branch_id: e.target.value })
+                    setFormData({ ...formData, sku: e.target.value })
                   }
-                  className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
+                  placeholder="e.g., PB-NK-001"
+                  className="h-9 border-slate-200 focus:border-slate-900 font-mono text-xs flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={generateSKU}
+                  className="h-9 w-9 border-slate-200 text-slate-500 hover:text-slate-900 shrink-0"
+                  title="Auto-generate SKU"
                 >
-                  {(userRole === 'admin' || userRole === 'super_admin') && !isEdit && (
-                    <option value="all">All Branches</option>
-                  )}
-                  <option value="">Select branch</option>
-                  {branches
-                    .filter((b) => b.is_active !== false)
-                    .map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                </select>
-                {(userRole === 'admin' || userRole === 'super_admin') && formData.branch_id === 'all' && (
-                  <p className="text-xs text-slate-500">
-                    Product will be available at all branches
-                  </p>
-                )}
+                  <Wand2 className="w-3.5 h-3.5" />
+                </Button>
               </div>
             </div>
-          </div>
-
-          {/* ── Section 6: Pricing & Inventory ────────────────────── */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Pricing & Inventory
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Rent Amount (₹) *
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-                    ₹
-                  </span>
-                  <Input
-                    type="number"
-                    value={formData.price_per_day}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        price_per_day: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    onFocus={clearZeroOnFocus}
-                    required
-                    placeholder="0"
-                    className="h-12 pl-7 border-slate-300 focus:border-primary"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Security Deposit (₹)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-                    ₹
-                  </span>
-                  <Input
-                    type="number"
-                    value={formData.security_deposit}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        security_deposit: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    onFocus={clearZeroOnFocus}
-                    placeholder="0"
-                    className="h-12 pl-7 border-slate-300 focus:border-primary"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Total Quantity *
-                </label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                Barcode
+              </label>
+              <div className="flex gap-1.5">
                 <Input
-                  type="number"
-                  value={formData.quantity}
+                  value={formData.barcode}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      quantity: parseInt(e.target.value) || 0,
-                    })
+                    setFormData({ ...formData, barcode: e.target.value })
                   }
-                  onFocus={clearZeroOnFocus}
-                  required
-                  placeholder="0"
-                  className="h-12 border-slate-300 focus:border-primary"
+                  placeholder="Auto-generated"
+                  className="h-9 border-slate-200 focus:border-slate-900 font-mono text-xs flex-1"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={generateBarcode}
+                  className="h-9 w-9 border-slate-200 text-slate-500 hover:text-slate-900 shrink-0"
+                  title="Auto-generate Barcode"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* URL Slug (collapsed, auto-generated) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                URL Slug
+              </label>
+              <Input
+                value={formData.slug}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, slug: e.target.value }));
+                  setSlugManuallyEdited(e.target.value.length > 0);
+                }}
+                placeholder="auto-generated"
+                className="h-9 border-slate-200 focus:border-slate-900 font-mono text-xs"
+              />
+            </div>
+          </div>
+
+          {/* Branch Inventory — ALL branches inline */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-900">
+                Stock by Branch
+              </h3>
+              <span className="text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                Total: {totalBranchQuantity}
+              </span>
+            </div>
+
+            {isLoadingInventory ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-900" />
+              </div>
+            ) : activeBranches.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4">
+                No active branches configured.
+              </p>
+            ) : (
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700 block">
-                  Low Stock Alert
-                </label>
-                <Input
-                  type="number"
-                  value={formData.low_stock_threshold}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      low_stock_threshold: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  onFocus={clearZeroOnFocus}
-                  placeholder="5"
-                  className="h-12 border-slate-300 focus:border-primary"
-                />
+                {branchStocks.map((entry) => (
+                  <div
+                    key={entry.branch_id}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Store className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="text-sm font-medium text-slate-800 truncate">
+                        {getBranchName(entry.branch_id)}
+                      </span>
+                    </div>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={entry.quantity}
+                      onChange={(e) =>
+                        handleStockChange(
+                          entry.branch_id,
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                      onFocus={clearZeroOnFocus}
+                      className="h-8 w-20 text-center font-bold border-slate-200 focus:border-slate-900"
+                    />
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
           </div>
+        </div>
+      </div>
 
-          {/* ── Section 7: Status & Options ───────────────────────── */}
-          <div className="space-y-4 pt-2">
-            <h3 className="text-lg font-semibold text-slate-900 border-b border-slate-200 pb-2">
-              Status
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <label className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer">
-                <span className="text-sm font-medium text-slate-700">
-                  Active
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formData.is_active}
-                  onChange={(e) =>
-                    setFormData({ ...formData, is_active: e.target.checked })
-                  }
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
-              <label className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer">
-                <span className="text-sm font-medium text-slate-700">
-                  Featured
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formData.is_featured}
-                  onChange={(e) =>
-                    setFormData({ ...formData, is_featured: e.target.checked })
-                  }
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
-              <label className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 cursor-pointer">
-                <span className="text-sm font-medium text-slate-700">
-                  Track Inventory
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formData.track_inventory}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      track_inventory: e.target.checked,
-                    })
-                  }
-                  className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* ── Submit ────────────────────────────────────────────── */}
-          <div className="flex gap-4 pt-6 border-t border-slate-200">
+      {/* ═══ Sticky Action Bar ═══ */}
+      <div className="sticky bottom-0 z-10 -mx-8 px-8 py-4 bg-white/95 backdrop-blur-sm border-t border-slate-200">
+        <div className="flex items-center justify-between max-w-6xl mx-auto">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push("/dashboard/products")}
+            className="h-10 border-slate-200 text-slate-600 hover:text-slate-900"
+          >
+            Cancel
+          </Button>
+          <div className="flex items-center gap-3">
+            {!isEdit && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+                onClick={() => handleSubmit(true)}
+                className="h-10 border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                {loading ? "Saving..." : "Save & Add Another"}
+              </Button>
+            )}
             <Button
-              type="submit"
+              type="button"
               disabled={loading}
-              variant="gradient"
-              className="flex-1 h-12 text-base"
+              onClick={() => handleSubmit(false)}
+              className="h-10 px-6 bg-slate-900 text-white hover:bg-slate-800 font-semibold"
             >
               {loading
                 ? "Saving..."
                 : isEdit
-                ? "Update Product"
+                ? "Save Changes"
                 : "Create Product"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push("/dashboard/products")}
-              className="flex-1 h-12 text-base border-slate-300 hover:bg-slate-50"
-            >
-              Cancel
-            </Button>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+    </div>
   );
 }

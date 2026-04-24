@@ -6,7 +6,7 @@
  * @module stores/index
  */
 
-export { useProductStore, useProductSelectors } from './productStore';
+export { useProductStore } from './productStore';
 export { useAppStore, useAppSelectors, appUtils } from './appStore';
 
 export type { 

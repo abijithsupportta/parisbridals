@@ -59,8 +59,8 @@ interface AppUIState {
   globalSearchOpen: boolean;
   globalSearchQuery: string;
 
-  // Branch Switching
-  selectedBranchId: string; // 'all' = all branches
+  // Branch Switching — always a specific branch id (no 'all' mode)
+  selectedBranchId: string;
 }
 
 export interface AppStore extends AppUIState {
@@ -120,7 +120,7 @@ const initialState: AppUIState = {
   globalSearchOpen: false,
   globalSearchQuery: '',
 
-  selectedBranchId: 'all',
+  selectedBranchId: '',
 };
 
 /**

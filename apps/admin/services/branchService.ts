@@ -49,7 +49,9 @@ class BranchService {
   }
 
   async createBranch(data: Omit<CreateBranchDTO, 'store_id'>): Promise<RepositoryResult<Branch>> {
-    const payload = { ...data, store_id: DEFAULT_STORE_ID };
+    // New branches can never be main — there can only ever be one main branch,
+    // set at initial system setup. Force-clear any attempt.
+    const payload = { ...data, is_main: false, store_id: DEFAULT_STORE_ID };
     const validation = CreateBranchSchema.safeParse(payload);
     if (!validation.success) {
       return validationError(validation.error.issues.map(i => i.message).join(', '));
@@ -62,13 +64,39 @@ class BranchService {
     if (!validation.success) {
       return validationError(validation.error.issues.map(i => i.message).join(', '));
     }
+
+    // Block promoting a non-main branch to main — the main branch is fixed.
+    if (data.is_main === true) {
+      const current = await branchRepository.findById(id);
+      if (current.success && current.data && !current.data.is_main) {
+        return validationError(
+          'The main branch cannot be changed. Only one main branch is allowed.',
+          'MAIN_BRANCH_LOCKED'
+        );
+      }
+    }
+
+    // Also block demoting the main branch (is_main set to false on the current main)
+    if (data.is_main === false) {
+      const current = await branchRepository.findById(id);
+      if (current.success && current.data?.is_main) {
+        return validationError(
+          'The main branch cannot be demoted.',
+          'MAIN_BRANCH_LOCKED'
+        );
+      }
+    }
+
     return branchRepository.update(id, data);
   }
 
   async deleteBranch(id: string): Promise<RepositoryResult<boolean>> {
     // Check if this is the main branch — cannot delete main branch
     const branch = await branchRepository.findById(id);
-    if (branch.success && branch.data?.is_main) {
+    if (!branch.success || !branch.data) {
+      return validationError('Branch not found', 'NOT_FOUND');
+    }
+    if (branch.data.is_main) {
       return validationError('Main branch cannot be deleted', 'DELETE_BLOCKED');
     }
 
@@ -77,6 +105,23 @@ class BranchService {
     if (check.success && check.data && !check.data.canDelete) {
       return validationError(check.data.reason || 'Cannot delete branch', 'DELETE_BLOCKED');
     }
+
+    // Clean up branch_inventory records for this branch before deleting.
+    // The DB has ON DELETE CASCADE on branch_inventory.branch_id, but we
+    // explicitly delete here so we can update product-level totals afterward.
+    try {
+      const { branchInventoryRepository } = await import('@/repository');
+      const inventoryResult = await branchInventoryRepository.getInventoryByBranch(id);
+      if (inventoryResult.success && inventoryResult.data) {
+        for (const inv of inventoryResult.data) {
+          await branchInventoryRepository.deleteBranchInventory(inv.id);
+        }
+      }
+    } catch (err) {
+      // Non-fatal: DB cascade will handle cleanup even if this fails
+      console.warn('[BranchService] Failed to pre-clean branch_inventory, relying on DB cascade:', err);
+    }
+
     return branchRepository.delete(id);
   }
 

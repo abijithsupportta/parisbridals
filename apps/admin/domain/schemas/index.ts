@@ -80,3 +80,16 @@ export type {
   CreateOrderInput,
   UpdateOrderInput,
 } from './common.schema';
+
+// Branch inventory schemas
+export {
+  CreateBranchInventorySchema,
+  UpdateBranchInventorySchema,
+  InventoryAdjustmentSchema,
+} from './branch-inventory.schema';
+
+export type {
+  CreateBranchInventoryInput,
+  UpdateBranchInventoryInput,
+  InventoryAdjustmentInput,
+} from './branch-inventory.schema';
