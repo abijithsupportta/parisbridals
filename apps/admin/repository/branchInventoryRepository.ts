@@ -19,7 +19,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async getBranchInventoryById(id: string): Promise<RepositoryResult<BranchInventory>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .select(`
         *,
         branch:branches(id, name),
@@ -36,7 +36,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async getInventoryByBranch(branchId: string): Promise<RepositoryResult<BranchInventory[]>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .select(`
         *,
         product:products(id, name, sku, images)
@@ -52,7 +52,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async getInventoryByProduct(productId: string): Promise<RepositoryResult<BranchInventory[]>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .select(`
         *,
         branch:branches(id, name)
@@ -68,7 +68,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async getBranchProductInventory(branchId: string, productId: string): Promise<RepositoryResult<BranchInventory | null>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .select('*')
       .eq('branch_id', branchId)
       .eq('product_id', productId)
@@ -82,7 +82,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async createBranchInventory(inventory: CreateBranchInventoryDTO): Promise<RepositoryResult<BranchInventory>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .insert({
         ...inventory,
         quantity: inventory.quantity ?? 0,
@@ -101,7 +101,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async updateBranchInventory(id: string, inventory: UpdateBranchInventoryDTO): Promise<RepositoryResult<BranchInventory>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .update(inventory)
       .eq('id', id)
       .select()
@@ -115,7 +115,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async deleteBranchInventory(id: string): Promise<RepositoryResult<null>> {
     const { error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .delete()
       .eq('id', id);
 
@@ -141,7 +141,7 @@ export class BranchInventoryRepository extends BaseRepository {
     const newAvailable = Math.max(0, Math.min(current.available_quantity + adjustment, newQuantity));
 
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .update({
         quantity: newQuantity,
         available_quantity: newAvailable,
@@ -158,7 +158,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async getLowStockItems(branchId: string): Promise<RepositoryResult<BranchInventory[]>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .select(`
         *,
         product:products(id, name, sku, images)
@@ -181,7 +181,7 @@ export class BranchInventoryRepository extends BaseRepository {
    */
   async getAllBranchInventory(): Promise<RepositoryResult<BranchInventory[]>> {
     const { data, error } = await this.client
-      .from('branch_inventory')
+      .from('product_inventory')
       .select(`
         *,
         branch:branches(id, name),
