@@ -115,26 +115,42 @@ export class OrderRepository extends BaseRepository {
 
     const totalQuantity = productResponse.data?.quantity || 0;
 
-    // Query existing orders that overlap with the requested date range
-    // Overlap condition: (start1 <= end2) AND (end1 >= start2)
+    // Fetch all active order items for this product
     const ordersResponse = await this.client
       .from('order_items')
-      .select('quantity')
+      .select('quantity, returned_quantity, orders!inner(start_date, end_date, status)')
       .eq('product_id', productId)
-      .gte('order(rental_start_date)', startDate)
-      .lte('order(rental_start_date)', endDate);
+      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
 
     if (ordersResponse.error) {
       return this.handleResponse<{ available: number; total: number }>(ordersResponse);
     }
 
-    const reservedQuantity = ordersResponse.data?.reduce((sum: number, item: any) => sum + item.quantity, 0) || 0;
+    const reqStart = new Date(startDate).getTime();
+    const reqEnd = new Date(endDate).getTime();
+
+    // Calculate reserved quantity based on overlapping active orders
+    const reservedQuantity = ordersResponse.data?.reduce((sum: number, item: any) => {
+       const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
+       if (!order) return sum;
+       
+       const ordStart = new Date(order.start_date).getTime();
+       const ordEnd = new Date(order.end_date).getTime();
+       
+       // Overlap condition
+       if (ordStart <= reqEnd && ordEnd >= reqStart) {
+          const unreturned = item.quantity - (item.returned_quantity || 0);
+          return sum + unreturned;
+       }
+       return sum;
+    }, 0) || 0;
+
     const availableQuantity = Math.max(0, totalQuantity - reservedQuantity);
 
     return {
-      success: true,
       data: { available: availableQuantity, total: totalQuantity },
       error: null,
+      success: true,
     };
   }
 
@@ -512,19 +528,21 @@ export class OrderRepository extends BaseRepository {
       .eq('id', orderId)
       .single();
 
-    let newTotalAmount = currentOrder?.total_amount || 0;
+    let newTotalAmount = Number(currentOrder?.total_amount || 0);
     
     // Add late fee and damage charges, subtract discounts
-    const lateFee = returnData.late_fee || 0;
-    const discount = returnData.discount || 0;
+    const lateFee = Number(returnData.late_fee || 0);
+    const discount = Number(returnData.discount || 0);
     const totalDeductions = lateFee + totalDamageCharges - discount;
 
     newTotalAmount = Math.max(0, newTotalAmount + totalDeductions);
     
     // Update payment status if the new total changed and is not fully paid anymore
     let paymentStatus = undefined;
-    if (currentOrder && newTotalAmount > currentOrder.amount_paid) {
-       paymentStatus = currentOrder.amount_paid > 0 ? 'partial' : 'pending';
+    const amountPaid = Number(currentOrder?.amount_paid || 0);
+    console.log(`processReturn: newTotalAmount=${newTotalAmount}, amountPaid=${amountPaid}, totalDeductions=${totalDeductions}`);
+    if (currentOrder && newTotalAmount > amountPaid) {
+       paymentStatus = amountPaid > 0 ? 'partial' : 'pending';
     }
 
     // Update order status and totals

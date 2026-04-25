@@ -151,7 +151,14 @@ export class OrderService {
       }
       
       const availCheck = await this.checkAvailability(item.product_id, data.rental_start_date, data.rental_end_date, data.branch_id);
-      if (availCheck.success && availCheck.data!.available < item.quantity) {
+      if (!availCheck.success) {
+        return {
+          data: null,
+          error: availCheck.error,
+          success: false
+        };
+      }
+      if (availCheck.data!.available < item.quantity) {
         return {
           data: null,
           error: { message: `Insufficient availability for product. Only ${availCheck.data!.available} available.`, code: 'VALIDATION_ERROR' } as any,
@@ -259,12 +266,12 @@ export class OrderService {
       };
     }
 
-    // Cannot delete orders that are in progress or completed
-    if (existingOrder.data.status === OrderStatus.IN_USE || 
-        existingOrder.data.status === OrderStatus.DELIVERED ||
-        existingOrder.data.status === OrderStatus.RETURNED ||
-        existingOrder.data.status === OrderStatus.LATE_RETURN ||
-        existingOrder.data.status === OrderStatus.COMPLETED) {
+    // Cannot delete orders that are active, completed or returned
+    if ([
+        OrderStatus.IN_USE, OrderStatus.DELIVERED, OrderStatus.RETURNED, 
+        OrderStatus.LATE_RETURN, OrderStatus.COMPLETED, OrderStatus.ONGOING, 
+        OrderStatus.FLAGGED, OrderStatus.PARTIAL
+    ].includes(existingOrder.data.status as OrderStatus)) {
       return {
         data: null,
         error: {
