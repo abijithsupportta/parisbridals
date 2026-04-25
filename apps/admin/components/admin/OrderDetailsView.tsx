@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   Package, CheckCircle2, AlertTriangle,
-  ArrowLeft, XCircle, Phone
+  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -99,8 +99,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
   const handleCollectPayment = async () => {
     const amountVal = parseFloat(paymentForm.amount) || 0;
+    const maxAmount = paymentForm.paymentType === PaymentType.DEPOSIT ? (order?.security_deposit || 0) : amount_due;
+
     if (!order || amountVal <= 0) {
       showError("Validation Error", "Amount must be greater than 0");
+      return;
+    }
+
+    if (amountVal > maxAmount) {
+      showError("Validation Error", `Amount cannot exceed ${formatCurrency(maxAmount)}`);
       return;
     }
 
@@ -126,6 +133,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             });
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
+            showSuccess("Payment Recorded", "Payment was successfully processed.");
           },
         }
       );
@@ -430,51 +438,97 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         onClose={() => setIsPaymentModalOpen(false)}
         title={paymentForm.paymentType === PaymentType.DEPOSIT ? "Collect Security Deposit" : "Collect Payment"}
       >
-        <div className="space-y-5 pt-2">
-          <div className="space-y-2">
-            <Label className="font-bold text-slate-700">Payment Method</Label>
-            <Select
-              value={paymentForm.paymentMode}
-              onValueChange={(value) => setPaymentForm({ ...paymentForm, paymentMode: value as PaymentMode })}
-            >
-              <SelectTrigger className="w-full h-12 text-base rounded-lg border-slate-300">
-                <SelectValue placeholder="Select a payment method" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={PaymentMode.CASH}>Cash</SelectItem>
-                <SelectItem value={PaymentMode.UPI}>UPI</SelectItem>
-                <SelectItem value={PaymentMode.CARD}>Card</SelectItem>
-                <SelectItem value={PaymentMode.BANK_TRANSFER}>Bank Transfer</SelectItem>
-                <SelectItem value={PaymentMode.CHEQUE}>Cheque</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="p-6 space-y-6">
+          {/* Summary Box */}
+          <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex justify-between items-center shadow-sm">
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
+                {paymentForm.paymentType === PaymentType.DEPOSIT ? 'Security Deposit' : 'Remaining Due'}
+              </p>
+              <p className="text-2xl font-black text-slate-900">
+                {formatCurrency(paymentForm.paymentType === PaymentType.DEPOSIT ? (order?.security_deposit || 0) : amount_due)}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Paying</p>
+              <p className={`text-2xl font-black ${parseFloat(paymentForm.amount) > (paymentForm.paymentType === PaymentType.DEPOSIT ? (order?.security_deposit || 0) : amount_due) ? 'text-red-600' : 'text-emerald-600'}`}>
+                {formatCurrency(parseFloat(paymentForm.amount) || 0)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Payment Method</Label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { id: PaymentMode.CASH, label: "Cash", icon: Banknote },
+                { id: PaymentMode.UPI, label: "UPI", icon: Smartphone },
+                { id: PaymentMode.CARD, label: "Card", icon: CreditCard },
+                { id: PaymentMode.BANK_TRANSFER, label: "Bank", icon: Building2 },
+              ].map((method) => {
+                const Icon = method.icon;
+                const isSelected = paymentForm.paymentMode === method.id;
+                return (
+                  <button
+                    key={method.id}
+                    type="button"
+                    onClick={() => setPaymentForm({ ...paymentForm, paymentMode: method.id })}
+                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                      isSelected 
+                        ? 'border-slate-900 bg-slate-900 text-white shadow-md' 
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Icon className={`w-6 h-6 mb-2 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                    <span className="text-sm font-bold">{method.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
           
-          <div className="space-y-2">
-            <Label className="font-bold text-slate-700">Amount (₹)</Label>
+          <div className="space-y-3">
+            <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs flex justify-between items-center">
+              <span>Amount (₹)</span>
+              <button 
+                type="button" 
+                onClick={() => setPaymentForm({ ...paymentForm, amount: (paymentForm.paymentType === PaymentType.DEPOSIT ? (order?.security_deposit || 0) : amount_due).toString() })}
+                className="text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-50 px-3 py-1 rounded-full text-[10px]"
+              >
+                PAY FULL AMOUNT
+              </button>
+            </Label>
             <Input
               type="number"
               value={paymentForm.amount}
-              onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-              className="w-full h-12 text-lg font-bold rounded-lg border-slate-300"
-              placeholder="0.00"
+              onChange={(e) => {
+                 const val = e.target.value;
+                 const maxPayable = paymentForm.paymentType === PaymentType.DEPOSIT ? (order?.security_deposit || 0) : amount_due;
+                 if (parseFloat(val) > maxPayable) {
+                    setPaymentForm({ ...paymentForm, amount: maxPayable.toString() });
+                 } else {
+                    setPaymentForm({ ...paymentForm, amount: val });
+                 }
+              }}
+              className="w-full h-14 text-2xl font-black rounded-xl border-slate-300 bg-slate-50 focus:bg-white shadow-inner px-4"
+              placeholder="0"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="font-bold text-slate-700">Notes / Ref ID <span className="text-slate-400 font-normal">(Optional)</span></Label>
+          <div className="space-y-3">
+            <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Notes / Ref ID <span className="text-slate-400 font-normal capitalize">(Optional)</span></Label>
             <Input
               value={paymentForm.notes}
               onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-              className="w-full h-12 rounded-lg border-slate-300"
+              className="w-full h-12 rounded-xl border-slate-300 bg-slate-50 focus:bg-white px-4"
               placeholder="E.g. UPI Ref #123456"
             />
           </div>
 
-          <div className="pt-6 flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} className="h-12 px-6 rounded-lg font-bold">Cancel</Button>
-            <Button onClick={handleCollectPayment} disabled={isCreatingPayment} className="h-12 px-8 rounded-lg font-bold text-white bg-slate-900 hover:bg-slate-800">
-              {isCreatingPayment ? "Saving..." : "Save Payment"}
+          <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
+            <Button onClick={handleCollectPayment} disabled={isCreatingPayment} className="h-12 px-8 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">
+              {isCreatingPayment ? "Processing..." : "Confirm Payment"}
             </Button>
           </div>
         </div>
