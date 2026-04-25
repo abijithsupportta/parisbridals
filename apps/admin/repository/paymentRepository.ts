@@ -102,7 +102,7 @@ export class PaymentRepository extends BaseRepository {
       .from(this.tableName)
       .insert({
         ...data,
-        ...this.getCreateAuditFields(),
+        created_by: this.currentUserId,
       })
       .select()
       .maybeSingle();
@@ -119,7 +119,6 @@ export class PaymentRepository extends BaseRepository {
       .update({
         ...data,
         updated_at: new Date().toISOString(),
-        ...this.getUpdateAuditFields(),
       })
       .eq('id', id)
       .select()
