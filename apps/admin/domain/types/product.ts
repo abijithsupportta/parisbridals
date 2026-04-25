@@ -95,6 +95,7 @@ export interface CreateProductDTO {
   is_featured?: boolean;
   track_inventory?: boolean;
   low_stock_threshold?: number;
+  branch_inventory?: Array<{ branch_id: string; quantity: number; id?: string }>;
 }
 
 // Product Update DTO
@@ -117,6 +118,8 @@ export interface UpdateProductDTO {
   is_featured?: boolean;
   track_inventory?: boolean;
   low_stock_threshold?: number;
+  branch_inventory?: Array<{ branch_id: string; quantity: number; id?: string }>;
+  removed_inventory_ids?: string[];
 }
 
 // Product Search Parameters

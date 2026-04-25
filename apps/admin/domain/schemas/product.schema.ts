@@ -61,6 +61,11 @@ export const CreateProductSchema = z.object({
   is_featured: z.boolean().default(false),
   track_inventory: z.boolean().default(true),
   low_stock_threshold: z.number().int().min(0).default(5),
+  branch_inventory: z.array(z.object({
+    branch_id: z.string(),
+    quantity: z.number().int().min(0),
+    id: z.string().optional(),
+  })).optional(),
 });
 
 // Product Update Schema
@@ -86,6 +91,12 @@ export const UpdateProductSchema = z.object({
   is_featured: z.boolean().optional(),
   track_inventory: z.boolean().optional(),
   low_stock_threshold: z.number().int().min(0).optional(),
+  branch_inventory: z.array(z.object({
+    branch_id: z.string(),
+    quantity: z.number().int().min(0),
+    id: z.string().optional(),
+  })).optional(),
+  removed_inventory_ids: z.array(z.string()).optional(),
 }).refine((data) => {
   if (data.quantity !== undefined && data.available_quantity !== undefined) {
     return data.available_quantity <= data.quantity;

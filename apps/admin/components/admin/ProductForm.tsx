@@ -263,11 +263,18 @@ export default function ProductForm({
           sku: formData.sku || undefined,
           barcode: formData.barcode || undefined,
           description: formData.description || undefined,
+          branch_inventory: branchStocks.filter((s) => s.id || s.quantity > 0).map(s => ({
+            id: s.id,
+            branch_id: s.branch_id,
+            quantity: s.quantity
+          })),
         };
 
         let productId: string;
 
         if (isEdit && product) {
+          // Include items removed from inventory in edit mode
+          (basePayload as any).removed_inventory_ids = removedInventoryIds;
           const res = await fetch(`/api/products/${product.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -297,44 +304,6 @@ export default function ProductForm({
             return;
           }
           productId = result?.data?.id;
-        }
-
-        // Save branch inventory (parallel — fast, ~500ms)
-        try {
-          const deletePromises = removedInventoryIds.map((rid) =>
-            fetch(`/api/branch-inventory/${rid}`, { method: "DELETE" })
-          );
-          await Promise.all(deletePromises);
-
-          const upsertPromises = branchStocks
-            .filter((entry) => entry.id || entry.quantity > 0)
-            .map((entry) => {
-              if (entry.id) {
-                return fetch(`/api/branch-inventory/${entry.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    quantity: entry.quantity,
-                    available_quantity: entry.quantity,
-                    low_stock_threshold: 0,
-                  }),
-                });
-              }
-              return fetch("/api/branch-inventory", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  branch_id: entry.branch_id,
-                  product_id: productId,
-                  quantity: entry.quantity,
-                  available_quantity: entry.quantity,
-                  low_stock_threshold: 0,
-                }),
-              });
-            });
-          await Promise.all(upsertPromises);
-        } catch (invErr) {
-          console.error("Branch inventory save error:", invErr);
         }
 
         // Wipe ALL product + inventory cache so list page fetches fresh

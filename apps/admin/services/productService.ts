@@ -136,9 +136,12 @@ export class ProductService {
       branchId = undefined;
     }
 
+    // Extract branch_inventory from data before passing to repository
+    const { branch_inventory, ...restData } = data;
+
     // Create product with adjusted branch_id
-    const createData = { ...data, branch_id: branchId };
-    const createResult = await productRepository.create(createData);
+    const createData = { ...restData, branch_id: branchId };
+    const createResult = await productRepository.create(createData as CreateProductDTO);
     
     if (!createResult.success || !createResult.data) {
       return createResult;
@@ -152,18 +155,31 @@ export class ProductService {
       if (branchesResult.success && branchesResult.data) {
         const adminClient = (await import('@/lib/supabase/server')).createAdminClient();
         
-        for (const branch of branchesResult.data) {
-          await adminClient
-            .from('product_inventory')
-            .insert({
-              product_id: createResult.data.id,
-              branch_id: branch.id,
-              quantity: data.quantity || 0,
-              available_quantity: data.quantity || 0,
-              low_stock_threshold: data.low_stock_threshold ?? 5,
-            });
+        const inventoryPayload = branchesResult.data.map(branch => ({
+          product_id: createResult.data!.id,
+          branch_id: branch.id,
+          quantity: data.quantity || 0,
+          available_quantity: data.quantity || 0,
+          low_stock_threshold: data.low_stock_threshold ?? 5,
+        }));
+        
+        if (inventoryPayload.length > 0) {
+          await adminClient.from('product_inventory').insert(inventoryPayload);
         }
       }
+    } else if (branch_inventory && branch_inventory.length > 0) {
+      // Handle bulk insert of specific branch inventory from frontend payload
+      const adminClient = (await import('@/lib/supabase/server')).createAdminClient();
+      
+      const inventoryPayload = branch_inventory.map(inv => ({
+        product_id: createResult.data!.id,
+        branch_id: inv.branch_id,
+        quantity: inv.quantity || 0,
+        available_quantity: inv.quantity || 0,
+        low_stock_threshold: data.low_stock_threshold ?? 5,
+      }));
+      
+      await adminClient.from('product_inventory').insert(inventoryPayload);
     }
 
     // Return product with relations
@@ -238,11 +254,45 @@ export class ProductService {
       }
     }
 
+    // Extract branch_inventory and removed_inventory_ids before updating product
+    const { branch_inventory, removed_inventory_ids, ...restData } = data;
+
     // Update product
-    const updateResult = await productRepository.update(id, data);
+    const updateResult = await productRepository.update(id, restData as UpdateProductDTO);
     
     if (!updateResult.success || !updateResult.data) {
       return updateResult;
+    }
+
+    const adminClient = (await import('@/lib/supabase/server')).createAdminClient();
+
+    // Process branch inventory deletions if any
+    if (removed_inventory_ids && removed_inventory_ids.length > 0) {
+      await adminClient
+        .from('product_inventory')
+        .delete()
+        .in('id', removed_inventory_ids);
+    }
+
+    // Process branch inventory bulk upsert
+    if (branch_inventory && branch_inventory.length > 0) {
+      const upsertPayload = branch_inventory.map(inv => {
+        const payload: any = {
+          product_id: id,
+          branch_id: inv.branch_id,
+          quantity: inv.quantity || 0,
+          available_quantity: inv.quantity || 0,
+          low_stock_threshold: restData.low_stock_threshold ?? existingProduct.data!.low_stock_threshold ?? 5,
+        };
+        if (inv.id) {
+          payload.id = inv.id;
+        }
+        return payload;
+      });
+
+      await adminClient
+        .from('product_inventory')
+        .upsert(upsertPayload, { onConflict: 'product_id, branch_id' });
     }
 
     // Return updated product with relations
