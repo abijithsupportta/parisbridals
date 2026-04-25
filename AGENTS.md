@@ -11,9 +11,10 @@
 1. Run `flutter analyze --no-pub` (for Flutter/Dart) or `pnpm run build` / `tsc --noEmit` (for Next.js/React apps).
 2. Fix ALL `error` and `warning` level issues before delivering to the user.
 3. Verify there are no runtime issues (e.g., React hook mismatches, unhandled rejections).
-4. **Push to GitHub:** Once all build and runtime issues are completely resolved, you MUST `git add`, `git commit`, and `git push` the code to the repository. Do not push broken code.
+4. **Push to GitHub:** Once all build and runtime issues are completely resolved, you MUST `git add`, `git commit`, and `git push` the code to the repository. 
+   **CRITICAL BRANCH RULE:** You must ONLY ever push to the `abijithcb` branch. NEVER push to the `main` branch.
 
-**This is non-negotiable. Every single change must be verified and pushed to GitHub.**
+**This is non-negotiable. Every single change must be verified and pushed to the abijithcb branch.**
 
 ---
 
