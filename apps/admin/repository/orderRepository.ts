@@ -811,6 +811,9 @@ export class OrderRepository extends BaseRepository {
       .update({
         status: newStatus,
         total_amount: newTotalAmount,
+        late_fee: lateFee,
+        discount: discount,
+        damage_charges_total: totalDamageCharges,
         ...(paymentStatus ? { payment_status: paymentStatus } : {})
       })
       .eq('id', orderId)

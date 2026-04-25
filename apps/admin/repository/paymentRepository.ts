@@ -38,7 +38,7 @@ export class PaymentRepository extends BaseRepository {
   async findByOrderId(orderId: string): Promise<RepositoryResult<Payment[]>> {
     const response = await this.client
       .from(this.tableName)
-      .select('*')
+      .select('*, staff:created_by(id, name)')
       .eq('order_id', orderId)
       .order('payment_date', { ascending: false });
 

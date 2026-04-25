@@ -95,6 +95,9 @@ export interface Order {
   delivery_method?: DeliveryMethod;
   delivery_address?: string;
   pickup_address?: string;
+  late_fee: number;
+  discount: number;
+  damage_charges_total: number;
   readonly created_at: string;
   readonly updated_at?: string;
 }
@@ -168,6 +171,11 @@ export interface UpdateOrderDTO {
   deposit_returned_at?: string;
   amount_paid?: number;
   payment_status?: PaymentStatus | string;
+  security_deposit?: number;
+  late_fee?: number;
+  discount?: number;
+  damage_charges_total?: number;
+  total_amount?: number;
 }
 
 // Return Order DTO

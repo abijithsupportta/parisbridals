@@ -52,6 +52,11 @@ export const UpdateOrderSchema = z.object({
   deposit_returned_at: z.string().datetime().optional(),
   amount_paid: z.number().nonnegative().optional(),
   payment_status: z.nativeEnum(PaymentStatus).optional(),
+  security_deposit: z.number().nonnegative().optional(),
+  late_fee: z.number().nonnegative().optional(),
+  discount: z.number().nonnegative().optional(),
+  damage_charges_total: z.number().nonnegative().optional(),
+  total_amount: z.number().nonnegative().optional(),
 }).refine((data) => {
   if (data.start_date && data.end_date) {
     const start = new Date(data.start_date);
