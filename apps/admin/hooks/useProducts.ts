@@ -109,22 +109,64 @@ export function useProduct(id: string) {
  */
 export function useCreateProduct() {
   const queryClient = useQueryClient();
-  const { showError } = useAppStore();
+  const { showError, showSuccess } = useAppStore();
   const closeCreateModal = useProductStore((state) => state.closeCreateModal);
 
   const mutation = useMutation({
     mutationFn: (data: CreateProductDTO) =>
-      apiFetch('/api/products', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      apiFetch<ApiSuccessResponse<ProductWithRelations>>('/api/products', { method: 'POST', body: JSON.stringify(data) }),
+    onMutate: async (newProduct) => {
+      // Cancel any outgoing refetches so they don't overwrite our optimistic update
+      await queryClient.cancelQueries({ queryKey: productKeys.all });
+
+      // Snapshot the previous value
+      const previousQueries = queryClient.getQueriesData<ProductSearchResult>({ queryKey: productKeys.all });
+
+      // Optimistically update the list
+      queryClient.setQueriesData<ProductSearchResult>({ queryKey: productKeys.all }, (old) => {
+        if (!old) return old;
+        const optimisticId = `temp-${Date.now()}`;
+        const optimisticProduct = {
+           id: optimisticId,
+           ...newProduct,
+           created_at: new Date().toISOString(),
+           updated_at: new Date().toISOString(),
+           is_active: newProduct.is_active ?? true,
+        } as Product;
+
+        return {
+          ...old,
+          products: [optimisticProduct, ...old.products],
+          total: old.total + 1,
+        };
+      });
+
+      return { previousQueries };
+    },
+    onSuccess: (res) => {
+      showSuccess('Product created successfully');
+      // The actual product from DB will replace the optimistic one
+      queryClient.invalidateQueries({ queryKey: productKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
       closeCreateModal();
     },
-    onError: (error) => showError('Failed to create product', error.message),
+    onError: (error, newProduct, context) => {
+      // Rollback on failure
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      showError('Failed to create product', error.message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: productKeys.all });
+    }
   });
 
   return {
     ...mutation,
-    createProduct: mutation.mutate,
+    createProduct: mutation.mutateAsync, // Expose mutateAsync for the form
     isLoading: mutation.isPending,
   };
 }
@@ -134,23 +176,67 @@ export function useCreateProduct() {
  */
 export function useUpdateProduct() {
   const queryClient = useQueryClient();
-  const { showError } = useAppStore();
+  const { showError, showSuccess } = useAppStore();
   const closeEditModal = useProductStore((state) => state.closeEditModal);
 
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProductDTO }) =>
-      apiFetch(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      apiFetch<ApiSuccessResponse<ProductWithRelations>>(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: productKeys.all });
+      await queryClient.cancelQueries({ queryKey: productKeys.detail(id) });
+
+      const previousQueries = queryClient.getQueriesData<ProductSearchResult>({ queryKey: productKeys.all });
+      const previousDetail = queryClient.getQueryData<ProductWithRelations>(productKeys.detail(id));
+
+      // Optimistically update the list
+      queryClient.setQueriesData<ProductSearchResult>({ queryKey: productKeys.all }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          products: old.products.map(p => p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } as Product : p),
+        };
+      });
+
+      // Optimistically update detail view
+      queryClient.setQueryData<ProductWithRelations>(productKeys.detail(id), (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          ...data,
+          updated_at: new Date().toISOString()
+        } as ProductWithRelations;
+      });
+
+      return { previousQueries, previousDetail, id };
+    },
+    onSuccess: (res, variables) => {
+      showSuccess('Product updated successfully');
+      queryClient.invalidateQueries({ queryKey: productKeys.all });
       queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
       closeEditModal();
     },
-    onError: (error) => showError('Failed to update product', error.message),
+    onError: (error, variables, context) => {
+      if (context?.previousQueries) {
+        for (const [key, data] of context.previousQueries) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      if (context?.previousDetail && context.id) {
+        queryClient.setQueryData(productKeys.detail(context.id), context.previousDetail);
+      }
+      showError('Failed to update product', error.message);
+    },
+    onSettled: (data, error, variables) => {
+      queryClient.invalidateQueries({ queryKey: productKeys.all });
+      queryClient.invalidateQueries({ queryKey: productKeys.detail(variables.id) });
+    }
   });
 
   return {
     ...mutation,
-    updateProduct: mutation.mutate,
+    updateProduct: mutation.mutateAsync, // Expose mutateAsync
     isLoading: mutation.isPending,
   };
 }

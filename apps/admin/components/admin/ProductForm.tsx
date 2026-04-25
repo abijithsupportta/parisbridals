@@ -22,6 +22,7 @@ import { type Category } from "@/domain/types/category";
 import { type Product } from "@/domain/types/product";
 import { useAppStore } from "@/stores";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
 
 const MAX_IMAGES = 5;
 
@@ -69,6 +70,8 @@ export default function ProductForm({
   const isEdit = !!product;
   const { showError, showSuccess, user } = useAppStore();
   const queryClient = useQueryClient();
+  const { createProduct } = useCreateProduct();
+  const { updateProduct } = useUpdateProduct();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -270,47 +273,16 @@ export default function ProductForm({
           })),
         };
 
-        let productId: string;
-
         if (isEdit && product) {
           // Include items removed from inventory in edit mode
           (basePayload as any).removed_inventory_ids = removedInventoryIds;
-          const res = await fetch(`/api/products/${product.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(basePayload),
-          });
-          const result = await res.json();
-          if (!res.ok || !result?.success) {
-            showError(result?.error?.message || result?.message || "Failed to update product");
-            setLoading(false);
-            return;
-          }
-          productId = product.id;
+          await updateProduct({ id: product.id, data: basePayload as any });
         } else {
-          const res = await fetch("/api/products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(basePayload),
-          });
-          const result = await res.json();
-          if (!res.ok || !result?.success) {
-            let msg = result?.error?.message || result?.message || "Failed to create product";
-            if (result?.error?.code === "SLUG_EXISTS") {
-              msg = "A product with this slug already exists.";
-            }
-            showError(msg);
-            setLoading(false);
-            return;
-          }
-          productId = result?.data?.id;
+          await createProduct(basePayload as any);
         }
 
-        // Wipe ALL product + inventory cache so list page fetches fresh
-        queryClient.removeQueries({ queryKey: ["products"] });
-        queryClient.removeQueries({ queryKey: ["branch-inventory"] });
-
-        showSuccess(isEdit ? "Product updated" : "Product created");
+        // With Optimistic UI, success UI and cache invalidation are handled by the hook
+        // We just need to navigate or reset the form.
 
         if (continueAdding && !isEdit) {
           // Reset form for next product
