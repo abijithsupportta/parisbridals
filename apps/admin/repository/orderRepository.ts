@@ -249,34 +249,36 @@ export class OrderRepository extends BaseRepository {
       return this.handleResponse<OrderWithRelations>(itemsResponse);
     }
 
-    // Deduct inventory
-    for (const item of data.items) {
-      const { data: inv } = await this.client
-        .from('product_inventory')
-        .select('available_quantity')
-        .eq('product_id', item.product_id)
-        .eq('branch_id', data.branch_id)
-        .single();
-        
-      if (inv) {
-        await this.client
+    // Deduct inventory only if starting immediately
+    if (initialStatus === 'ongoing') {
+      for (const item of data.items) {
+        const { data: inv } = await this.client
           .from('product_inventory')
-          .update({ available_quantity: Math.max(0, inv.available_quantity - item.quantity) })
+          .select('available_quantity')
           .eq('product_id', item.product_id)
-          .eq('branch_id', data.branch_id);
-      }
-      
-      const { data: prod } = await this.client
-        .from('products')
-        .select('available_quantity')
-        .eq('id', item.product_id)
-        .single();
+          .eq('branch_id', data.branch_id)
+          .single();
+          
+        if (inv) {
+          await this.client
+            .from('product_inventory')
+            .update({ available_quantity: Math.max(0, inv.available_quantity - item.quantity) })
+            .eq('product_id', item.product_id)
+            .eq('branch_id', data.branch_id);
+        }
         
-      if (prod) {
-        await this.client
+        const { data: prod } = await this.client
           .from('products')
-          .update({ available_quantity: Math.max(0, prod.available_quantity - item.quantity) })
-          .eq('id', item.product_id);
+          .select('available_quantity')
+          .eq('id', item.product_id)
+          .single();
+          
+        if (prod) {
+          await this.client
+            .from('products')
+            .update({ available_quantity: Math.max(0, prod.available_quantity - item.quantity) })
+            .eq('id', item.product_id);
+        }
       }
     }
 
@@ -297,6 +299,16 @@ export class OrderRepository extends BaseRepository {
    * Update an existing order
    */
   async update(id: string, data: UpdateOrderDTO): Promise<RepositoryResult<OrderWithRelations>> {
+    // Fetch existing order to check status transitions
+    const oldOrderResponse = await this.client
+      .from(this.tableName)
+      .select('status, branch_id')
+      .eq('id', id)
+      .single();
+      
+    const oldStatus = oldOrderResponse.data?.status;
+    const branchId = oldOrderResponse.data?.branch_id;
+
     const response = await this.client
       .from(this.tableName)
       .update({
@@ -305,6 +317,33 @@ export class OrderRepository extends BaseRepository {
       .eq('id', id)
       .select()
       .single();
+
+    // If status changed to ongoing/in_use, decrement stock
+    if (data.status && oldStatus && branchId) {
+      const isStarting = ['ongoing', 'in_use'].includes(data.status) && 
+                         !['ongoing', 'in_use', 'returned', 'late_return', 'completed'].includes(oldStatus);
+      const isCancelling = data.status === 'cancelled' && 
+                           ['ongoing', 'in_use'].includes(oldStatus);
+                           
+      if (isStarting || isCancelling) {
+        const itemsRes = await this.client.from(this.orderItemsTable).select('product_id, quantity').eq('order_id', id);
+        if (itemsRes.data) {
+          for (const item of itemsRes.data) {
+            const qtyChange = isStarting ? item.quantity : -item.quantity; // positive means we subtract from available
+            
+            const { data: inv } = await this.client.from('product_inventory').select('available_quantity').eq('product_id', item.product_id).eq('branch_id', branchId).single();
+            if (inv) {
+              await this.client.from('product_inventory').update({ available_quantity: Math.max(0, inv.available_quantity - qtyChange) }).eq('product_id', item.product_id).eq('branch_id', branchId);
+            }
+            
+            const { data: prod } = await this.client.from('products').select('available_quantity').eq('id', item.product_id).single();
+            if (prod) {
+              await this.client.from('products').update({ available_quantity: Math.max(0, prod.available_quantity - qtyChange) }).eq('id', item.product_id);
+            }
+          }
+        }
+      }
+    }
 
     // If status changed, add to history
     if (data.status) {
@@ -435,13 +474,29 @@ export class OrderRepository extends BaseRepository {
     let hasDamage = false;
     let totalDamageCharges = 0;
 
+    // Fetch existing order items to check for partial returns
+    const { data: existingItems } = await this.client
+      .from(this.orderItemsTable)
+      .select('id, quantity, returned_quantity')
+      .eq('order_id', orderId);
+
     for (const item of returnData.items) {
       if (item.damage_charges && item.damage_charges > 0) {
         hasDamage = true;
         totalDamageCharges += item.damage_charges;
       }
       if (item.condition_rating === 'damaged') hasDamage = true;
-      if (item.returned_quantity === 0) hasMissing = true;
+      
+      const existingItem = existingItems?.find(i => i.id === item.item_id);
+      if (existingItem) {
+         const oldReturned = existingItem.returned_quantity || 0;
+         // If what we are returning now + what was previously returned is less than the total quantity ordered
+         if ((item.returned_quantity) < existingItem.quantity) {
+           hasMissing = true;
+         }
+      } else if (item.returned_quantity === 0) {
+         hasMissing = true;
+      }
     }
 
     if (hasDamage) {

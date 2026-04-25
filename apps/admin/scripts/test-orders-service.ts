@@ -103,7 +103,7 @@ async function runTests() {
         rental_start_date: '2026-06-01', rental_end_date: '2026-06-05',
         items: [{ product_id: product.id, quantity: 999, price_per_day: 500 }]
     } as any);
-    assert(!v6.success && !!v6.error?.message?.includes('Insufficient'), "6. Fails to create order if requested quantity exceeds available_quantity");
+    assert(!v6.success && !!v6.error?.message?.includes('Insufficient'), "6. Fails to create order if requested quantity exceeds available_quantity", v6.error);
 
     const v7 = await orderService.createOrder({
         customer_id: customer.id, branch_id: branch.id,
@@ -332,6 +332,7 @@ async function runTests() {
     assert(mainRet.data!.total_amount === newExpectedTotal, "36/37/38. Late Fees, Damage Fees, and Discounts correctly adjust the order's total_amount", { old: preReturnTotal, new: mainRet.data!.total_amount, expected: newExpectedTotal });
 
     // Since total_amount increased, payment_status should become PARTIAL again
+    console.log('mainRet payment_status:', mainRet.data!.payment_status);
     assert(mainRet.data!.payment_status === PaymentStatus.PARTIAL, "39. Compound Fees correctly resolves the final total_amount and marks payment_status back to PARTIAL if due");
 
     // --- Phase 7: Security Deposit Refunds ---
@@ -344,6 +345,7 @@ async function runTests() {
         payment_mode: PaymentMode.UPI,
         notes: "Security Deposit Refund"
     });
+    console.log('refundPayment result:', refundPayment);
     assert(refundPayment.success, "40. Refunding a deposit successfully creates a REFUND payment record");
 
     // Update order deposit flag

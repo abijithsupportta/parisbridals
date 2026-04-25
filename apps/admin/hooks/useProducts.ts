@@ -12,6 +12,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Product, 
+  Category,
   CreateProductDTO, 
   UpdateProductDTO, 
   ProductSearchParams,
@@ -129,14 +130,31 @@ export function useCreateProduct() {
         // fetch the real data when the mutation completes.
         if (!old || !Array.isArray(old.products)) return old;
 
+        // Hydrate category relation from the categories cache.
+        // The form only sends category_id (a UUID), but the product
+        // list renders product.category.name. Without this lookup,
+        // the optimistic product shows "Uncategorized" until the
+        // server response replaces it with the real SQL JOIN data.
+        let category: { id: string; name: string; slug: string } | undefined;
+        if (newProduct.category_id) {
+          const cachedCategories = queryClient.getQueryData<Category[]>(['categories']);
+          if (cachedCategories) {
+            const found = cachedCategories.find(c => c.id === newProduct.category_id);
+            if (found) {
+              category = { id: found.id, name: found.name, slug: found.slug };
+            }
+          }
+        }
+
         const optimisticId = `temp-${Date.now()}`;
         const optimisticProduct = {
            id: optimisticId,
            ...newProduct,
+           category,
            created_at: new Date().toISOString(),
            updated_at: new Date().toISOString(),
            is_active: newProduct.is_active ?? true,
-        } as Product;
+        } as unknown as Product;
 
         return {
           ...old,

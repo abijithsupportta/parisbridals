@@ -149,6 +149,15 @@ export class OrderService {
           success: false,
         };
       }
+      
+      const availCheck = await this.checkAvailability(item.product_id, data.rental_start_date, data.rental_end_date, data.branch_id);
+      if (availCheck.success && availCheck.data!.available < item.quantity) {
+        return {
+          data: null,
+          error: { message: `Insufficient availability for product. Only ${availCheck.data!.available} available.`, code: 'VALIDATION_ERROR' } as any,
+          success: false
+        };
+      }
     }
 
     // Get GST settings
