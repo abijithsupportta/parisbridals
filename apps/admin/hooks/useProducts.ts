@@ -123,7 +123,12 @@ export function useCreateProduct() {
 
       // Optimistically update the list
       queryClient.setQueriesData<ProductSearchResult>({ queryKey: productKeys.all }, (old) => {
-        if (!old) return old;
+        // Guard: If no cached data exists (e.g., user navigated directly
+        // to /create without visiting the product list first), skip the
+        // optimistic update entirely. The onSettled invalidation will
+        // fetch the real data when the mutation completes.
+        if (!old || !Array.isArray(old.products)) return old;
+
         const optimisticId = `temp-${Date.now()}`;
         const optimisticProduct = {
            id: optimisticId,
@@ -150,13 +155,16 @@ export function useCreateProduct() {
       closeCreateModal();
     },
     onError: (error, newProduct, context) => {
-      // Rollback on failure
+      // Rollback on failure — restore the snapshot taken in onMutate
       if (context?.previousQueries) {
         for (const [key, data] of context.previousQueries) {
           queryClient.setQueryData(key, data);
         }
       }
-      showError('Failed to create product', error.message);
+      // NOTE: We do NOT call showError() here because this hook exposes
+      // mutateAsync (which re-throws). The calling code (ProductForm)
+      // catches the error and shows its own notification. Calling
+      // showError() here too would produce duplicate error bars.
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: productKeys.all });
@@ -190,7 +198,7 @@ export function useUpdateProduct() {
 
       // Optimistically update the list
       queryClient.setQueriesData<ProductSearchResult>({ queryKey: productKeys.all }, (old) => {
-        if (!old) return old;
+        if (!old || !Array.isArray(old.products)) return old;
         return {
           ...old,
           products: old.products.map(p => p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } as Product : p),
@@ -225,7 +233,7 @@ export function useUpdateProduct() {
       if (context?.previousDetail && context.id) {
         queryClient.setQueryData(productKeys.detail(context.id), context.previousDetail);
       }
-      showError('Failed to update product', error.message);
+      // No showError here — mutateAsync re-throws to the form's catch block
     },
     onSettled: (data, error, variables) => {
       queryClient.invalidateQueries({ queryKey: productKeys.all });
@@ -285,7 +293,7 @@ export function useDeleteProduct() {
       queryClient.setQueriesData<ProductSearchResult>(
         { queryKey: productKeys.all },
         (old) => {
-          if (!old) return old;
+          if (!old || !Array.isArray(old.products)) return old;
           return {
             ...old,
             products: old.products.filter((p: Product) => p.id !== id),
