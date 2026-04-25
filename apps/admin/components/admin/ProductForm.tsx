@@ -23,6 +23,8 @@ import { type Product } from "@/domain/types/product";
 import { useAppStore } from "@/stores";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateProduct, useUpdateProduct } from "@/hooks/useProducts";
+import { useCategories } from "@/hooks/useCategories";
+import { useBranches } from "@/hooks";
 
 const MAX_IMAGES = 5;
 
@@ -41,8 +43,6 @@ interface BranchStockEntry {
 
 interface ProductFormProps {
   product?: Product;
-  categories?: Category[];
-  branches?: Branch[];
 }
 
 /* ── Helper: default empty form state ──────────────────────────────── */
@@ -63,8 +63,6 @@ function emptyFormData() {
 
 export default function ProductForm({
   product,
-  categories = [],
-  branches = [],
 }: ProductFormProps) {
   const router = useRouter();
   const isEdit = !!product;
@@ -72,6 +70,8 @@ export default function ProductForm({
   const queryClient = useQueryClient();
   const { createProduct } = useCreateProduct();
   const { updateProduct } = useUpdateProduct();
+  const { categories } = useCategories();
+  const { branches } = useBranches();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -105,11 +105,14 @@ export default function ProductForm({
   // branchStocks holds quantities keyed by branch_id.
   // For create mode: pre-populate all active branches at qty 0.
   // For edit mode: starts empty, populated by API fetch below.
-  const [branchStocks, setBranchStocks] = useState<BranchStockEntry[]>(() =>
-    !isEdit
-      ? activeBranches.map((b) => ({ branch_id: b.id, quantity: 0 }))
-      : []
-  );
+  const [branchStocks, setBranchStocks] = useState<BranchStockEntry[]>([]);
+  
+  // Pre-fill active branches for create mode once branches are loaded
+  useEffect(() => {
+    if (!isEdit && activeBranches.length > 0 && branchStocks.length === 0) {
+      setBranchStocks(activeBranches.map((b: any) => ({ branch_id: b.id, quantity: 0 })));
+    }
+  }, [activeBranches, isEdit, branchStocks.length]);
   const [removedInventoryIds] = useState<string[]>([]);
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
 
