@@ -85,7 +85,6 @@ export abstract class BaseRepository {
     if (!this.useMultiBranchAuditFields) {
       return {
         created_by: this.currentUserId,
-        updated_by: this.currentUserId,
       };
     }
 
@@ -102,9 +101,7 @@ export abstract class BaseRepository {
    */
   protected getUpdateAuditFields() {
     if (!this.useMultiBranchAuditFields) {
-      return {
-        updated_by: this.currentUserId,
-      };
+      return {};
     }
 
     return {
