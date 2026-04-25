@@ -12,9 +12,9 @@
 
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   Search,
@@ -28,6 +28,7 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -60,24 +61,65 @@ interface BranchInvRow {
 }
 
 export default function ProductsPage() {
-  const router = useRouter();
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center p-12 text-slate-500">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+        Loading catalog...
+      </div>
+    }>
+      <ProductsContent />
+    </Suspense>
+  );
+}
 
-  // Debounce search input by 300ms
+function ProductsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+
+  // Read State from URL (The Source of Truth)
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const pageSize = parseInt(searchParams.get("limit") || "25", 10);
+  const urlQuery = searchParams.get("query") || "";
+
+  // Local state only for the fast-typing input field
+  const [searchInput, setSearchInput] = useState(urlQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(urlQuery);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Centralized URL updater (Idempotent updates)
+  const updateParams = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    let hasChanges = false;
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      const current = params.get(key);
+      if (value === null || value === "") {
+        if (current !== null) { params.delete(key); hasChanges = true; }
+      } else {
+        if (current !== value) { params.set(key, value); hasChanges = true; }
+      }
+    });
+
+    if (hasChanges) {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  };
+
+  // Debounce search input by 300ms and sync to URL
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setDebouncedQuery(searchInput);
-      setPage(1); // Reset to page 1 on new search
+      if (searchInput !== urlQuery) {
+        setDebouncedQuery(searchInput);
+        updateParams({ query: searchInput, page: "1" }); // Reset to page 1 on new search
+      }
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [searchInput]);
+  }, [searchInput, urlQuery, searchParams]);
 
   const { products, isLoading, total, totalPages, hasNext, hasPrev } = useProducts({
     query: debouncedQuery,
@@ -635,10 +677,7 @@ export default function ProductsPage() {
               <span className="text-xs text-slate-500">Rows:</span>
               <select
                 value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
+                onChange={(e) => updateParams({ limit: e.target.value, page: "1" })}
                 className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900"
               >
                 <option value={25}>25</option>
@@ -659,7 +698,7 @@ export default function ProductsPage() {
                 size="icon"
                 className="w-8 h-8 border-slate-200"
                 disabled={!hasPrev}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => updateParams({ page: Math.max(1, page - 1).toString() })}
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
@@ -668,7 +707,7 @@ export default function ProductsPage() {
                 size="icon"
                 className="w-8 h-8 border-slate-200"
                 disabled={!hasNext}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => updateParams({ page: (page + 1).toString() })}
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>

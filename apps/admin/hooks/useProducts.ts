@@ -60,7 +60,6 @@ export function useProducts(params: ProductSearchParams = {}) {
       return response.data;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
-    refetchOnMount: 'always', // Always fetch fresh on page mount
     placeholderData: (prev) => prev, // Keep old data visible while loading new results
   });
 

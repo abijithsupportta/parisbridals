@@ -9,9 +9,9 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   Search,
   Trash2,
@@ -27,6 +27,7 @@ import {
   Package,
   FileText,
   XCircle,
+  Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -45,31 +46,70 @@ import { formatCurrency } from "@/lib/shared-utils";
 import { OrderStatus, type OrderWithRelations } from "@/domain";
 
 export default function OrdersPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center p-12 text-slate-500">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+        Loading orders...
+      </div>
+    }>
+      <OrdersContent />
+    </Suspense>
+  );
+}
+
+function OrdersContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
   const user = useAppStore((state) => state.user);
   const canDelete = user?.role === 'admin';
-  const [searchInput, setSearchInput] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  // Read State from URL (The Source of Truth)
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const pageSize = parseInt(searchParams.get("limit") || "25", 10);
+  const urlQuery = searchParams.get("query") || "";
+  const statusFilter = (searchParams.get("status") || "ALL") as OrderStatus | "ALL";
+  const dateFilter = searchParams.get("date_filter") || "ALL";
+  const dateFrom = searchParams.get("date_from") || "";
+  const dateTo = searchParams.get("date_to") || "";
+
+  const [searchInput, setSearchInput] = useState(urlQuery);
+  const [debouncedQuery, setDebouncedQuery] = useState(urlQuery);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+
+  // Centralized URL updater (Idempotent updates)
+  const updateParams = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    let hasChanges = false;
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      const current = params.get(key);
+      if (value === null || value === "") {
+        if (current !== null) { params.delete(key); hasChanges = true; }
+      } else {
+        if (current !== value) { params.set(key, value); hasChanges = true; }
+      }
+    });
+
+    if (hasChanges) {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  };
 
   // Debounce search input by 300ms
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      setDebouncedQuery(searchInput);
-      setPage(1); // Reset to page 1 on new search
+      if (searchInput !== urlQuery) {
+        setDebouncedQuery(searchInput);
+        updateParams({ query: searchInput, page: "1" });
+      }
     }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [searchInput]);
-
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "ALL">("ALL");
-  const [dateFilter, setDateFilter] = useState<string>("ALL");
-  const [dateFrom, setDateFrom] = useState<string>("");
-  const [dateTo, setDateTo] = useState<string>("");
+  }, [searchInput, urlQuery, searchParams]);
 
   const selectedBranchId = useAppStore((s) => s.selectedBranchId);
 
@@ -216,8 +256,7 @@ export default function OrdersPage() {
                 <button
                   key={chip.value}
                   onClick={() => {
-                    setStatusFilter(chip.value as any);
-                    setPage(1);
+                    updateParams({ status: chip.value, page: "1" });
                   }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors ${
                     statusFilter === chip.value
@@ -236,8 +275,7 @@ export default function OrdersPage() {
               <select
                 value={dateFilter}
                 onChange={(e) => {
-                  setDateFilter(e.target.value);
-                  setPage(1);
+                  updateParams({ date_filter: e.target.value, page: "1" });
                 }}
                 className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900 shrink-0"
               >
@@ -255,14 +293,14 @@ export default function OrdersPage() {
                     type="date" 
                     className="h-8 text-xs w-[120px]" 
                     value={dateFrom} 
-                    onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} 
+                    onChange={(e) => updateParams({ date_from: e.target.value, page: "1" })} 
                   />
                   <span className="text-slate-400 text-xs">to</span>
                   <Input 
                     type="date" 
                     className="h-8 text-xs w-[120px]" 
                     value={dateTo} 
-                    onChange={(e) => { setDateTo(e.target.value); setPage(1); }} 
+                    onChange={(e) => updateParams({ date_to: e.target.value, page: "1" })} 
                   />
                 </div>
               )}
@@ -517,8 +555,7 @@ export default function OrdersPage() {
               <select
                 value={pageSize}
                 onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
+                  updateParams({ limit: e.target.value, page: "1" });
                 }}
                 className="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-900"
               >
@@ -538,7 +575,7 @@ export default function OrdersPage() {
                 size="icon"
                 className="w-8 h-8 border-slate-200"
                 disabled={!hasPrev}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => updateParams({ page: Math.max(1, page - 1).toString() })}
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
@@ -547,7 +584,7 @@ export default function OrdersPage() {
                 size="icon"
                 className="w-8 h-8 border-slate-200"
                 disabled={!hasNext}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => updateParams({ page: (page + 1).toString() })}
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
