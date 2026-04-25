@@ -142,7 +142,7 @@ export default function ProductForm({
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [product?.id]);
 
   // ── Helpers ────────────────────────────────────────────────────────
@@ -364,7 +364,7 @@ export default function ProductForm({
         setLoading(false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [
       formData,
       imageUrls,

@@ -4,16 +4,16 @@
 
 ---
 
-## 🚨 MANDATORY: Post-Work Build Verification
+## 🚨 MANDATORY: Post-Work Build Verification & Git Push
 
 **After EVERY code change, the agent MUST:**
 
-1. Run `flutter analyze --no-pub` (for Flutter/Dart) or the equivalent lint/build command
-2. Fix ALL `error` and `warning` level issues before delivering to the user
-3. `info` level hints are acceptable but should be minimized
-4. Never deliver code that has compilation errors
+1. Run `flutter analyze --no-pub` (for Flutter/Dart) or `pnpm run build` / `tsc --noEmit` (for Next.js/React apps).
+2. Fix ALL `error` and `warning` level issues before delivering to the user.
+3. Verify there are no runtime issues (e.g., React hook mismatches, unhandled rejections).
+4. **Push to GitHub:** Once all build and runtime issues are completely resolved, you MUST `git add`, `git commit`, and `git push` the code to the repository. Do not push broken code.
 
-**This is non-negotiable. Every single change must be verified.**
+**This is non-negotiable. Every single change must be verified and pushed to GitHub.**
 
 ---
 

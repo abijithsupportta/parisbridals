@@ -205,7 +205,7 @@ export default function ProductsPage() {
       lowStock,
       outOfStock,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [visibleProducts, inventoryByProduct, selectedBranchId]);
 
   // ── Actions ──────────────────────────────────────────────────────

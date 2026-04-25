@@ -76,16 +76,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     };
   }, [setUser, setAuthenticated, setLoading, router, pathname, supabase]);
 
-  if (!initialized && !pathname.startsWith('/auth')) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 font-medium">Initializing session...</p>
+  return (
+    <>
+      {!initialized && !pathname.startsWith('/auth') && (
+        <div className="flex items-center justify-center min-h-screen bg-slate-50 fixed inset-0 z-50">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-500 font-medium">Initializing session...</p>
+          </div>
         </div>
+      )}
+      <div style={{ display: (!initialized && !pathname.startsWith('/auth')) ? 'none' : 'contents' }}>
+        {children}
       </div>
-    );
-  }
-
-  return <>{children}</>;
+    </>
+  );
 }
