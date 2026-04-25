@@ -137,9 +137,9 @@ export function useCreateProduct() {
         // server response replaces it with the real SQL JOIN data.
         let category: { id: string; name: string; slug: string } | undefined;
         if (newProduct.category_id) {
-          const cachedCategories = queryClient.getQueryData<Category[]>(['categories']);
-          if (cachedCategories) {
-            const found = cachedCategories.find(c => c.id === newProduct.category_id);
+          const cachedCategories = queryClient.getQueryData<{ success: boolean; data: Category[] }>(['categories']);
+          if (cachedCategories?.data) {
+            const found = cachedCategories.data.find(c => c.id === newProduct.category_id);
             if (found) {
               category = { id: found.id, name: found.name, slug: found.slug };
             }

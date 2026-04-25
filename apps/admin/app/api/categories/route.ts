@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     if (guard.error) return guard.error;
 
     const result = await categoryService.getAllCategories();
+    console.log("[API /api/categories] Result:", JSON.stringify({ success: result.success, count: result.data?.length }));
     if (!result.success) {
       return apiRepositoryError(result.error, 'Failed to fetch categories');
     }
