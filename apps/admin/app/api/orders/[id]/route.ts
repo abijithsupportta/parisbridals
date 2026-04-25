@@ -74,6 +74,15 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     if (guard.error) return guard.error;
 
     const authUser = await getAuthUser(request);
+
+    // Enforce role-based access for deletion (shop admin/owner only)
+    if (!['admin', 'super_admin', 'owner'].includes(authUser?.role || '')) {
+      return new Response(JSON.stringify({ success: false, error: 'Unauthorized: Only shop admins and owners can delete orders.' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     orderService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
 
     const { id } = await params;
