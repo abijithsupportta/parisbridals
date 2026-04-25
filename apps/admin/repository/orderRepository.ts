@@ -99,56 +99,260 @@ export class OrderRepository extends BaseRepository {
   }
 
   /**
-   * Check product availability for given date range
+   * Fetch active orders overlapping a specific date range for the calendar view.
    */
-  async checkAvailability(productId: string, startDate: string, endDate: string, branchId?: string): Promise<RepositoryResult<{ available: number; total: number }>> {
+  async getCalendarOrders(branchId: string, startDate: string, endDate: string): Promise<RepositoryResult<OrderWithRelations[]>> {
+    const response = await this.client
+      .from(this.tableName)
+      .select(`
+        *,
+        customer:customer_id(id, name, phone, email),
+        items:order_items(*, product:product_id(id, name, images)),
+        branch:branch_id(id, name)
+      `)
+      .eq('branch_id', branchId)
+      .in('status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial', 'flagged'])
+      .lte('start_date', endDate)
+      .gte('end_date', startDate)
+      .order('start_date', { ascending: true });
+
+    return this.handleResponse<OrderWithRelations[]>(response);
+  }
+
+  /**
+   * Check product availability for given date range using Sweep Line algorithm.
+   *
+   * Instead of simply summing all overlapping reservations (which over-counts
+   * when bookings don't all overlap each other simultaneously), this uses the
+   * Sweep Line technique to find the PEAK concurrent usage within the
+   * requested date range.
+   *
+   * Time complexity: O(N log N) where N = number of overlapping bookings.
+   *
+   * @param excludeOrderId - Exclude this order from the count (for edit scenarios)
+   */
+  async checkAvailability(
+    productId: string,
+    startDate: string,
+    endDate: string,
+    branchId?: string,
+    excludeOrderId?: string
+  ): Promise<RepositoryResult<{ available: number; total: number; peakReserved: number; overlappingOrders: any[] }>> {
     // Get product total quantity
     const productResponse = await this.client
       .from('products')
-      .select('quantity')
+      .select('quantity, name')
       .eq('id', productId)
       .single();
 
     if (productResponse.error) {
-      return this.handleResponse<{ available: number; total: number }>(productResponse);
+      return this.handleResponse<{ available: number; total: number; peakReserved: number; overlappingOrders: any[] }>(productResponse);
     }
 
     const totalQuantity = productResponse.data?.quantity || 0;
 
-    // Fetch all active order items for this product
+    // Fetch all active order items for this product with their order date ranges
     const ordersResponse = await this.client
       .from('order_items')
-      .select('quantity, returned_quantity, orders!inner(start_date, end_date, status)')
+      .select('quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status, customer_id, customer:customer_id(name))')
       .eq('product_id', productId)
       .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
 
     if (ordersResponse.error) {
-      return this.handleResponse<{ available: number; total: number }>(ordersResponse);
+      return this.handleResponse<{ available: number; total: number; peakReserved: number; overlappingOrders: any[] }>(ordersResponse);
     }
 
     const reqStart = new Date(startDate).getTime();
     const reqEnd = new Date(endDate).getTime();
 
-    // Calculate reserved quantity based on overlapping active orders
-    const reservedQuantity = ordersResponse.data?.reduce((sum: number, item: any) => {
-       const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
-       if (!order) return sum;
-       
-       const ordStart = new Date(order.start_date).getTime();
-       const ordEnd = new Date(order.end_date).getTime();
-       
-       // Overlap condition
-       if (ordStart <= reqEnd && ordEnd >= reqStart) {
-          const unreturned = item.quantity - (item.returned_quantity || 0);
-          return sum + unreturned;
-       }
-       return sum;
-    }, 0) || 0;
+    // Collect overlapping bookings (filtering out the excluded order if editing)
+    const overlappingBookings: { start: number; end: number; quantity: number; orderId: string; customerName: string; startDate: string; endDate: string; status: string }[] = [];
 
-    const availableQuantity = Math.max(0, totalQuantity - reservedQuantity);
+    for (const item of (ordersResponse.data || []) as any[]) {
+      const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
+      if (!order) continue;
+      if (excludeOrderId && order.id === excludeOrderId) continue;
+
+      const ordStart = new Date(order.start_date).getTime();
+      const ordEnd = new Date(order.end_date).getTime();
+
+      // Overlap condition (inclusive end dates — jewellery rental model)
+      if (ordStart <= reqEnd && ordEnd >= reqStart) {
+        const unreturned = item.quantity - (item.returned_quantity || 0);
+        if (unreturned > 0) {
+          const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
+          overlappingBookings.push({
+            start: ordStart,
+            end: ordEnd,
+            quantity: unreturned,
+            orderId: order.id,
+            customerName: customer?.name || 'Unknown',
+            startDate: order.start_date,
+            endDate: order.end_date,
+            status: order.status,
+          });
+        }
+      }
+    }
+
+    // ─── Sweep Line Algorithm ─────────────────────────────────────────
+    // Create events: +qty at start, -qty at (end + 1 day)
+    const events: { time: number; delta: number }[] = [];
+    for (const booking of overlappingBookings) {
+      events.push({ time: booking.start, delta: +booking.quantity });
+      // End + 1 day: the item is released the day AFTER the end date
+      events.push({ time: booking.end + 86400000, delta: -booking.quantity });
+    }
+
+    // Sort: by time, then releases (-delta) before acquisitions (+delta)
+    events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+
+    let currentUsage = 0;
+    let peakUsage = 0;
+    for (const event of events) {
+      // Only count events within the requested range
+      if (event.time > reqEnd + 86400000) break;
+      currentUsage += event.delta;
+      if (event.time >= reqStart && event.time <= reqEnd) {
+        peakUsage = Math.max(peakUsage, currentUsage);
+      }
+    }
+
+    // Also check usage at the very start of the requested range
+    // (events before reqStart contribute to the baseline)
+    let baselineAtStart = 0;
+    for (const booking of overlappingBookings) {
+      if (booking.start <= reqStart && booking.end >= reqStart) {
+        baselineAtStart += booking.quantity;
+      }
+    }
+    peakUsage = Math.max(peakUsage, baselineAtStart);
+
+    const availableQuantity = Math.max(0, totalQuantity - peakUsage);
 
     return {
-      data: { available: availableQuantity, total: totalQuantity },
+      data: {
+        available: availableQuantity,
+        total: totalQuantity,
+        peakReserved: peakUsage,
+        overlappingOrders: overlappingBookings.map(b => ({
+          orderId: b.orderId,
+          customerName: b.customerName,
+          quantity: b.quantity,
+          startDate: b.startDate,
+          endDate: b.endDate,
+          status: b.status,
+        })),
+      },
+      error: null,
+      success: true,
+    };
+  }
+
+  /**
+   * Get per-day availability calendar for a product over a date range.
+   *
+   * Used to render the availability calendar on the product detail page.
+   * For each day in the range, computes how many units are reserved vs available.
+   *
+   * Uses per-day iteration (O(D × N)) which is appropriate for calendar
+   * rendering where we need every single day's data.
+   */
+  async getAvailabilityCalendar(
+    productId: string,
+    rangeStart: string,
+    rangeEnd: string,
+  ): Promise<RepositoryResult<{ productId: string; productName: string; totalQuantity: number; days: any[] }>> {
+    // Get product info
+    const productResponse = await this.client
+      .from('products')
+      .select('quantity, name')
+      .eq('id', productId)
+      .single();
+
+    if (productResponse.error) {
+      return this.handleResponse<any>(productResponse);
+    }
+
+    const totalQuantity = productResponse.data?.quantity || 0;
+    const productName = productResponse.data?.name || '';
+
+    // Fetch all active bookings that overlap with the view range
+    const ordersResponse = await this.client
+      .from('order_items')
+      .select('quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status, customer_id, customer:customer_id(name))')
+      .eq('product_id', productId)
+      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
+
+    if (ordersResponse.error) {
+      return this.handleResponse<any>(ordersResponse);
+    }
+
+    const viewStart = new Date(rangeStart);
+    const viewEnd = new Date(rangeEnd);
+
+    // Parse all bookings
+    const bookings: { start: Date; end: Date; quantity: number; orderId: string; customerName: string; startDate: string; endDate: string; status: string }[] = [];
+    for (const item of (ordersResponse.data || []) as any[]) {
+      const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
+      if (!order) continue;
+
+      const unreturned = item.quantity - (item.returned_quantity || 0);
+      if (unreturned <= 0) continue;
+
+      const bookingStart = new Date(order.start_date);
+      const bookingEnd = new Date(order.end_date);
+
+      // Only include if it overlaps with our view range
+      if (bookingStart <= viewEnd && bookingEnd >= viewStart) {
+        const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
+        bookings.push({
+          start: bookingStart,
+          end: bookingEnd,
+          quantity: unreturned,
+          orderId: order.id,
+          customerName: customer?.name || 'Unknown',
+          startDate: order.start_date,
+          endDate: order.end_date,
+          status: order.status,
+        });
+      }
+    }
+
+    // Build per-day availability map
+    const days: any[] = [];
+    const current = new Date(viewStart);
+    while (current <= viewEnd) {
+      const dateStr = current.toISOString().split('T')[0];
+      let reserved = 0;
+      const dayBookings: any[] = [];
+
+      for (const booking of bookings) {
+        // Check if this booking covers the current day (inclusive)
+        if (booking.start <= current && booking.end >= current) {
+          reserved += booking.quantity;
+          dayBookings.push({
+            orderId: booking.orderId,
+            customerName: booking.customerName,
+            quantity: booking.quantity,
+            startDate: booking.startDate,
+            endDate: booking.endDate,
+            status: booking.status,
+          });
+        }
+      }
+
+      const available = Math.max(0, totalQuantity - reserved);
+      let status: 'available' | 'partial' | 'unavailable' = 'available';
+      if (available === 0) status = 'unavailable';
+      else if (reserved > 0) status = 'partial';
+
+      days.push({ date: dateStr, total: totalQuantity, reserved, available, status, bookings: dayBookings });
+      current.setDate(current.getDate() + 1);
+    }
+
+    return {
+      data: { productId, productName, totalQuantity, days },
       error: null,
       success: true,
     };

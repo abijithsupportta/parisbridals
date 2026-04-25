@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Edit, Trash2, Package, AlertTriangle, Store,
-  XCircle, Barcode, Image as ImageIcon
+  XCircle, Barcode, Image as ImageIcon, CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Modal from "@/components/admin/Modal";
+import ProductAvailabilityCalendar from "@/components/admin/ProductAvailabilityCalendar";
 import { useProduct, useDeleteProduct } from "@/hooks";
 import { useProductStore, useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
@@ -453,6 +454,17 @@ export default function ProductDetailPage() {
                   })}
                 </ul>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Booking Calendar — Interval Scheduling */}
+          <Card className="shadow-sm border-slate-200 bg-white">
+            <CardHeader className="border-b border-slate-200 py-4 px-5 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-semibold text-slate-900">Booking Calendar</CardTitle>
+              <CalendarDays className="w-4 h-4 text-slate-400" />
+            </CardHeader>
+            <CardContent className="p-4">
+              <ProductAvailabilityCalendar productId={product.id} />
             </CardContent>
           </Card>
         </div>
