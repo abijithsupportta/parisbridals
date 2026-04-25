@@ -82,11 +82,11 @@ export interface CreateProductDTO {
   subcategory_id?: string;
   subvariant_id?: string;
   branch_id?: string | 'all';
-  store_id: string;
+  store_id?: string;
   description?: string;
   price_per_day: number;
   security_deposit?: number;
-  quantity: number;
+  quantity?: number;
   available_quantity?: number;
   images?: Omit<ProductImage, 'id'>[];
   sizes?: Omit<ProductVariant, 'id'>[];

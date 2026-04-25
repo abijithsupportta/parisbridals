@@ -110,8 +110,10 @@ export async function POST(request: NextRequest) {
     const validatedData = CreateProductSchema.parse(body);
 
     // Convert null values to undefined for type compatibility
+    // Inject store_id from authenticated session (server-authoritative)
     const productData: CreateProductDTO = {
       ...validatedData,
+      store_id: authUser?.store_id || validatedData.store_id || '',
       category_id: validatedData.category_id || undefined,
       subcategory_id: validatedData.subcategory_id || undefined,
       subvariant_id: validatedData.subvariant_id || undefined,
