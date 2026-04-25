@@ -164,6 +164,8 @@ export interface UpdateOrderDTO {
   deposit_collected?: boolean;
   deposit_collected_at?: string;
   deposit_payment_method?: PaymentMethod;
+  deposit_returned?: boolean;
+  deposit_returned_at?: string;
   amount_paid?: number;
   payment_status?: PaymentStatus | string;
 }

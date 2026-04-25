@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Modal from "@/components/admin/Modal";
-import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment } from "@/hooks";
+import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
 import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
@@ -30,10 +30,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const { showSuccess, showError } = useAppStore();
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     amount: "0",
     paymentMode: PaymentMode.CASH,
     paymentType: PaymentType.FINAL,
+    notes: ""
+  });
+  const [refundForm, setRefundForm] = useState({
+    paymentMode: PaymentMode.CASH,
     notes: ""
   });
 
@@ -48,6 +53,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const [discount, setDiscount] = useState<number>(0);
 
   const order = orderResponse?.data;
+  const { data: paymentsResponse, isLoading: isLoadingPayments } = useOrderPayments(orderId);
+  const payments = paymentsResponse || [];
   
   const isReturnable = order?.status === OrderStatus.IN_USE || order?.status === OrderStatus.ONGOING || order?.status === OrderStatus.LATE_RETURN || order?.status === OrderStatus.PARTIAL;
 
@@ -142,6 +149,38 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     }
   };
 
+  const handleRefundDeposit = async () => {
+    if (!order || order.deposit_returned) return;
+
+    try {
+      createPayment(
+        {
+          order_id: order.id,
+          payment_type: PaymentType.REFUND,
+          amount: order.security_deposit,
+          payment_mode: refundForm.paymentMode,
+          notes: refundForm.notes || "Security Deposit Refund",
+        },
+        {
+          onSuccess: () => {
+            updateOrder({
+              id: order.id,
+              data: {
+                deposit_returned: true,
+                deposit_returned_at: new Date().toISOString(),
+              },
+            });
+            setIsRefundModalOpen(false);
+            setRefundForm({ paymentMode: PaymentMode.CASH, notes: "" });
+            showSuccess("Deposit Refunded", "The security deposit was successfully refunded.");
+          },
+        }
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const submitReturn = () => {
     if (!order) return;
 
@@ -163,7 +202,9 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           damage_description: rItem.notes,
           damage_charges: rItem.damage_fee,
         };
-      })
+      }),
+      late_fee: lateFee,
+      discount: discount,
     };
 
     processOrderReturn({ orderId: order.id, returnData: returnPayload });
@@ -256,6 +297,66 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Items</p>
           <p className="text-2xl font-bold text-slate-900">{order.items.length} Pieces</p>
         </div>
+      </div>
+
+      {/* Payment History Block */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2">
+            <Banknote className="w-5 h-5 text-slate-500" /> Payment History
+          </h2>
+        </div>
+        {isLoadingPayments ? (
+          <div className="p-8 text-center text-slate-500 font-medium">Loading payments...</div>
+        ) : payments.length === 0 ? (
+          <div className="p-8 text-center text-slate-500 font-medium bg-slate-50/50">No payments recorded yet.</div>
+        ) : (
+          <div className="divide-y divide-slate-100 overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[600px]">
+              <thead>
+                <tr className="bg-white">
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/4">Date & Time</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/4">Type & Mode</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/4 text-right">Amount</th>
+                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/4">Handled By</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-100">
+                {payments.map((payment: any) => (
+                  <tr key={payment.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-bold text-slate-900">{format(new Date(payment.payment_date || payment.created_at), "dd MMM, yyyy")}</div>
+                      <div className="text-xs text-slate-500">{format(new Date(payment.payment_date || payment.created_at), "h:mm a")}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md border ${
+                          payment.payment_type === PaymentType.REFUND ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          payment.payment_type === PaymentType.DEPOSIT ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          {payment.payment_type}
+                        </span>
+                        <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md uppercase border border-slate-200">
+                          {payment.payment_mode}
+                        </span>
+                      </div>
+                      {payment.notes && <div className="text-xs text-slate-500 mt-1.5 truncate max-w-[200px]" title={payment.notes}>{payment.notes}</div>}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <span className={`text-base font-black ${payment.payment_type === PaymentType.REFUND ? 'text-orange-600' : 'text-emerald-600'}`}>
+                        {payment.payment_type === PaymentType.REFUND ? '-' : '+'}{formatCurrency(payment.amount)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-bold text-slate-700">{payment.created_by ? `Staff ID: ${payment.created_by.slice(0,8)}` : 'System'}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* 3. Split View */}
@@ -357,12 +458,16 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             {isReturnable && (
                <div className="bg-slate-50 p-6 border-t border-slate-200">
                   <div className="flex flex-col sm:flex-row items-end justify-between gap-4">
-                     <div className="flex gap-4 w-full sm:w-auto">
+                      <div className="flex gap-4 w-full sm:w-auto">
                         <div className="space-y-1">
                           <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Extra Late Fee</label>
                           <Input type="number" value={lateFee || ""} onChange={(e) => setLateFee(parseFloat(e.target.value) || 0)} className="w-32 h-12 font-bold text-lg" placeholder="0" />
                         </div>
-                     </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Discount</label>
+                          <Input type="number" value={discount || ""} onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)} className="w-32 h-12 font-bold text-lg" placeholder="0" />
+                        </div>
+                      </div>
                      <Button
                         onClick={submitReturn}
                         disabled={isReturning}
@@ -426,6 +531,24 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               >
                 Record Payment
               </Button>
+            )}
+
+            {(order.status === OrderStatus.RETURNED || order.status === OrderStatus.PARTIAL || order.status === OrderStatus.FLAGGED) && !order.deposit_returned && order.security_deposit > 0 && (
+              <Button 
+                onClick={() => {
+                  setRefundForm({ paymentMode: PaymentMode.CASH, notes: "Security Deposit Refund" });
+                  setIsRefundModalOpen(true);
+                }} 
+                className="w-full mt-4 h-14 bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 font-bold text-lg rounded-xl shadow-sm transition-colors"
+              >
+                Refund Security Deposit
+              </Button>
+            )}
+            
+            {order.deposit_returned && (
+               <div className="w-full mt-4 h-14 flex items-center justify-center bg-slate-50 border border-slate-200 text-slate-500 font-bold text-sm rounded-xl">
+                 Security Deposit Refunded
+               </div>
             )}
           </div>
 
@@ -525,14 +648,77 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             />
           </div>
 
-          <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
-            <Button onClick={handleCollectPayment} disabled={isCreatingPayment} className="h-12 px-8 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">
-              {isCreatingPayment ? "Processing..." : "Confirm Payment"}
-            </Button>
+            <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
+              <Button onClick={handleCollectPayment} disabled={isCreatingPayment} className="h-12 px-8 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-md">
+                {isCreatingPayment ? "Processing..." : "Confirm Payment"}
+              </Button>
+            </div>
           </div>
-        </div>
-      </Modal>
-    </div>
+        </Modal>
+
+        {/* Refund Deposit Modal */}
+        <Modal
+          open={isRefundModalOpen}
+          onClose={() => setIsRefundModalOpen(false)}
+          title="Refund Security Deposit"
+        >
+          <div className="p-6 space-y-6">
+            <div className="bg-orange-50 p-5 rounded-2xl border border-orange-200 flex justify-between items-center shadow-sm">
+              <div>
+                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Refund Amount</p>
+                <p className="text-2xl font-black text-orange-900">{formatCurrency(order?.security_deposit || 0)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Refund Method</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { id: PaymentMode.CASH, label: "Cash", icon: Banknote },
+                  { id: PaymentMode.UPI, label: "UPI", icon: Smartphone },
+                  { id: PaymentMode.CARD, label: "Card", icon: CreditCard },
+                  { id: PaymentMode.BANK_TRANSFER, label: "Bank", icon: Building2 },
+                ].map((method) => {
+                  const Icon = method.icon;
+                  const isSelected = refundForm.paymentMode === method.id;
+                  return (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => setRefundForm({ ...refundForm, paymentMode: method.id })}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                        isSelected 
+                          ? 'border-orange-500 bg-orange-500 text-white shadow-md' 
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Icon className={`w-6 h-6 mb-2 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                      <span className="text-sm font-bold">{method.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Notes / Ref ID</Label>
+              <Input
+                value={refundForm.notes}
+                onChange={(e) => setRefundForm({ ...refundForm, notes: e.target.value })}
+                className="w-full h-12 rounded-xl border-slate-300 bg-slate-50 focus:bg-white px-4"
+                placeholder="E.g. Refunded via UPI"
+              />
+            </div>
+
+            <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setIsRefundModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
+              <Button onClick={handleRefundDeposit} disabled={isCreatingPayment || isUpdating} className="h-12 px-8 rounded-xl font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md">
+                {isCreatingPayment || isUpdating ? "Processing..." : "Confirm Refund"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      </div>
   );
 }

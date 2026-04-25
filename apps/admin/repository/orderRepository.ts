@@ -433,9 +433,13 @@ export class OrderRepository extends BaseRepository {
     let newStatus = 'returned';
     let hasMissing = false;
     let hasDamage = false;
+    let totalDamageCharges = 0;
 
     for (const item of returnData.items) {
-      if (item.damage_charges && item.damage_charges > 0) hasDamage = true;
+      if (item.damage_charges && item.damage_charges > 0) {
+        hasDamage = true;
+        totalDamageCharges += item.damage_charges;
+      }
       if (item.condition_rating === 'damaged') hasDamage = true;
       if (item.returned_quantity === 0) hasMissing = true;
     }
@@ -446,11 +450,35 @@ export class OrderRepository extends BaseRepository {
       newStatus = 'partial';
     }
 
-    // Update order status to new calculated status
+    // Get current order to calculate new total
+    const { data: currentOrder } = await this.client
+      .from(this.tableName)
+      .select('total_amount, amount_paid')
+      .eq('id', orderId)
+      .single();
+
+    let newTotalAmount = currentOrder?.total_amount || 0;
+    
+    // Add late fee and damage charges, subtract discounts
+    const lateFee = returnData.late_fee || 0;
+    const discount = returnData.discount || 0;
+    const totalDeductions = lateFee + totalDamageCharges - discount;
+
+    newTotalAmount = Math.max(0, newTotalAmount + totalDeductions);
+    
+    // Update payment status if the new total changed and is not fully paid anymore
+    let paymentStatus = undefined;
+    if (currentOrder && newTotalAmount > currentOrder.amount_paid) {
+       paymentStatus = currentOrder.amount_paid > 0 ? 'partial' : 'pending';
+    }
+
+    // Update order status and totals
     const orderResponse = await this.client
       .from(this.tableName)
       .update({
         status: newStatus,
+        total_amount: newTotalAmount,
+        ...(paymentStatus ? { payment_status: paymentStatus } : {})
       })
       .eq('id', orderId)
       .select()

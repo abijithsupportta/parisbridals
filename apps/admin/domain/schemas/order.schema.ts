@@ -48,6 +48,8 @@ export const UpdateOrderSchema = z.object({
   deposit_collected: z.boolean().optional(),
   deposit_collected_at: z.string().datetime().optional(),
   deposit_payment_method: z.nativeEnum(PaymentMethod).optional(),
+  deposit_returned: z.boolean().optional(),
+  deposit_returned_at: z.string().datetime().optional(),
   amount_paid: z.number().nonnegative().optional(),
   payment_status: z.nativeEnum(PaymentStatus).optional(),
 }).refine((data) => {
