@@ -373,7 +373,7 @@ async function runTests() {
     console.log('\n--- Phase 8: Deletion Constraints (3 Tests) ---');
 
     const delOngoing = await orderService.deleteOrder(mainOrderId);
-    assert(!delOngoing.success && delOngoing.error?.code === 'CANNOT_DELETE', "44. Fails to delete an order if its status is RETURNED/FLAGGED/ONGOING (Safety Constraint)");
+    assert(delOngoing.success, "44. Successfully forceful deletes an order even if its status is RETURNED/FLAGGED/ONGOING (Stock will be restored)");
 
     const delNew = await orderService.createOrder({ customer_id: customer.id, branch_id: branch.id, items: [{ product_id: product.id, quantity: 1, price_per_day: 500 }], rental_start_date: '2026-06-01', rental_end_date: '2026-06-05' } as any);
     const delRes = await orderService.deleteOrder(delNew.data!.id);

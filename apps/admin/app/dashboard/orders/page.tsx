@@ -63,7 +63,7 @@ function OrdersContent() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const user = useAppStore((state) => state.user);
-  const canDelete = user?.role === 'admin';
+  const canDelete = ['admin', 'super_admin', 'owner'].includes(user?.role || '');
 
   // Read State from URL (The Source of Truth)
   const page = parseInt(searchParams.get("page") || "1", 10);

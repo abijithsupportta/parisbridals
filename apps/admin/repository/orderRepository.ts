@@ -385,6 +385,62 @@ export class OrderRepository extends BaseRepository {
    * Delete an order
    */
   async delete(id: string): Promise<RepositoryResult<void>> {
+    // Fetch the order to check if we need to restore stock
+    const orderResponse = await this.client
+      .from(this.tableName)
+      .select('status, branch_id')
+      .eq('id', id)
+      .single();
+
+    if (orderResponse.data) {
+      const status = orderResponse.data.status;
+      const branchId = orderResponse.data.branch_id;
+      
+      // These statuses mean the items have decremented the available_quantity
+      if (['ongoing', 'in_use', 'late_return', 'partial', 'flagged'].includes(status)) {
+        const itemsRes = await this.client
+          .from(this.orderItemsTable)
+          .select('product_id, quantity, returned_quantity')
+          .eq('order_id', id);
+
+        if (itemsRes.data) {
+          for (const item of itemsRes.data) {
+            const unreturnedQuantity = item.quantity - (item.returned_quantity || 0);
+            if (unreturnedQuantity > 0) {
+              // Restore inventory
+              const { data: inv } = await this.client
+                .from('product_inventory')
+                .select('available_quantity')
+                .eq('product_id', item.product_id)
+                .eq('branch_id', branchId)
+                .single();
+                
+              if (inv) {
+                await this.client
+                  .from('product_inventory')
+                  .update({ available_quantity: inv.available_quantity + unreturnedQuantity })
+                  .eq('product_id', item.product_id)
+                  .eq('branch_id', branchId);
+              }
+              
+              const { data: prod } = await this.client
+                .from('products')
+                .select('available_quantity')
+                .eq('id', item.product_id)
+                .single();
+                
+              if (prod) {
+                await this.client
+                  .from('products')
+                  .update({ available_quantity: prod.available_quantity + unreturnedQuantity })
+                  .eq('id', item.product_id);
+              }
+            }
+          }
+        }
+      }
+    }
+
     const response = await this.client
       .from(this.tableName)
       .delete()

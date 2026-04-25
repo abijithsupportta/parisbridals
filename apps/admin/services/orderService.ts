@@ -266,22 +266,6 @@ export class OrderService {
       };
     }
 
-    // Cannot delete orders that are active, completed or returned
-    if ([
-        OrderStatus.IN_USE, OrderStatus.DELIVERED, OrderStatus.RETURNED, 
-        OrderStatus.LATE_RETURN, OrderStatus.COMPLETED, OrderStatus.ONGOING, 
-        OrderStatus.FLAGGED, OrderStatus.PARTIAL
-    ].includes(existingOrder.data.status as OrderStatus)) {
-      return {
-        data: null,
-        error: {
-          message: 'Cannot delete orders that are in progress or completed',
-          code: 'CANNOT_DELETE'
-        } as any,
-        success: false,
-      };
-    }
-
     return await orderRepository.delete(id);
   }
 
