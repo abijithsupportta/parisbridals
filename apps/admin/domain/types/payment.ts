@@ -10,6 +10,7 @@
 export enum PaymentType {
   DEPOSIT = 'deposit',
   FINAL = 'final',
+  REFUND = 'refund',
 }
 
 // Payment Mode Enum

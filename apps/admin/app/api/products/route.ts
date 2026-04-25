@@ -10,11 +10,11 @@
 
 import { NextRequest } from 'next/server';
 import { productService } from '@/services';
-import { CreateProductDTO, ProductSearchSchema, CreateProductSchema } from '@/domain';
+import { CreateProductDTO, ProductSearchSchema, ClientCreateProductSchema } from '@/domain';
 import { z } from 'zod';
 import { apiGuard } from '@/lib/apiGuard';
 import { getAuthUser } from '@/lib/auth';
-import { apiSuccess, apiRepositoryError, apiZodError, apiInternalError } from '@/lib/apiResponse';
+import { apiSuccess, apiRepositoryError, apiZodError, apiInternalError, apiBadRequest } from '@/lib/apiResponse';
 
 /**
  * GET /api/products
@@ -84,9 +84,11 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/products
  * 
- * Request body: CreateProductDTO
+ * Request body: ClientCreateProductInput (no store_id required)
  * 
- * Creates a new product with validation and business logic.
+ * The server injects store_id from the authenticated session cookie.
+ * This implements Server-Authoritative Identity Injection (Zero-Trust):
+ * the client can never influence which store a product belongs to.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -94,33 +96,42 @@ export async function POST(request: NextRequest) {
     const guard = await apiGuard(request, 'products');
     if (guard.error) return guard.error;
 
-    // Get authenticated user for audit fields
+    // ── Step 1: Extract identity from encrypted auth cookie ──────────
+    // This is the Zero-Trust layer. We NEVER trust JSON body for identity.
     const authUser = await getAuthUser(request);
     
-    // Set user context in service
+    // Reject early if we cannot determine store context
+    if (!authUser?.store_id) {
+      return apiBadRequest('Cannot determine store context. Please log out and log back in.');
+    }
+
+    // Set user context in service for audit fields
     productService.setUserContext(
-      authUser?.staff_id || null, 
-      authUser?.branch_id || null, 
-      authUser?.store_id || null
+      authUser.staff_id, 
+      authUser.branch_id, 
+      authUser.store_id
     );
 
+    // ── Step 2: Validate client input using CLIENT schema ───────────
+    // ClientCreateProductSchema has NO store_id — the client doesn't
+    // need to know about it. This is Boundary Separation in action.
     const body = await request.json();
-    
-    // Validate request body
-    const validatedData = CreateProductSchema.parse(body);
+    const clientInput = ClientCreateProductSchema.parse(body);
 
-    // Convert null values to undefined for type compatibility
-    // Inject store_id from authenticated session (server-authoritative)
+    // ── Step 3: Merge server context into validated data ─────────────
+    // The server forcefully injects store_id from the auth cookie.
+    // Even if a malicious client tried to send store_id, it's ignored
+    // because ClientCreateProductSchema strips unknown fields.
     const productData: CreateProductDTO = {
-      ...validatedData,
-      store_id: authUser?.store_id || validatedData.store_id || '',
-      category_id: validatedData.category_id || undefined,
-      subcategory_id: validatedData.subcategory_id || undefined,
-      subvariant_id: validatedData.subvariant_id || undefined,
+      ...clientInput,
+      store_id: authUser.store_id,
+      category_id: clientInput.category_id || undefined,
+      subcategory_id: clientInput.subcategory_id || undefined,
+      subvariant_id: clientInput.subvariant_id || undefined,
     };
 
-    // Pass user role to service for "all branches" logic
-    const result = await productService.createProduct(productData, authUser?.role || 'staff');
+    // ── Step 4: Execute business logic ──────────────────────────────
+    const result = await productService.createProduct(productData, authUser.role || 'staff');
 
     if (!result.success) {
       return apiRepositoryError(result.error, 'Failed to create product');

@@ -465,7 +465,7 @@ export class OrderRepository extends BaseRepository {
       // Get existing order item to prevent double-counting inventory on partial returns
       const { data: orderItem } = await this.client
         .from(this.orderItemsTable)
-        .select('returned_quantity, product_id, order(branch_id)')
+        .select('returned_quantity, product_id, orders(branch_id)')
         .eq('id', item.item_id)
         .single();
         
@@ -486,7 +486,7 @@ export class OrderRepository extends BaseRepository {
 
       // Increment inventory only by the difference
       if (quantityToIncrement > 0 && orderItem && orderItem.product_id) {
-        const branchId = (orderItem as any).order?.branch_id || (orderItem as any).order?.[0]?.branch_id;
+        const branchId = (orderItem as any).orders?.branch_id || (orderItem as any).orders?.[0]?.branch_id;
         
         const { data: inv } = await this.client
           .from('product_inventory')

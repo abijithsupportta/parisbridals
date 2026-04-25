@@ -15,6 +15,7 @@ export {
   CreateProductImageSchema,
   ProductVariantSchema,
   CreateProductVariantSchema,
+  ClientCreateProductSchema,
   CreateProductSchema,
   UpdateProductSchema,
   ProductSearchSchema,
@@ -33,6 +34,7 @@ export {
 } from './schemas';
 
 export type {
+  ClientCreateProductInput,
   CreateProductInput,
   UpdateProductInput,
   BulkProductOperationInput,

@@ -38,8 +38,13 @@ export const ProductVariantSchema = z.object({
 
 export const CreateProductVariantSchema = ProductVariantSchema.omit({ id: true });
 
-// Product Create Schema
-export const CreateProductSchema = z.object({
+// ─── Client-Facing Input Schema ─────────────────────────────────────
+// This is what the frontend sends. It contains ONLY human-entered fields.
+// Server-only fields (store_id, created_by) are deliberately excluded —
+// the API route injects them from the authenticated session cookie.
+// This separation implements the "Boundary Separation" pattern:
+// Client input validation ≠ Database integrity validation.
+export const ClientCreateProductSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
   slug: z.string().min(1, 'Slug is required').max(100, 'Slug must be less than 100 characters')
     .regex(/^[a-z0-9-]+$/, 'Slug must contain only lowercase letters, numbers, and hyphens'),
@@ -48,11 +53,10 @@ export const CreateProductSchema = z.object({
   category_id: z.string().optional().nullable(),
   subcategory_id: z.string().optional().nullable(),
   subvariant_id: z.string().optional().nullable(),
-  store_id: z.string().optional(),
   description: z.string().max(1000, 'Description must be less than 1000 characters').optional(),
   price_per_day: positiveNumber.max(999999, 'Price must be less than 999,999'),
   security_deposit: z.number().max(999999, 'Security deposit must be less than 999,999').optional().default(0),
-  quantity: z.number().int().min(0, 'Quantity must be a non-negative integer').optional().default(0),
+  quantity: z.number().int().min(0).optional().default(0),
   available_quantity: z.number().int().min(0, 'Available quantity must be a non-negative integer').optional(),
   images: z.array(CreateProductImageSchema).optional(),
   sizes: z.array(CreateProductVariantSchema).optional(),
@@ -66,6 +70,14 @@ export const CreateProductSchema = z.object({
     quantity: z.number().int().min(0),
     id: z.string().optional(),
   })).optional(),
+});
+
+// ─── Server-Side Full Schema ────────────────────────────────────────
+// Extends the client schema with server-injected fields.
+// Used AFTER the API route has merged auth context into the payload.
+// This guarantees store_id is always present before hitting the DB.
+export const CreateProductSchema = ClientCreateProductSchema.extend({
+  store_id: z.string().min(1, 'Store ID is required'),
 });
 
 // Product Update Schema
@@ -169,6 +181,7 @@ export const validateProductInventory = (quantity: number, availableQuantity: nu
 };
 
 // Type exports
+export type ClientCreateProductInput = z.infer<typeof ClientCreateProductSchema>;
 export type CreateProductInput = z.infer<typeof CreateProductSchema>;
 export type UpdateProductInput = z.infer<typeof UpdateProductSchema>;
 export type ProductSearchParams = z.infer<typeof ProductSearchSchema>;

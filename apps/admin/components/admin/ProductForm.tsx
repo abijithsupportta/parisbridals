@@ -70,8 +70,14 @@ export default function ProductForm({
   const queryClient = useQueryClient();
   const { createProduct } = useCreateProduct();
   const { updateProduct } = useUpdateProduct();
-  const { categories } = useCategories();
-  const { branches } = useBranches();
+  const { categories, isLoading: isCategoriesLoading } = useCategories();
+  const { branches, isLoading: isBranchesLoading } = useBranches();
+
+  // ── Async-Resilience Guard ──────────────────────────────────────
+  // Block submission until all async dependencies are resolved.
+  // This prevents the "impedance mismatch" where the form tries
+  // to use data that hasn't arrived from the network yet.
+  const isFormReady = !isCategoriesLoading && !isBranchesLoading;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -253,11 +259,13 @@ export default function ProductForm({
           name: formData.name,
           slug: formData.slug || generateSlug(formData.name),
           images,
-          store_id: user?.store_id || undefined,
+          // NOTE: store_id is deliberately ABSENT here.
+          // The server injects it from the auth cookie (Zero-Trust).
+          // This eliminates the race condition where user?.store_id
+          // was undefined because Zustand hadn't finished hydrating.
           category_id: formData.category_id || undefined,
           subcategory_id: formData.subcategory_id || undefined,
           subvariant_id: formData.subvariant_id || undefined,
-          branch_id: undefined,
           security_deposit: 0,
           is_featured: false,
           track_inventory: true,
@@ -600,7 +608,7 @@ export default function ProductForm({
               </span>
             </div>
 
-            {isLoadingInventory ? (
+            {isLoadingInventory || isBranchesLoading ? (
               <div className="flex justify-center py-6">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-slate-900" />
               </div>
@@ -658,21 +666,23 @@ export default function ProductForm({
               <Button
                 type="button"
                 variant="outline"
-                disabled={loading}
+                disabled={loading || !isFormReady}
                 onClick={() => handleSubmit(true)}
                 className="h-10 border-slate-200 text-slate-700 hover:bg-slate-50"
               >
-                {loading ? "Saving..." : "Save & Add Another"}
+                {loading ? "Saving..." : !isFormReady ? "Loading..." : "Save & Add Another"}
               </Button>
             )}
             <Button
               type="button"
-              disabled={loading}
+              disabled={loading || !isFormReady}
               onClick={() => handleSubmit(false)}
               className="h-10 px-6 bg-slate-900 text-white hover:bg-slate-800 font-semibold"
             >
               {loading
                 ? "Saving..."
+                : !isFormReady
+                ? "Loading..."
                 : isEdit
                 ? "Save Changes"
                 : "Create Product"}

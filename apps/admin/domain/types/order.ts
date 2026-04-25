@@ -179,6 +179,8 @@ export interface ReturnOrderDTO {
     damage_charges?: number;
   }[];
   notes?: string;
+  late_fee?: number;
+  discount?: number;
 }
 
 // Order Search Parameters

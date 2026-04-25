@@ -74,4 +74,6 @@ export const ReturnOrderSchema = z.object({
   order_id: z.string().uuid("Invalid order ID"),
   items: z.array(returnItemSchema).min(1, "Must return at least one item"),
   notes: z.string().max(2000).optional(),
+  late_fee: z.number().nonnegative().optional(),
+  discount: z.number().nonnegative().optional(),
 });

@@ -12,6 +12,7 @@ export {
   CreateProductImageSchema,
   ProductVariantSchema,
   CreateProductVariantSchema,
+  ClientCreateProductSchema,
   CreateProductSchema,
   UpdateProductSchema,
   ProductSearchSchema,
@@ -24,6 +25,7 @@ export {
 } from './product.schema';
 
 export type {
+  ClientCreateProductInput,
   CreateProductInput,
   UpdateProductInput,
   ProductSearchParams,

@@ -33,7 +33,9 @@ function Record($name, $ok, $detail) {
 
 function Invoke-Api($method, $path, $body) {
     $uri = "$BaseUrl$path"
-    $headers = @{ "X-Test-Bypass" = "true" }
+    # To run this script without 401s, you either need to pass an Authorization Bearer token 
+    # or temporarily comment out `apiGuard` in the route handlers.
+    $headers = @{} # Add your bearer token here if testing against a live server: @{ "Authorization" = "Bearer YOUR_JWT" }
     $params = @{ Uri = $uri; Method = $method; ContentType = 'application/json'; Headers = $headers; UseBasicParsing = $true }
     if ($body) { $params.Body = ($body | ConvertTo-Json -Depth 5 -Compress) }
     try {
@@ -70,19 +72,15 @@ Show-Step "SETUP: Fetching dependencies"
 $branchResp = Invoke-Api "GET" "/branches" $null
 $branch = $branchResp.Body.branches | Select-Object -First 1
 if (-not $branch) { 
-    Write-Host "Creating test branch..."
-    $res = Invoke-Api "POST" "/branches" @{ name="Test Branch"; is_main_branch=$true; is_active=$true }
-    $branch = $res.Body.branch 
-    if (-not $branch) { Write-Host "Branch creation failed: $($res.Raw)"; exit 1 }
+    Write-Host "Please ensure you have at least one branch created via the UI before running this test." -ForegroundColor Yellow
+    exit 1
 }
 
 $customerResp = Invoke-Api "GET" "/customers" $null
 $customer = $customerResp.Body.customers | Select-Object -First 1
 if (-not $customer) { 
-    Write-Host "Creating test customer..."
-    $res = Invoke-Api "POST" "/customers" @{ full_name="Test Customer"; primary_phone="9999999999"; status="active" }
-    $customer = $res.Body.customer 
-    if (-not $customer) { Write-Host "Customer creation failed: $($res.Raw)"; exit 1 }
+    Write-Host "Please ensure you have at least one customer created via the UI before running this test." -ForegroundColor Yellow
+    exit 1
 }
 
 $productResp = Invoke-Api "GET" "/products" $null
