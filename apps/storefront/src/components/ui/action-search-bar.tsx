@@ -116,7 +116,7 @@ export default function ActionSearchBar({ storeId }: ActionSearchBarProps) {
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, storeId, supabase]);
 
   // Close dropdown on outside click
   useEffect(() => {
