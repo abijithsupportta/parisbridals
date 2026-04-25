@@ -38,15 +38,16 @@ export class UploadRepository extends BaseRepository {
         throw new Error(errorData.message || `Upload failed: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      const json = await response.json();
+      const payload = json.data || json;
 
       const uploadResult: ImageUploadResult = {
-        url: result.url,
-        public_id: result.public_id || key,
-        format: result.format || extension || 'unknown',
-        size: result.size || file.size,
-        width: result.width || 0,
-        height: result.height || 0,
+        url: payload.url,
+        public_id: payload.key || payload.public_id || key,
+        format: payload.format || extension || 'unknown',
+        size: payload.size || file.size,
+        width: payload.width || 0,
+        height: payload.height || 0,
       };
 
       return {

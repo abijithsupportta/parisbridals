@@ -311,8 +311,9 @@ const FileUpload = React.forwardRef<HTMLDivElement, FileUploadProps>(
             throw new Error(`Upload failed: ${res.statusText}`);
           }
 
-          const data = await res.json();
-          return data.url;
+          const json = await res.json();
+          // Support both legacy { url } and standard apiSuccess { data: { url } }
+          return json.data?.url || json.url;
         } catch (err) {
           console.error("Upload error:", err);
           return null;
