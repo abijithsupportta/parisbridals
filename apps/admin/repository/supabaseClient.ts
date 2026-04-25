@@ -56,6 +56,9 @@ export abstract class BaseRepository {
   // Current user context for audit fields
   protected currentUserId: string | null = null;
   protected currentBranchId: string | null = null;
+  
+  // Configuration flag for multi-branch audit fields tracking
+  protected useMultiBranchAuditFields: boolean = true;
 
   protected get client() {
     if (!this._client) this._client = createAdminClient();
@@ -79,6 +82,13 @@ export abstract class BaseRepository {
    * Get audit fields for create operations
    */
   protected getCreateAuditFields() {
+    if (!this.useMultiBranchAuditFields) {
+      return {
+        created_by: this.currentUserId,
+        updated_by: this.currentUserId,
+      };
+    }
+
     return {
       created_by: this.currentUserId,
       created_at_branch_id: this.currentBranchId,
@@ -91,6 +101,12 @@ export abstract class BaseRepository {
    * Get audit fields for update operations
    */
   protected getUpdateAuditFields() {
+    if (!this.useMultiBranchAuditFields) {
+      return {
+        updated_by: this.currentUserId,
+      };
+    }
+
     return {
       updated_by: this.currentUserId,
       updated_at_branch_id: this.currentBranchId,

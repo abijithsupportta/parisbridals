@@ -17,6 +17,7 @@ import {
 
 export class PaymentRepository extends BaseRepository {
   private readonly tableName = 'payments';
+  protected useMultiBranchAuditFields = false;
 
   /**
    * Find a payment by ID
@@ -102,7 +103,7 @@ export class PaymentRepository extends BaseRepository {
       .from(this.tableName)
       .insert({
         ...data,
-        created_by: this.currentUserId,
+        ...this.getCreateAuditFields(),
       })
       .select()
       .maybeSingle();
@@ -119,6 +120,7 @@ export class PaymentRepository extends BaseRepository {
       .update({
         ...data,
         updated_at: new Date().toISOString(),
+        ...this.getUpdateAuditFields(),
       })
       .eq('id', id)
       .select()
