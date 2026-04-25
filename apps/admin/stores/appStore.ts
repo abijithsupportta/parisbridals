@@ -274,37 +274,6 @@ export const useAppStore = create<AppStore>()(
   )
 );
 
-// Selectors for optimized re-renders
-export const useAppSelectors = {
-  // User selectors
-  user: () => useAppStore((state) => state.user),
-  isAuthenticated: () => useAppStore((state) => state.isAuthenticated),
-  isLoading: () => useAppStore((state) => state.isLoading),
-  
-  // UI selectors
-  sidebarCollapsed: () => useAppStore((state) => state.sidebarCollapsed),
-  theme: () => useAppStore((state) => state.theme),
-  language: () => useAppStore((state) => state.language),
-  
-  // Notification selectors
-  notifications: () => useAppStore((state) => state.notifications),
-  notificationCount: () => useAppStore((state) => state.notifications.length),
-  
-  // Loading selectors
-  globalLoading: () => useAppStore((state) => state.globalLoading),
-  globalError: () => useAppStore((state) => state.globalError),
-  
-  // Navigation selectors
-  currentPage: () => useAppStore((state) => state.currentPage),
-  breadcrumbs: () => useAppStore((state) => state.breadcrumbs),
-  
-  // Search selectors
-  globalSearchOpen: () => useAppStore((state) => state.globalSearchOpen),
-  globalSearchQuery: () => useAppStore((state) => state.globalSearchQuery),
-
-  // Branch selectors
-  selectedBranchId: () => useAppStore((state) => state.selectedBranchId),
-};
 
 // Utility functions for common operations
 export const appUtils = {
