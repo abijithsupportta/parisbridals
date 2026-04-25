@@ -51,9 +51,9 @@ pnpm format       # Prettier format
 
 ## 2. Architecture Rules
 
-### Next.js Admin (apps/admin) — MANDATORY LAYERED PATTERN
+### All Next.js Apps (Admin, Storefront, etc.) — MANDATORY LAYERED PATTERN
 
-The admin app follows a **strict 5-layer architecture**. All new features MUST follow this pattern:
+Every Next.js application in this monorepo follows a **strict 5-layer architecture**. All new features across all projects MUST follow this pattern:
 
 ```
 Domain → Repository → Service → Hooks → Components/Pages
@@ -446,9 +446,8 @@ components/
 - Vendor/store-specific data filtering (only show Paris Bridals content)
 
 ### Storefront Data Access
-- `src/lib/supabase/` — Supabase client for storefront
-- `src/lib/actions/` — Server actions for data fetching
-- Direct Supabase queries (no repository/service layers)
+- The Storefront MUST follow the exact same 5-layer architecture as the Admin app (`Domain → Repository → Service → Hooks → Components/Pages`).
+- Direct Supabase queries in components or simple server actions without service/repository layers are STRICTLY PROHIBITED.
 
 ---
 
