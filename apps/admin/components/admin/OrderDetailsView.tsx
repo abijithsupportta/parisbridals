@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
-  Package, User, Calendar, CheckCircle2, AlertTriangle,
-  ArrowLeft, ArrowRight, XCircle, Clock
+  Package, CheckCircle2, AlertTriangle,
+  ArrowLeft, XCircle, Phone
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { PaymentType, PaymentMode } from "@/domain/types/payment";
 export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const router = useRouter();
   const { data: orderResponse, isLoading } = useOrder(orderId);
+  // We keep history for potential future use but hide it from the 2-second UX glance
   const { data: historyResponse } = useOrderStatusHistory(orderId);
   const { processOrderReturn, isPending: isReturning } = useProcessOrderReturn();
   const { updateOrder, isLoading: isUpdating } = useUpdateOrder();
@@ -36,9 +37,6 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     notes: ""
   });
 
-  const order = orderResponse?.data;
-  const history = historyResponse?.data || [];
-
   // Local state for the return checklist
   const [returnItems, setReturnItems] = useState<Record<string, {
     status: 'excellent' | 'damaged' | 'missing' | null,
@@ -49,9 +47,10 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const [lateFee, setLateFee] = useState<number>(0);
   const [discount, setDiscount] = useState<number>(0);
 
+  const order = orderResponse?.data;
+  
   const isReturnable = order?.status === OrderStatus.IN_USE || order?.status === OrderStatus.ONGOING || order?.status === OrderStatus.LATE_RETURN || order?.status === OrderStatus.PARTIAL;
 
-  // Initialize return state when order loads
   useEffect(() => {
     if (order && Object.keys(returnItems).length === 0 && isReturnable) {
       const initial: any = {};
@@ -62,7 +61,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     }
   }, [order, isReturnable]);
 
-  // Calculations
+  const amount_due = order ? Math.max(0, order.total_amount - (order.amount_paid || 0)) : 0;
   const calculatedDamage = Object.values(returnItems).reduce((sum, item) => sum + (item.damage_fee || 0), 0);
   const totalDeductions = calculatedDamage + lateFee - discount;
 
@@ -116,25 +115,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
-            if (paymentForm.paymentType === PaymentType.DEPOSIT) {
-              updateOrder({
-                id: order.id,
-                data: {
-                  deposit_collected: true,
-                  deposit_collected_at: new Date().toISOString(),
-                },
-              });
-            } else {
-              const newAmountPaid = ((order as any).amount_paid || 0) + amountVal;
-              const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
-              updateOrder({
-                id: order.id,
-                data: {
-                  amount_paid: newAmountPaid,
-                  payment_status: newStatus,
-                },
-              });
-            }
+            const newAmountPaid = (order.amount_paid || 0) + amountVal;
+            const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
+            updateOrder({
+              id: order.id,
+              data: {
+                amount_paid: newAmountPaid,
+                payment_status: newStatus,
+              },
+            });
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
           },
@@ -180,112 +169,102 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     );
   }
 
-  // Status badge color
-  const getStatusColor = (status: string) => {
+  const getStatusDisplay = (status: string) => {
     switch (status) {
-      case 'completed': case 'returned': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-      case 'late_return': case 'flagged': return 'bg-red-50 text-red-700 border-red-200';
-      case 'cancelled': return 'bg-slate-100 text-slate-600 border-slate-200';
-      default: return 'bg-amber-50 text-amber-700 border-amber-200';
+      case OrderStatus.SCHEDULED: return { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Scheduled' };
+      case OrderStatus.ONGOING: case OrderStatus.IN_USE: return { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Ongoing' };
+      case OrderStatus.LATE_RETURN: return { color: 'bg-red-100 text-red-800 border-red-300 shadow-[0_0_10px_rgba(239,68,68,0.3)]', label: 'Late' };
+      case OrderStatus.PARTIAL: return { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Partial' };
+      case OrderStatus.RETURNED: case OrderStatus.COMPLETED: return { color: 'bg-slate-100 text-slate-600 border-slate-200', label: 'Returned' };
+      case OrderStatus.FLAGGED: return { color: 'bg-purple-100 text-purple-800 border-purple-200', label: '⚠️ Flagged' };
+      case OrderStatus.CANCELLED: return { color: 'bg-slate-800 text-slate-300 border-slate-700 line-through', label: 'Cancelled' };
+      default: return { color: 'bg-slate-100 text-slate-600 border-slate-200', label: status };
     }
   };
 
+  const statusDisplay = getStatusDisplay(order.status);
+
   return (
-    <div className="space-y-6">
-      {/* Page header — same as product module */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push("/dashboard/orders")}
-            className="w-9 h-9 border-slate-200 text-slate-500 hover:text-slate-900 bg-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
+    <div className="space-y-6 max-w-7xl mx-auto pb-20">
+      
+      {/* 1. Hero Banner (The 2-Second Glance) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+        <div className="flex items-center gap-5">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard/orders")} className="h-12 w-12 rounded-full bg-slate-50 hover:bg-slate-100">
+            <ArrowLeft className="w-5 h-5 text-slate-700" />
           </Button>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                Order #{order.id.slice(0, 6).toUpperCase()}
-              </h1>
-              <span className={`text-xs font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${getStatusColor(order.status)}`}>
-                {order.status.replace('_', ' ')}
-              </span>
-            </div>
-            <p className="text-sm text-slate-500">
-              {order.customer?.name} · {format(new Date(order.start_date), "MMM dd")} – {format(new Date(order.end_date), "MMM dd, yyyy")}
-            </p>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
+              #{order.id.slice(0, 6).toUpperCase()}
+            </h1>
+            <p className="text-slate-500 font-bold uppercase tracking-wide text-sm">{order.customer?.name}</p>
+          </div>
+          <div className={`px-4 py-1.5 ml-2 rounded-full border-2 font-black uppercase tracking-wider text-sm ${statusDisplay.color}`}>
+            {statusDisplay.label}
           </div>
         </div>
-        {order.status === OrderStatus.SCHEDULED && (
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => updateOrder({ id: order.id, data: { status: OrderStatus.CANCELLED } })}
-              disabled={isUpdating}
-              variant="outline"
-              className="border-slate-200 text-slate-700 hover:text-red-600 hover:bg-red-50 font-semibold h-9 px-4"
-            >
-              Cancel Order
+
+        <div className="flex items-center gap-4 w-full lg:w-auto">
+          {/* Payment Pill */}
+          {amount_due > 0 ? (
+            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-3 rounded-xl text-xl font-black flex-1 lg:flex-none text-center">
+              DUE: {formatCurrency(amount_due)}
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-6 py-3 rounded-xl text-sm font-black flex-1 lg:flex-none text-center">
+              PAID
+            </div>
+          )}
+
+          {/* Primary Action Button */}
+          {order.status === OrderStatus.SCHEDULED && (
+            <Button onClick={handleStartOrder} disabled={isUpdating} className="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
+              Start Rental
             </Button>
-            <Button
-              onClick={handleStartOrder}
-              disabled={isUpdating}
-              className="bg-emerald-600 text-white hover:bg-emerald-700 font-semibold h-9 px-4 shadow-sm"
-            >
-              {isUpdating ? "Starting..." : "Start Order Today"}
+          )}
+          {order.status !== OrderStatus.SCHEDULED && amount_due > 0 && (
+            <Button onClick={() => setIsPaymentModalOpen(true)} className="h-14 px-8 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
+              Collect Payment
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 2. Logistics Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Out (Pickup)</p>
+          <p className="text-2xl font-bold text-slate-900">{format(new Date(order.start_date), "dd MMM, yyyy")}</p>
+        </div>
+        <div className={`bg-white rounded-2xl border p-5 ${order.status === OrderStatus.LATE_RETURN ? 'border-red-400 bg-red-50 ring-4 ring-red-50' : 'border-slate-200'}`}>
+          <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${order.status === OrderStatus.LATE_RETURN ? 'text-red-600' : 'text-slate-500'}`}>
+            In (Return)
+          </p>
+          <p className={`text-2xl font-bold ${order.status === OrderStatus.LATE_RETURN ? 'text-red-700' : 'text-slate-900'}`}>
+            {format(new Date(order.end_date), "dd MMM, yyyy")}
+          </p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Items</p>
+          <p className="text-2xl font-bold text-slate-900">{order.items.length} Pieces</p>
+        </div>
+      </div>
 
-        {/* LEFT COLUMN (2/3) — Order Info + Checklist */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Order Summary */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Customer</p>
-                <p className="text-sm font-semibold text-slate-900 mt-1 flex items-center gap-1"><User className="w-3.5 h-3.5 text-slate-400" /> {order.customer?.name}</p>
-                <p className="text-xs text-slate-500">{order.customer?.phone}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pickup</p>
-                <p className="text-sm font-semibold text-slate-900 mt-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> {format(new Date(order.start_date), "MMM dd, yyyy")}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Return</p>
-                <p className="text-sm font-semibold text-slate-900 mt-1 flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-slate-400" /> {format(new Date(order.end_date), "MMM dd, yyyy")}</p>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Amount</p>
-                <p className="text-lg font-bold text-slate-900 mt-1">{formatCurrency(order.total_amount)}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Return Checklist */}
-          <div className="bg-white border border-slate-200 rounded-lg">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                <Package className="w-4 h-4 text-slate-400" />
-                {isReturnable ? "Return Checklist" : "Order Items"}
-              </h3>
+      {/* 3. Split View */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        {/* Left Column: Physical Items */}
+        <div className="xl:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+            <div className="bg-slate-50 px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wide">Physical Items</h2>
               {isReturnable && (
-                <Button
-                  onClick={handleMarkAllExcellent}
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 font-medium"
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark All Excellent
+                <Button onClick={handleMarkAllExcellent} variant="outline" className="font-bold border-slate-300 text-slate-700">
+                  <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> Mark All Good
                 </Button>
               )}
             </div>
-
+            
             <div className="divide-y divide-slate-100">
               {order.items.map((item) => {
                 const rItem = returnItems[item.id] || { status: null, damage_fee: 0, notes: "" };
@@ -296,79 +275,67 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 const imgUrl = getImageUrl(product);
 
                 return (
-                  <div key={item.id} className={`p-5 ${isExcellent ? 'bg-emerald-50/30' : isDamaged ? 'bg-orange-50/30' : isMissing ? 'bg-red-50/30' : ''}`}>
-                    <div className="flex flex-col md:flex-row md:items-center gap-4">
-                      <div className="w-12 h-12 rounded-md bg-slate-100 flex-shrink-0 border border-slate-200 overflow-hidden">
+                  <div key={item.id} className={`p-6 transition-colors ${isExcellent ? 'bg-emerald-50/50' : isDamaged ? 'bg-orange-50/50' : isMissing ? 'bg-red-50/50' : ''}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+                      <div className="w-20 h-20 rounded-xl bg-slate-100 flex-shrink-0 border-2 border-slate-200 overflow-hidden shadow-sm">
                         {imgUrl ? (
                           <img src={imgUrl} alt={product?.name} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-slate-300">
-                            <Package className="w-5 h-5" />
+                            <Package className="w-8 h-8" />
                           </div>
                         )}
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-semibold text-slate-900">{product?.name || `Product #${item.product_id?.slice(0, 6).toUpperCase()}`}</h4>
-                        <p className="text-xs text-slate-500">Qty: {item.quantity} · {formatCurrency(item.price_per_day)}</p>
+                        <h4 className="text-lg font-bold text-slate-900">{product?.name || `Product #${item.product_id?.slice(0, 6).toUpperCase()}`}</h4>
+                        <p className="text-sm font-medium text-slate-500 mt-1">Qty: {item.quantity} · {formatCurrency(item.price_per_day)}/day</p>
                       </div>
 
                       {isReturnable ? (
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Button
                             type="button"
                             onClick={() => handleItemUpdate(item.id, 'status', 'excellent')}
                             variant="outline"
-                            size="sm"
-                            className={`h-9 text-xs font-medium ${isExcellent ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                            className={`h-12 px-4 font-bold rounded-xl transition-all ${isExcellent ? 'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700 hover:text-white' : 'border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'}`}
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Excellent
+                            <CheckCircle2 className={`w-5 h-5 mr-2 ${isExcellent ? 'text-white' : 'text-emerald-500'}`} /> Good
                           </Button>
                           <Button
                             type="button"
                             onClick={() => handleItemUpdate(item.id, 'status', 'damaged')}
                             variant="outline"
-                            size="sm"
-                            className={`h-9 text-xs font-medium ${isDamaged ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                            className={`h-12 px-4 font-bold rounded-xl transition-all ${isDamaged ? 'bg-orange-500 text-white border-orange-500 hover:bg-orange-600 hover:text-white' : 'border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-200'}`}
                           >
-                            <AlertTriangle className="w-3.5 h-3.5 mr-1" /> Damaged
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => handleItemUpdate(item.id, 'status', 'missing')}
-                            variant="outline"
-                            size="sm"
-                            className={`h-9 text-xs font-medium ${isMissing ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
+                            <AlertTriangle className={`w-5 h-5 mr-2 ${isDamaged ? 'text-white' : 'text-orange-500'}`} /> Damaged
                           </Button>
                         </div>
                       ) : (
-                        <span className={`text-xs font-medium px-2 py-1 rounded border ${item.is_returned ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                        <span className={`text-sm font-bold px-3 py-1.5 rounded-lg border-2 ${item.is_returned ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                           {item.is_returned ? "Returned" : "Pending"}
                         </span>
                       )}
                     </div>
 
-                    {/* Inline Damage Form */}
                     {isReturnable && isDamaged && (
-                      <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg flex gap-3 items-start">
-                        <div className="flex-1 space-y-1.5">
-                          <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Damage Description</label>
+                      <div className="mt-4 p-4 bg-white border-2 border-orange-200 rounded-xl flex flex-col sm:flex-row gap-4 items-start shadow-sm">
+                        <div className="flex-1 space-y-2 w-full">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Damage Notes</label>
                           <Input
                             value={rItem.notes}
                             onChange={(e) => handleItemUpdate(item.id, 'notes', e.target.value)}
-                            placeholder="E.g. Broken clasp, missing stone..."
-                            className="h-9 border-slate-200 focus:border-slate-900 text-sm"
+                            placeholder="Describe damage (e.g. Broken clasp)"
+                            className="h-12 border-slate-300 focus:border-orange-400 text-base rounded-lg"
                           />
                         </div>
-                        <div className="w-36 space-y-1.5">
-                          <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Fee (₹)</label>
+                        <div className="w-full sm:w-40 space-y-2">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Fee (₹)</label>
                           <Input
                             type="number"
                             value={rItem.damage_fee || ""}
                             onChange={(e) => handleItemUpdate(item.id, 'damage_fee', parseFloat(e.target.value) || 0)}
                             placeholder="0"
-                            className="h-9 border-slate-200 focus:border-slate-900 font-bold text-sm"
+                            className="h-12 border-slate-300 focus:border-orange-400 font-bold text-lg rounded-lg"
                           />
                         </div>
                       </div>
@@ -377,185 +344,83 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 );
               })}
             </div>
+            
+            {/* Settlement Footer (Only visible when processing returns) */}
+            {isReturnable && (
+               <div className="bg-slate-50 p-6 border-t border-slate-200">
+                  <div className="flex flex-col sm:flex-row items-end justify-between gap-4">
+                     <div className="flex gap-4 w-full sm:w-auto">
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Extra Late Fee</label>
+                          <Input type="number" value={lateFee || ""} onChange={(e) => setLateFee(parseFloat(e.target.value) || 0)} className="w-32 h-12 font-bold text-lg" placeholder="0" />
+                        </div>
+                     </div>
+                     <Button
+                        onClick={submitReturn}
+                        disabled={isReturning}
+                        className="w-full sm:w-auto h-14 px-8 bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg rounded-xl shadow-md"
+                     >
+                        {isReturning ? "Processing..." : "Complete Return Process"}
+                     </Button>
+                  </div>
+               </div>
+            )}
           </div>
         </div>
 
-        {/* RIGHT COLUMN (1/3) — Settlement + History */}
+        {/* Right Column: Customer & Money */}
         <div className="space-y-6">
-
-          {/* Payments & Deposit */}
-          <div className="bg-white border border-slate-200 rounded-lg">
-            <div className="p-5 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold">₹</span>
-                Payments & Deposit
-              </h3>
-            </div>
-            <div className="p-5 space-y-4">
-              <div className="flex justify-between items-center text-sm">
-                <span className="text-slate-500 font-medium">Security Deposit</span>
-                {order.deposit_collected ? (
-                  <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Collected ({formatCurrency(order.security_deposit)})</span>
-                ) : (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-7 text-xs border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 font-medium"
-                      onClick={() => {
-                        setPaymentForm({ amount: order.security_deposit.toString(), paymentMode: PaymentMode.CASH, paymentType: PaymentType.DEPOSIT, notes: "" });
-                        setIsPaymentModalOpen(true);
-                      }}
-                      disabled={isUpdating || isCreatingPayment}
-                    >
-                      Collect {formatCurrency(order.security_deposit)}
-                    </Button>
-                  )}
-                </div>
-                
-                <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Total Amount Due</span>
-                    <span className="font-bold text-slate-900">{formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">Payment Status</span>
-                    {(order as any).payment_status === 'paid' ? (
-                      <span className="font-semibold text-emerald-600 px-2 py-0.5 bg-emerald-50 rounded border border-emerald-100">Paid in Full</span>
-                    ) : (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-7 text-xs border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
-                        onClick={() => {
-                          setPaymentForm({ amount: Math.max(0, order.total_amount - ((order as any).amount_paid || 0)).toString(), paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
-                          setIsPaymentModalOpen(true);
-                        }}
-                        disabled={isUpdating || isCreatingPayment || Math.max(0, order.total_amount - ((order as any).amount_paid || 0)) === 0}
-                      >
-                        Collect Payment
-                      </Button>
-                    )}
-                </div>
-              </div>
-            </div>
+          
+          {/* Customer Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Customer</h2>
+            <p className="text-2xl font-black text-slate-900 leading-tight">{order.customer?.name}</p>
+            <a 
+               href={`tel:${order.customer?.phone}`} 
+               className="mt-6 flex items-center justify-center gap-3 w-full bg-green-50 hover:bg-green-100 text-green-700 border-2 border-green-200 py-4 rounded-xl font-black text-lg transition-colors shadow-sm"
+            >
+               <Phone className="w-5 h-5" /> {order.customer?.phone}
+            </a>
           </div>
 
-          {/* Settlement */}
-          {isReturnable && (
-            <div className="bg-white border border-slate-200 rounded-lg">
-              <div className="p-5 border-b border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-900">Settlement</h3>
+          {/* Receipt Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">Financial Receipt</h2>
+            
+            <div className="space-y-4">
+              <div className="flex justify-between text-slate-600 font-bold text-sm">
+                <span>Total Rental</span>
+                <span>{formatCurrency(order.total_amount)}</span>
               </div>
-              <div className="p-5 space-y-3">
-                <div className="flex justify-between text-sm py-2">
-                  <span className="text-slate-500">Subtotal</span>
-                  <span className="font-medium text-slate-900">{formatCurrency(order.subtotal)}</span>
-                </div>
-                {order.gst_amount > 0 && (
-                  <div className="flex justify-between text-sm py-2 border-b border-slate-100">
-                    <span className="text-slate-500">GST</span>
-                    <span className="font-medium text-slate-900">{formatCurrency(order.gst_amount)}</span>
-                  </div>
-                )}
-                {calculatedDamage > 0 && (
-                  <div className="flex justify-between text-sm text-slate-600">
-                    <span>Damage Fees</span>
-                    <span className="font-medium text-red-600">+ {formatCurrency(calculatedDamage)}</span>
-                  </div>
-                )}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Late Fee (₹)</label>
-                  <Input
-                    type="number"
-                    value={lateFee || ""}
-                    onChange={(e) => setLateFee(parseFloat(e.target.value) || 0)}
-                    className="h-9 border-slate-200 focus:border-slate-900"
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Discount (₹)</label>
-                  <Input
-                    type="number"
-                    value={discount || ""}
-                    onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                    className="h-9 border-slate-200 focus:border-slate-900"
-                    placeholder="0"
-                  />
-                </div>
-
-                <div className="pt-3 border-t border-slate-200">
-                  <div className="flex justify-between items-end">
-                    <span className="text-sm font-medium text-slate-500">Total Deductions</span>
-                    <span className="text-xl font-bold text-slate-900">{formatCurrency(totalDeductions)}</span>
-                  </div>
-                </div>
-
-                <Button
-                  onClick={submitReturn}
-                  disabled={isReturning}
-                  className="w-full h-10 bg-slate-900 text-white hover:bg-slate-800 font-semibold mt-2"
-                >
-                  {isReturning ? "Processing..." : "Settle & Complete"} <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
+              <div className="flex justify-between text-slate-600 font-bold text-sm">
+                <span>Security Deposit</span>
+                <span>{formatCurrency(order.security_deposit)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 font-bold text-sm pb-4 border-b-2 border-slate-100">
+                <span>Total Paid</span>
+                <span>{formatCurrency(order.amount_paid || 0)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-lg font-black text-slate-900">Remaining Due</span>
+                <span className={`text-2xl font-black ${amount_due > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                  {formatCurrency(amount_due)}
+                </span>
               </div>
             </div>
-          )}
 
-          {/* Status History */}
-          <div className="bg-white border border-slate-200 rounded-lg">
-            <div className="p-5 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-slate-400" />
-                Status History
-              </h3>
-            </div>
-            <div className="p-5">
-              {history.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">No history yet</p>
-              ) : (
-                <div className="relative ml-2">
-                  {history.map((h: any, i: number) => {
-                    const isLast = i === history.length - 1;
-                    const statusColor = getStatusColor(h.status);
-                    
-                    return (
-                      <div key={h.id} className="relative pb-8 last:pb-0">
-                        {/* Seamless connecting line */}
-                        {!isLast && (
-                          <div className="absolute top-5 left-[5px] bottom-[-10px] w-0.5 bg-slate-100" />
-                        )}
-                        
-                        <div className="flex items-start gap-5">
-                          {/* Timeline Dot */}
-                          <div className="relative z-10 flex-shrink-0 w-3 h-3 mt-1.5 rounded-full bg-white border-2 border-slate-300 shadow-sm" />
-                          
-                          {/* Content */}
-                          <div className="flex-1 -mt-1">
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${statusColor}`}>
-                                {h.status.replace('_', ' ')}
-                              </span>
-                              <span className="text-xs text-slate-400 font-medium">
-                                {format(new Date(h.created_at), "MMM dd, yyyy · h:mm a")}
-                              </span>
-                            </div>
-                            
-                            {h.notes && (
-                              <div className="mt-2.5 bg-slate-50 border border-slate-100 rounded-md p-3 text-xs leading-relaxed text-slate-600 font-medium">
-                                {h.notes}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {amount_due > 0 && (
+              <Button 
+                onClick={() => {
+                  setPaymentForm({ amount: amount_due.toString(), paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
+                  setIsPaymentModalOpen(true);
+                }} 
+                className="w-full mt-8 h-14 bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg rounded-xl shadow-md"
+              >
+                Record Payment
+              </Button>
+            )}
           </div>
+
         </div>
       </div>
 
@@ -567,12 +432,12 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       >
         <div className="space-y-5 pt-2">
           <div className="space-y-2">
-            <Label>Payment Method</Label>
+            <Label className="font-bold text-slate-700">Payment Method</Label>
             <Select
               value={paymentForm.paymentMode}
               onValueChange={(value) => setPaymentForm({ ...paymentForm, paymentMode: value as PaymentMode })}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full h-12 text-base rounded-lg border-slate-300">
                 <SelectValue placeholder="Select a payment method" />
               </SelectTrigger>
               <SelectContent>
@@ -586,34 +451,29 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           </div>
           
           <div className="space-y-2">
-            <Label>Amount (₹)</Label>
+            <Label className="font-bold text-slate-700">Amount (₹)</Label>
             <Input
               type="number"
               value={paymentForm.amount}
               onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-              className="w-full"
+              className="w-full h-12 text-lg font-bold rounded-lg border-slate-300"
               placeholder="0.00"
             />
-            {paymentForm.paymentType === PaymentType.FINAL && (
-              <p className="text-xs text-slate-500 font-medium">
-                Max amount due: {formatCurrency(Math.max(0, order.total_amount - ((order as any).amount_paid || 0)))}
-              </p>
-            )}
           </div>
 
           <div className="space-y-2">
-            <Label>Notes / Transaction ID <span className="text-slate-400 font-normal">(Optional)</span></Label>
+            <Label className="font-bold text-slate-700">Notes / Ref ID <span className="text-slate-400 font-normal">(Optional)</span></Label>
             <Input
               value={paymentForm.notes}
               onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
-              className="w-full"
+              className="w-full h-12 rounded-lg border-slate-300"
               placeholder="E.g. UPI Ref #123456"
             />
           </div>
 
-          <div className="pt-4 flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleCollectPayment} disabled={isCreatingPayment}>
+          <div className="pt-6 flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} className="h-12 px-6 rounded-lg font-bold">Cancel</Button>
+            <Button onClick={handleCollectPayment} disabled={isCreatingPayment} className="h-12 px-8 rounded-lg font-bold text-white bg-slate-900 hover:bg-slate-800">
               {isCreatingPayment ? "Saving..." : "Save Payment"}
             </Button>
           </div>
