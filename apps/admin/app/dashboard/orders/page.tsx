@@ -132,6 +132,9 @@ function OrdersContent() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OrderWithRelations | null>(null);
 
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [currentCancelOrder, setCurrentCancelOrder] = useState<OrderWithRelations | null>(null);
+
   const visibleOrders = ordersResult?.data || [];
   const total = ordersResult?.total || 0;
   const totalPages = ordersResult?.totalPages || 1;
@@ -183,6 +186,25 @@ function OrdersContent() {
     try {
       await deleteOrder.mutateAsync(currentOrder.id);
       closeDeleteModal();
+    } catch {
+      // Handled in hook
+    }
+  };
+
+  const openCancelModal = (order: OrderWithRelations) => {
+    setCurrentCancelOrder(order);
+    setIsCancelModalOpen(true);
+  };
+  const closeCancelModal = () => {
+    setIsCancelModalOpen(false);
+    setCurrentCancelOrder(null);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!currentCancelOrder) return;
+    try {
+      updateOrder({ id: currentCancelOrder.id, data: { status: OrderStatus.CANCELLED } });
+      closeCancelModal();
     } catch {
       // Handled in hook
     }
@@ -497,7 +519,7 @@ function OrdersContent() {
                                 className="w-8 h-8 text-slate-400 hover:text-orange-600" 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  updateOrder({ id: order.id, data: { status: OrderStatus.CANCELLED } });
+                                  openCancelModal(order);
                                 }}
                                 title="Cancel Order"
                               >
@@ -616,6 +638,34 @@ function OrdersContent() {
             <Button variant="outline" onClick={closeDeleteModal} className="border-slate-200">Cancel</Button>
             <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleteOrder.isPending}>
               {deleteOrder.isPending ? "Deleting..." : "Delete Order"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cancel Confirmation Modal */}
+      <Modal
+        open={isCancelModalOpen}
+        onClose={closeCancelModal}
+        title="Cancel Order"
+        maxWidth="max-w-md"
+      >
+        <div className="p-6">
+          <div className="flex items-start gap-4 mb-6">
+            <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center shrink-0">
+              <XCircle className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900 mb-1">Confirm Cancellation</h4>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Are you sure you want to cancel order <span className="font-semibold text-slate-900">#{currentCancelOrder?.id.slice(0, 8)}</span>?
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button variant="outline" onClick={closeCancelModal} className="border-slate-200">Keep Order</Button>
+            <Button onClick={handleConfirmCancel} className="bg-orange-600 hover:bg-orange-700 text-white">
+              Cancel Order
             </Button>
           </div>
         </div>

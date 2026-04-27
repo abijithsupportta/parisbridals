@@ -222,7 +222,6 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     if (isEditing) {
       updateOrder({ id: initialData.id, data: { ...basePayload, start_date: startDate.toISOString(), end_date: endDate.toISOString() } as any }, {
         onSuccess: () => {
-          showSuccess("Order updated successfully");
           router.push("/dashboard/orders");
         }
       });
@@ -240,7 +239,6 @@ export default function OrderForm({ initialData }: OrderFormProps) {
         }))
       } as any, {
         onSuccess: () => {
-          showSuccess("Order created successfully");
           router.push("/dashboard/orders");
         }
       });

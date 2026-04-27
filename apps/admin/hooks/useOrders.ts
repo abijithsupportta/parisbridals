@@ -135,8 +135,8 @@ export function useCreateOrder() {
   const mutation = useMutation({
     mutationFn: (data: CreateOrderDTO) =>
       apiFetch<ApiSuccessResponse<OrderWithRelations>>('/api/orders', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
       showSuccess('Order created successfully');
     },
     onError: (error) => showError('Failed to create order', error.message),
@@ -159,9 +159,8 @@ export function useUpdateOrder() {
   const mutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateOrderDTO }) => 
       apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
       showSuccess('Order updated successfully');
     },
     onError: (error) => {
@@ -197,9 +196,8 @@ export function useDeleteOrder() {
       }
       return { previousOrders };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
       showSuccess('Order deleted successfully');
     },
     onError: (error, id, context) => {
@@ -227,9 +225,8 @@ export function useProcessOrderReturn() {
   const mutation = useMutation({
     mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) => 
       apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
       showSuccess('Order return processed successfully');
     },
     onError: (error) => {
@@ -253,9 +250,8 @@ export function useMarkDepositReturned() {
 
   const mutation = useMutation({
     mutationFn: (orderId: string) => apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/deposit`, { method: 'PATCH' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: orderKeys.details() });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
       showSuccess('Deposit marked as returned');
     },
     onError: (error) => {
