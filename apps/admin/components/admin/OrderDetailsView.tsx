@@ -18,6 +18,7 @@ import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
 import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
 import { PaymentType, PaymentMode } from "@/domain/types/payment";
+import { startOfDay } from "date-fns";
 
 export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
     amount: "0",
     paymentMode: PaymentMode.CASH,
@@ -275,11 +277,31 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           )}
 
           {/* Primary Action Button */}
-          {order.status === OrderStatus.SCHEDULED && (
-            <Button onClick={handleStartOrder} disabled={isUpdating} className="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
-              Start Rental
-            </Button>
-          )}
+          {order.status === OrderStatus.SCHEDULED && (() => {
+            const today = startOfDay(new Date());
+            const rentalStart = startOfDay(new Date(order.start_date));
+            const canStart = today >= rentalStart;
+            return (
+              <div className="flex items-center gap-3 flex-1 lg:flex-none">
+                <Button onClick={handleStartOrder} disabled={isUpdating || !canStart} className="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none disabled:opacity-50 disabled:cursor-not-allowed">
+                  Start Rental
+                </Button>
+                <Button
+                  onClick={() => setIsCancelModalOpen(true)}
+                  disabled={isUpdating}
+                  variant="outline"
+                  className="h-14 px-6 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-bold text-lg rounded-xl"
+                >
+                  <XCircle className="w-5 h-5 mr-2" /> Cancel
+                </Button>
+                {!canStart && (
+                  <p className="text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
+                    Available on {format(rentalStart, "dd MMM, yyyy")}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           {order.status !== OrderStatus.SCHEDULED && amount_due > 0 && (
             <Button onClick={() => setIsPaymentModalOpen(true)} className="h-14 px-8 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
               Collect Payment
@@ -856,6 +878,41 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 });
               }}>
                 {isUpdating || isCreatingPayment ? 'Processing...' : 'Apply Adjustment'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Cancel Order Modal */}
+        <Modal
+          open={isCancelModalOpen}
+          onClose={() => setIsCancelModalOpen(false)}
+          title="Cancel Order"
+          maxWidth="max-w-md"
+        >
+          <div className="p-6">
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">Confirm Cancellation</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Are you sure you want to cancel order <span className="font-semibold text-slate-900">#{order.id.slice(0, 6).toUpperCase()}</span>? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setIsCancelModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Keep Order</Button>
+              <Button
+                onClick={() => {
+                  updateOrder({ id: order.id, data: { status: OrderStatus.CANCELLED } });
+                  setIsCancelModalOpen(false);
+                }}
+                disabled={isUpdating}
+                className="h-12 px-8 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-md"
+              >
+                {isUpdating ? "Cancelling..." : "Cancel Order"}
               </Button>
             </div>
           </div>
