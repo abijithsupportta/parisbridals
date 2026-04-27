@@ -529,7 +529,12 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               )}
               {/* Security Deposit - editable */}
               <div className="flex justify-between items-center text-slate-600 font-medium text-sm">
-                <span>Security Deposit</span>
+                <div className="flex flex-col">
+                  <span>Security Deposit</span>
+                  {order.deposit_payment_method && (
+                    <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">{order.deposit_payment_method}</span>
+                  )}
+                </div>
                 {isEditingDeposit ? (
                   <div className="flex items-center gap-1">
                     <Input type="number" value={editDepositValue} onChange={e => setEditDepositValue(e.target.value)} className="w-24 h-7 text-sm text-right" />
