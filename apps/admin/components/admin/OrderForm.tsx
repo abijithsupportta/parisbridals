@@ -155,9 +155,20 @@ export default function OrderForm({ initialData }: OrderFormProps) {
 
   // Handlers
   const addToCart = (product: any) => {
+    if (product.available_quantity !== undefined && product.available_quantity < 1) {
+      showError("Out of Stock", "This product is currently out of stock.");
+      return;
+    }
+
+    const existing = cartItems.find(p => p.product.id === product.id);
+    if (existing && product.available_quantity !== undefined && existing.quantity >= product.available_quantity) {
+      showError("Stock Limit Reached", `Only ${product.available_quantity} available in stock.`);
+      return;
+    }
+
     setCartItems(prev => {
-      const existing = prev.find(p => p.product.id === product.id);
-      if (existing) {
+      const ex = prev.find(p => p.product.id === product.id);
+      if (ex) {
         return prev.map(p => p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p);
       }
       return [...prev, { product, quantity: 1, price_per_day: product.price_per_day }];
@@ -167,6 +178,14 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   };
 
   const updateCartQty = (productId: string, delta: number) => {
+    if (delta > 0) {
+      const itemToUpdate = cartItems.find(p => p.product.id === productId);
+      if (itemToUpdate && itemToUpdate.product.available_quantity !== undefined && itemToUpdate.quantity >= itemToUpdate.product.available_quantity) {
+        showError("Stock Limit Reached", `Only ${itemToUpdate.product.available_quantity} available in stock.`);
+        return;
+      }
+    }
+
     setCartItems(prev => prev.map(p => {
       if (p.product.id === productId) {
         const newQty = Math.max(1, p.quantity + delta);
