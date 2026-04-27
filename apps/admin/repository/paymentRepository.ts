@@ -64,7 +64,7 @@ export class PaymentRepository extends BaseRepository {
   async findAll(params: PaymentSearchParams = {}): Promise<RepositoryResult<Payment[]>> {
     let query = this.client
       .from(this.tableName)
-      .select('*');
+      .select('*, staff:created_by(id, name)');
 
     if (params.order_id) {
       query = query.eq('order_id', params.order_id);

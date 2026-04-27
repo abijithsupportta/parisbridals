@@ -11,13 +11,13 @@
 -- ────────────────────────────────────────────────────────────────────────────
 -- 1. create_staff_member
 --
--- Atomically creates a Supabase Auth user AND a row in `public.staff`.
--- If the staff INSERT fails, the auth user is NOT left orphaned because
--- everything runs inside a single transaction.
+-- Atomically creates a row in `public.staff`.
+-- Replaces direct insert into `auth.users` to avoid bypassing GoTrue.
+-- API should first create user via Supabase Admin Auth API, then call this RPC.
 --
 -- Parameters:
---   p_email       — Email for the new auth user
---   p_password    — Password for the new auth user
+--   p_user_id     — UUID of the pre-created auth user
+--   p_email       — Email for the new staff member
 --   p_name        — Display name
 --   p_role        — Role enum ('admin', 'manager', 'staff')
 --   p_branch_id   — UUID of the branch to assign
@@ -28,8 +28,8 @@
 -- Returns: JSON object with the new staff record
 -- ────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.create_staff_member(
+  p_user_id   UUID,
   p_email     TEXT,
-  p_password  TEXT,
   p_name      TEXT,
   p_role      TEXT DEFAULT 'staff',
   p_branch_id UUID DEFAULT NULL,
@@ -43,60 +43,12 @@ SECURITY DEFINER          -- runs with the definer's privileges (service role)
 SET search_path = public  -- prevent search_path injection
 AS $$
 DECLARE
-  v_auth_uid UUID;
   v_staff    RECORD;
 BEGIN
-  -- Step 1: Create the auth user via Supabase's internal function
-  v_auth_uid := (
-    SELECT id FROM auth.users
-    WHERE email = p_email
-    LIMIT 1
-  );
-
-  -- If user already exists, raise an error
-  IF v_auth_uid IS NOT NULL THEN
-    RAISE EXCEPTION 'A user with email % already exists', p_email
-      USING ERRCODE = '23505'; -- unique_violation
-  END IF;
-
-  -- Create the auth user using Supabase's admin API (via extension)
-  -- Note: This uses the auth.users table directly since we're SECURITY DEFINER
-  INSERT INTO auth.users (
-    instance_id,
-    id,
-    aud,
-    role,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at,
-    confirmation_token,
-    recovery_token
-  )
-  VALUES (
-    '00000000-0000-0000-0000-000000000000',
-    gen_random_uuid(),
-    'authenticated',
-    'authenticated',
-    p_email,
-    crypt(p_password, gen_salt('bf')),
-    NOW(),
-    jsonb_build_object('provider', 'email', 'providers', ARRAY['email']),
-    jsonb_build_object('name', p_name, 'role', p_role),
-    NOW(),
-    NOW(),
-    '',
-    ''
-  )
-  RETURNING id INTO v_auth_uid;
-
-  -- Step 2: Create the staff record linked to the auth user
+  -- Create the staff record linked to the auth user
   INSERT INTO public.staff (
     id,
-    auth_user_id,
+    user_id,
     name,
     email,
     phone,
@@ -109,7 +61,7 @@ BEGIN
   )
   VALUES (
     gen_random_uuid(),
-    v_auth_uid,
+    p_user_id,
     p_name,
     p_email,
     p_phone,
@@ -122,13 +74,10 @@ BEGIN
   )
   RETURNING * INTO v_staff;
 
-  -- If we reach here, both operations succeeded — the transaction commits.
   RETURN to_jsonb(v_staff);
 
 EXCEPTION
   WHEN OTHERS THEN
-    -- Any error here causes a ROLLBACK of the entire transaction,
-    -- including the auth.users INSERT if it succeeded.
     RAISE;
 END;
 $$;
@@ -160,8 +109,8 @@ DECLARE
   v_auth_uid UUID;
   v_staff_name TEXT;
 BEGIN
-  -- Step 1: Get the auth_user_id from staff record
-  SELECT auth_user_id, name INTO v_auth_uid, v_staff_name
+  -- Step 1: Get the user_id from staff record
+  SELECT user_id, name INTO v_auth_uid, v_staff_name
   FROM public.staff
   WHERE id = p_staff_id;
 
