@@ -314,14 +314,14 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
           <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">Out (Pickup)</p>
-          <p className="text-2xl font-bold text-slate-900">{format(new Date(order.start_date), "dd MMM, yyyy")}</p>
+          <p className="text-2xl font-bold text-slate-900">{format(new Date(order.start_date), "dd/MM/yyyy")}</p>
         </div>
         <div className={`bg-white rounded-2xl border p-5 ${order.status === OrderStatus.LATE_RETURN ? 'border-red-400 bg-red-50 ring-4 ring-red-50' : 'border-slate-200'}`}>
           <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${order.status === OrderStatus.LATE_RETURN ? 'text-red-600' : 'text-slate-500'}`}>
             In (Return)
           </p>
           <p className={`text-2xl font-bold ${order.status === OrderStatus.LATE_RETURN ? 'text-red-700' : 'text-slate-900'}`}>
-            {format(new Date(order.end_date), "dd MMM, yyyy")}
+            {format(new Date(order.end_date), "dd/MM/yyyy")}
           </p>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
