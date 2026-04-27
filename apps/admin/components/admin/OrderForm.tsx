@@ -11,8 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import { useCustomers, useProducts, useCreateOrder, useUpdateOrder, useCreateCustomer, useGSTPercentage, useIsGSTEnabled, useCheckOrderAvailability } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
@@ -437,55 +435,35 @@ export default function OrderForm({ initialData }: OrderFormProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-600">Pickup Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`w-full h-12 justify-start text-left font-normal border-slate-200 text-base ${!startDate ? 'text-slate-500' : 'text-slate-900'}`}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "dd/MM/yyyy") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarPicker
-                      mode="single"
-                      selected={startDate}
-                      onSelect={(date) => {
-                        if (date) {
-                          setStartDate(date);
-                          if (startOfDay(endDate) < startOfDay(date)) {
-                            setEndDate(date);
-                          }
-                        }
-                      }}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Input
+                  type="date"
+                  className="h-12 border-slate-200 focus:border-slate-900 text-base"
+                  value={format(startDate, "yyyy-MM-dd")}
+                  onChange={(e) => {
+                    const newDate = new Date(e.target.value);
+                    if (!isNaN(newDate.getTime())) {
+                      setStartDate(newDate);
+                      if (startOfDay(endDate) < startOfDay(newDate)) {
+                        setEndDate(newDate);
+                      }
+                    }
+                  }}
+                />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-600">Return Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`w-full h-12 justify-start text-left font-normal border-slate-200 text-base ${!endDate ? 'text-slate-500' : 'text-slate-900'}`}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "dd/MM/yyyy") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarPicker
-                      mode="single"
-                      selected={endDate}
-                      onSelect={(date) => date && setEndDate(date)}
-                      disabled={(date) => startOfDay(date) < startOfDay(startDate)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <Input
+                  type="date"
+                  className="h-12 border-slate-200 focus:border-slate-900 text-base"
+                  value={format(endDate, "yyyy-MM-dd")}
+                  min={format(startDate, "yyyy-MM-dd")}
+                  onChange={(e) => {
+                    const newDate = new Date(e.target.value);
+                    if (!isNaN(newDate.getTime())) {
+                      setEndDate(newDate);
+                    }
+                  }}
+                />
               </div>
             </div>
             
