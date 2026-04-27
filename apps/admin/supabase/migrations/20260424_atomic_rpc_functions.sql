@@ -8,6 +8,13 @@
 --            orphaned rows are left behind.
 -- ============================================================================
 
+-- Drop old function signatures that had different parameter lists.
+-- This prevents "function name is not unique" errors when the signature changes.
+DROP FUNCTION IF EXISTS public.create_staff_member(TEXT, TEXT, TEXT, TEXT, UUID, UUID, TEXT, BOOLEAN);
+DROP FUNCTION IF EXISTS public.create_staff_member(UUID, TEXT, TEXT, TEXT, UUID, UUID, TEXT, BOOLEAN);
+DROP FUNCTION IF EXISTS public.delete_staff_member(UUID);
+DROP FUNCTION IF EXISTS public.create_order_with_items(JSONB, JSONB);
+
 -- ────────────────────────────────────────────────────────────────────────────
 -- 1. create_staff_member
 --
