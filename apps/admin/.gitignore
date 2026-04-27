@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# dev artifacts
+run_sql.ts
+run_sql.js
+test-db.ts
+test-results.txt

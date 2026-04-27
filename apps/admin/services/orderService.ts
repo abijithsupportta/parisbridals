@@ -47,10 +47,17 @@ export class OrderService {
   }
 
   /**
-   * Check product availability for given date range
+   * Check product availability for given date range (Sweep Line)
    */
-  async checkAvailability(productId: string, startDate: string, endDate: string, branchId?: string): Promise<RepositoryResult<{ available: number; total: number }>> {
-    return await orderRepository.checkAvailability(productId, startDate, endDate, branchId);
+  async checkAvailability(productId: string, startDate: string, endDate: string, branchId?: string, excludeOrderId?: string): Promise<RepositoryResult<{ available: number; total: number; peakReserved: number; overlappingOrders: any[] }>> {
+    return await orderRepository.checkAvailability(productId, startDate, endDate, branchId, excludeOrderId);
+  }
+
+  /**
+   * Get per-day availability calendar for a product
+   */
+  async getProductAvailabilityCalendar(productId: string, rangeStart: string, rangeEnd: string) {
+    return await orderRepository.getAvailabilityCalendar(productId, rangeStart, rangeEnd);
   }
 
   /**

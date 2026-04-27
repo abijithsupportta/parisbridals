@@ -69,6 +69,7 @@ export const routePermissionMap: Record<string, Permission> = {
   '/dashboard/staff': 'staff',
   '/dashboard/banners': 'banners',
   '/dashboard/orders': 'orders',
+  '/dashboard/calendar': 'orders',
   '/dashboard/customers': 'customers',
   '/dashboard/settings': 'settings',
 };

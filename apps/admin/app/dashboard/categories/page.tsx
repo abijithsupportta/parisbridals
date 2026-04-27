@@ -28,6 +28,7 @@ import CategoryTree from "@/components/admin/CategoryTree";
  */
 export default async function CategoriesPage() {
   const result = await categoryService.getAllCategories();
+  console.log("[CategoriesPage] Result:", JSON.stringify({ success: result.success, count: result.data?.length }));
   const categories = result.success ? (result.data || []) : [];
 
   return (

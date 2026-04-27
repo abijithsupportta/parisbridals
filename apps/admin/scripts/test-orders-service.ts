@@ -158,14 +158,14 @@ async function runTests() {
     // --- Phase 3: Inventory Synchronization ---
     console.log('\n--- Phase 3: Inventory Synchronization (6 Tests) ---');
 
-    let prodCheck1 = await productRepository.findById(product.id);
+    const prodCheck1 = await productRepository.findById(product.id);
     assert(prodCheck1.data!.available_quantity === 10, "15. Order creation (Scheduled) does NOT decrement available_quantity immediately");
 
     // Transition to ONGOING
     const t1 = await orderService.updateOrder(mainOrderId, { status: OrderStatus.ONGOING });
     assert(t1.success, "Transitioning to ONGOING successful");
     
-    let prodCheck2 = await productRepository.findById(product.id);
+    const prodCheck2 = await productRepository.findById(product.id);
     assert(prodCheck2.data!.available_quantity === 8, "16. Transitioning order from SCHEDULED to ONGOING correctly decrements available_quantity", { avail: prodCheck2.data!.available_quantity });
 
     // Try creating and starting another order that exceeds stock (8 available, request 10)
@@ -184,9 +184,9 @@ async function runTests() {
     } as any);
     if (o3.success) {
         await orderService.updateOrder(o3.data!.id, { status: OrderStatus.ONGOING });
-        let prodCheck3 = await productRepository.findById(product.id); 
+        const prodCheck3 = await productRepository.findById(product.id); 
         await orderService.updateOrder(o3.data!.id, { status: OrderStatus.CANCELLED });
-        let prodCheck4 = await productRepository.findById(product.id); 
+        const prodCheck4 = await productRepository.findById(product.id); 
         
         // This might fail if the backend doesn't handle stock restoration on cancel yet, we'll just check
         assert(true, "18. Transitioning order to CANCELLED restores reserved stock (Checked logically)");
@@ -290,7 +290,7 @@ async function runTests() {
     assert(ret1.data!.status === OrderStatus.RETURNED, "33. Standard Return: Items marked EXCELLENT change order status to RETURNED");
     
     // Validating test 19
-    let prodCheck19 = await productRepository.findById(product.id);
+    const prodCheck19 = await productRepository.findById(product.id);
     console.log('prodCheck19 avail:', prodCheck19.data!.available_quantity);
     assert(prodCheck19.data!.available_quantity === 8, "19. Returning an order increments available_quantity back to original levels");
 
@@ -311,7 +311,7 @@ async function runTests() {
     assert(ret3.data!.status === OrderStatus.PARTIAL, "35. Missing Return: Returning partial quantity automatically changes order status to PARTIAL");
 
     // Validating test 20
-    let prodCheck20 = await productRepository.findById(product.id);
+    const prodCheck20 = await productRepository.findById(product.id);
     // created 1, 1, 2. returned 1, 1, 1. Product started with 8 (after mainOrder). So 8 - 1 - 1 - 2 = 4. Returned 1+1+1 = 3. 4 + 3 = 7.
     assert(prodCheck20.data!.available_quantity === 7, "20. Returning only a partial quantity correctly increments stock by the partial amount");
 

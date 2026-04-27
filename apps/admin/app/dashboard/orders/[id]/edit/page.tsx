@@ -2,15 +2,14 @@
 
 import { use } from "react";
 import OrderForm from "@/components/admin/OrderForm";
-import { useOrders } from "@/hooks";
+import { useOrder } from "@/hooks";
 import { ShoppingCart } from "lucide-react";
 
 export default function EditOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const { data: orderResponse, isLoading } = useOrders({ query: resolvedParams.id });
+  const { data: orderResponse, isLoading } = useOrder(resolvedParams.id);
   
-  // Since useOrders returns a paginated list, we find our specific order
-  const order = orderResponse?.data?.find(o => o.id === resolvedParams.id);
+  const order = orderResponse?.data;
 
   if (isLoading) {
     return (

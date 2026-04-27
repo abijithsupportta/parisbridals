@@ -95,6 +95,9 @@ export interface Order {
   delivery_method?: DeliveryMethod;
   delivery_address?: string;
   pickup_address?: string;
+  late_fee: number;
+  discount: number;
+  damage_charges_total: number;
   readonly created_at: string;
   readonly updated_at?: string;
 }
@@ -168,6 +171,11 @@ export interface UpdateOrderDTO {
   deposit_returned_at?: string;
   amount_paid?: number;
   payment_status?: PaymentStatus | string;
+  security_deposit?: number;
+  late_fee?: number;
+  discount?: number;
+  damage_charges_total?: number;
+  total_amount?: number;
 }
 
 // Return Order DTO
@@ -203,4 +211,54 @@ export interface OrderValidationResult {
   is_valid: boolean;
   errors: string[];
   warnings: string[];
+}
+
+// ─── Interval-Based Availability Types ──────────────────────────────────────
+
+/** Status of a single calendar day */
+export type DayAvailabilityStatus = 'available' | 'partial' | 'unavailable';
+
+/** A booking that occupies a product on a given day */
+export interface DayBookingInfo {
+  orderId: string;
+  customerName: string;
+  quantity: number;
+  startDate: string;
+  endDate: string;
+  status: string;
+}
+
+/** Per-day availability data for calendar rendering */
+export interface DayAvailability {
+  date: string;
+  total: number;
+  reserved: number;
+  available: number;
+  status: DayAvailabilityStatus;
+  bookings: DayBookingInfo[];
+}
+
+/** Full availability calendar response */
+export interface AvailabilityCalendarResponse {
+  productId: string;
+  productName: string;
+  totalQuantity: number;
+  days: DayAvailability[];
+}
+
+/** Availability check result for a single item (used in order form) */
+export interface ItemAvailabilityResult {
+  product_id: string;
+  product_name: string;
+  requested: number;
+  available: number;
+  isAvailable: boolean;
+  peakReserved: number;
+  overlappingOrders: DayBookingInfo[];
+}
+
+/** Batch availability check response */
+export interface BatchAvailabilityResponse {
+  allAvailable: boolean;
+  items: ItemAvailabilityResult[];
 }

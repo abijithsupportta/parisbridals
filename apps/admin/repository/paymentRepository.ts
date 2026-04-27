@@ -38,7 +38,7 @@ export class PaymentRepository extends BaseRepository {
   async findByOrderId(orderId: string): Promise<RepositoryResult<Payment[]>> {
     const response = await this.client
       .from(this.tableName)
-      .select('*')
+      .select('*, staff:created_by(id, name)')
       .eq('order_id', orderId)
       .order('payment_date', { ascending: false });
 
@@ -64,7 +64,7 @@ export class PaymentRepository extends BaseRepository {
   async findAll(params: PaymentSearchParams = {}): Promise<RepositoryResult<Payment[]>> {
     let query = this.client
       .from(this.tableName)
-      .select('*');
+      .select('*, staff:created_by(id, name)');
 
     if (params.order_id) {
       query = query.eq('order_id', params.order_id);

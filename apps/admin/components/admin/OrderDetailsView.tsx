@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   Package, CheckCircle2, AlertTriangle,
-  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2
+  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2, Edit3, ReceiptText
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     paymentMode: PaymentMode.CASH,
     notes: ""
   });
+
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [adjustmentForm, setAdjustmentForm] = useState({
+    type: 'discount' as 'discount' | 'late_fee' | 'damage_fee' | 'extra_charge',
+    amount: "0",
+    notes: ""
+  });
+  const [isEditingDeposit, setIsEditingDeposit] = useState(false);
+  const [editDepositValue, setEditDepositValue] = useState("");
 
   // Local state for the return checklist
   const [returnItems, setReturnItems] = useState<Record<string, {
@@ -349,7 +358,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-slate-700">{payment.created_by ? `Staff ID: ${payment.created_by.slice(0,8)}` : 'System'}</div>
+                      <div className="text-sm font-bold text-slate-700">{(payment as any).staff?.name || (payment.created_by ? `Staff #${payment.created_by.slice(0,6)}` : 'System')}</div>
                     </td>
                   </tr>
                 ))}
@@ -397,7 +406,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                       </div>
                       <div className="flex-1">
                         <h4 className="text-lg font-bold text-slate-900">{product?.name || `Product #${item.product_id?.slice(0, 6).toUpperCase()}`}</h4>
-                        <p className="text-sm font-medium text-slate-500 mt-1">Qty: {item.quantity} · {formatCurrency(item.price_per_day)}/day</p>
+                        <p className="text-sm font-medium text-slate-500 mt-1">Qty: {item.quantity} · {formatCurrency(item.price_per_day)}</p>
                       </div>
 
                       {isReturnable ? (
@@ -498,18 +507,79 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
           {/* Receipt Card */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-5">Financial Receipt</h2>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <ReceiptText className="w-4 h-4" /> Financial Receipt
+              </h2>
+              <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={() => setIsAdjustmentModalOpen(true)}>
+                <Edit3 className="w-3 h-3 mr-1" /> Adjust
+              </Button>
+            </div>
             
-            <div className="space-y-4">
-              <div className="flex justify-between text-slate-600 font-bold text-sm">
-                <span>Total Rental</span>
+            <div className="space-y-3">
+              <div className="flex justify-between text-slate-600 font-medium text-sm">
+                <span>Subtotal (Rental)</span>
+                <span>{formatCurrency(order.subtotal || order.total_amount)}</span>
+              </div>
+              {(order.gst_amount || 0) > 0 && (
+                <div className="flex justify-between text-slate-600 font-medium text-sm">
+                  <span>GST</span>
+                  <span>{formatCurrency(order.gst_amount)}</span>
+                </div>
+              )}
+              {/* Security Deposit - editable */}
+              <div className="flex justify-between items-center text-slate-600 font-medium text-sm">
+                <div className="flex flex-col">
+                  <span>Security Deposit</span>
+                  {order.deposit_payment_method && (
+                    <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">{order.deposit_payment_method}</span>
+                  )}
+                </div>
+                {isEditingDeposit ? (
+                  <div className="flex items-center gap-1">
+                    <Input type="number" value={editDepositValue} onChange={e => setEditDepositValue(e.target.value)} className="w-24 h-7 text-sm text-right" />
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-emerald-600" onClick={() => {
+                      const val = parseFloat(editDepositValue) || 0;
+                      updateOrder({ id: order.id, data: { security_deposit: val } });
+                      setIsEditingDeposit(false);
+                      showSuccess('Deposit Updated');
+                    }}>✓</Button>
+                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => setIsEditingDeposit(false)}>✕</Button>
+                  </div>
+                ) : (
+                  <button className="flex items-center gap-1 hover:text-primary" onClick={() => { setEditDepositValue(String(order.security_deposit)); setIsEditingDeposit(true); }}>
+                    {formatCurrency(order.security_deposit)} <Edit3 className="w-3 h-3 text-slate-400" />
+                  </button>
+                )}
+              </div>
+
+              {/* Late Fee */}
+              {(order.late_fee || 0) > 0 && (
+                <div className="flex justify-between text-red-600 font-bold text-sm">
+                  <span>Late Fee</span>
+                  <span>+ {formatCurrency(order.late_fee)}</span>
+                </div>
+              )}
+              {/* Damage Charges */}
+              {(order.damage_charges_total || 0) > 0 && (
+                <div className="flex justify-between text-orange-600 font-bold text-sm">
+                  <span>Damage Charges</span>
+                  <span>+ {formatCurrency(order.damage_charges_total)}</span>
+                </div>
+              )}
+              {/* Discount */}
+              {(order.discount || 0) > 0 && (
+                <div className="flex justify-between text-emerald-600 font-bold text-sm">
+                  <span>Discount</span>
+                  <span>- {formatCurrency(order.discount)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-slate-800 font-black text-sm pt-3 border-t-2 border-slate-100">
+                <span>Grand Total</span>
                 <span>{formatCurrency(order.total_amount)}</span>
               </div>
               <div className="flex justify-between text-slate-600 font-bold text-sm">
-                <span>Security Deposit</span>
-                <span>{formatCurrency(order.security_deposit)}</span>
-              </div>
-              <div className="flex justify-between text-slate-600 font-bold text-sm pb-4 border-b-2 border-slate-100">
                 <span>Total Paid</span>
                 <span>{formatCurrency(order.amount_paid || 0)}</span>
               </div>
@@ -533,7 +603,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               </Button>
             )}
 
-            {(order.status === OrderStatus.RETURNED || order.status === OrderStatus.PARTIAL || order.status === OrderStatus.FLAGGED) && !order.deposit_returned && order.security_deposit > 0 && (
+            {(order.status === OrderStatus.RETURNED || order.status === OrderStatus.PARTIAL || order.status === OrderStatus.FLAGGED || order.status === OrderStatus.COMPLETED) && !order.deposit_returned && order.security_deposit > 0 && (
               <Button 
                 onClick={() => {
                   setRefundForm({ paymentMode: PaymentMode.CASH, notes: "Security Deposit Refund" });
@@ -715,6 +785,77 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               <Button variant="outline" onClick={() => setIsRefundModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
               <Button onClick={handleRefundDeposit} disabled={isCreatingPayment || isUpdating} className="h-12 px-8 rounded-xl font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md">
                 {isCreatingPayment || isUpdating ? "Processing..." : "Confirm Refund"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Adjustment Modal */}
+        <Modal
+          open={isAdjustmentModalOpen}
+          onClose={() => setIsAdjustmentModalOpen(false)}
+          title="Apply Financial Adjustment"
+        >
+          <div className="p-6 space-y-6">
+            <div className="space-y-3">
+              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Adjustment Type</Label>
+              <Select value={adjustmentForm.type} onValueChange={(v: any) => setAdjustmentForm({ ...adjustmentForm, type: v })}>
+                <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="discount">Discount (reduces total)</SelectItem>
+                  <SelectItem value="late_fee">Late Fee (increases total)</SelectItem>
+                  <SelectItem value="damage_fee">Damage Fee (increases total)</SelectItem>
+                  <SelectItem value="extra_charge">Extra Charge (increases total)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-3">
+              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Amount (₹)</Label>
+              <Input type="number" value={adjustmentForm.amount} onChange={e => setAdjustmentForm({ ...adjustmentForm, amount: e.target.value })} className="h-14 text-2xl font-black" placeholder="0" />
+            </div>
+            <div className="space-y-3">
+              <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Reason / Notes</Label>
+              <Input value={adjustmentForm.notes} onChange={e => setAdjustmentForm({ ...adjustmentForm, notes: e.target.value })} className="h-12" placeholder="E.g. Loyal customer discount" />
+            </div>
+            <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setIsAdjustmentModalOpen(false)} className="h-12 px-6 rounded-xl font-bold">Cancel</Button>
+              <Button className="h-12 px-8 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800" disabled={isUpdating || isCreatingPayment} onClick={() => {
+                if (!order) return;
+                const val = parseFloat(adjustmentForm.amount) || 0;
+                if (val <= 0) { showError('Invalid', 'Amount must be greater than 0'); return; }
+
+                const isDeduction = adjustmentForm.type === 'discount';
+                const newTotal = isDeduction ? Math.max(0, order.total_amount - val) : order.total_amount + val;
+                const newLateFee = adjustmentForm.type === 'late_fee' ? (order.late_fee || 0) + val : (order.late_fee || 0);
+                const newDiscount = adjustmentForm.type === 'discount' ? (order.discount || 0) + val : (order.discount || 0);
+                const newDamage = adjustmentForm.type === 'damage_fee' ? (order.damage_charges_total || 0) + val : (order.damage_charges_total || 0);
+                const newAmountPaid = order.amount_paid || 0;
+                const newPaymentStatus = newAmountPaid >= newTotal ? 'paid' : newAmountPaid > 0 ? 'partial' : 'pending';
+
+                // Record as adjustment payment
+                const label = adjustmentForm.type === 'discount' ? 'Discount' : adjustmentForm.type === 'late_fee' ? 'Late Fee' : adjustmentForm.type === 'damage_fee' ? 'Damage Fee' : 'Extra Charge';
+                createPayment({
+                  order_id: order.id,
+                  payment_type: PaymentType.ADJUSTMENT,
+                  amount: val,
+                  payment_mode: PaymentMode.CASH,
+                  notes: `${label}: ${adjustmentForm.notes || 'N/A'}`,
+                }, {
+                  onSuccess: () => {
+                    updateOrder({ id: order.id, data: {
+                      total_amount: newTotal,
+                      late_fee: newLateFee,
+                      discount: newDiscount,
+                      damage_charges_total: newDamage,
+                      payment_status: newPaymentStatus,
+                    }});
+                    setIsAdjustmentModalOpen(false);
+                    setAdjustmentForm({ type: 'discount', amount: '0', notes: '' });
+                    showSuccess('Adjustment Applied', `${label} of ${formatCurrency(val)} has been applied.`);
+                  }
+                });
+              }}>
+                {isUpdating || isCreatingPayment ? 'Processing...' : 'Apply Adjustment'}
               </Button>
             </div>
           </div>

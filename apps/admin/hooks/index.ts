@@ -124,3 +124,14 @@ export {
   useUpdatePayment,
   useDeletePayment,
 } from './usePayments';
+
+// Product Availability hooks (Interval-Based Scheduling)
+export {
+  useProductAvailabilityCalendar,
+  useCheckOrderAvailability,
+} from './useProductAvailability';
+
+// Calendar hooks
+export {
+  useCalendarOrders,
+} from './useCalendar';
