@@ -55,6 +55,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddPhone, setQuickAddPhone] = useState("");
+  const [quickAddAddress, setQuickAddAddress] = useState("");
+
+  // Delivery / Customer Address
+  const [deliveryAddress, setDeliveryAddress] = useState(initialData?.delivery_address || "");
 
   // Cart State
   const [cartItems, setCartItems] = useState<any[]>(
@@ -89,6 +93,13 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Sync selected customer's address to delivery address if empty
+  useEffect(() => {
+    if (selectedCustomer?.address && !deliveryAddress && !isEditing) {
+      setDeliveryAddress(selectedCustomer.address);
+    }
+  }, [selectedCustomer, deliveryAddress, isEditing]);
 
   // Set Dates Quick Action — uses the currently selected start date
   const handleQuickDate = (days: number) => {
@@ -183,7 +194,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       showError("Validation Error", "Name and Phone are required.");
       return;
     }
-    createCustomer({ name: quickAddName, phone: quickAddPhone }, {
+    createCustomer({ name: quickAddName, phone: quickAddPhone, address: quickAddAddress || undefined }, {
       onSuccess: (res: any) => {
         const newCustomer = res.customer;
         setSelectedCustomer(newCustomer);
@@ -192,6 +203,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
         setCustomerSearch("");
         setQuickAddName("");
         setQuickAddPhone("");
+        setQuickAddAddress("");
       }
     });
   };
@@ -213,6 +225,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
 
     const basePayload = {
       notes: notes || undefined,
+      delivery_address: deliveryAddress || undefined,
       deposit_collected: depositCollected,
       security_deposit: depositCollected ? depositAmount : 0,
       deposit_payment_method: depositCollected ? depositPaymentMethod : undefined,
@@ -319,6 +332,16 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                               onChange={e => setQuickAddPhone(e.target.value)}
                               placeholder="9876543210"
                               className="h-9 border-slate-200 focus:border-slate-900"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Address (Optional)</label>
+                            <textarea
+                              value={quickAddAddress}
+                              onChange={e => setQuickAddAddress(e.target.value)}
+                              placeholder="Customer address"
+                              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 resize-none"
+                              rows={2}
                             />
                           </div>
                           <div className="flex gap-2 pt-1">
@@ -431,16 +454,28 @@ export default function OrderForm({ initialData }: OrderFormProps) {
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Notes</h3>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes about this order..."
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
-              rows={3}
-            />
+          {/* Address & Notes */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-5">
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Customer / Delivery Address</h3>
+              <textarea
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                placeholder="Enter address for delivery or record..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Notes</h3>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes about this order..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
+                rows={2}
+              />
+            </div>
           </div>
 
           {/* Security Deposit */}
