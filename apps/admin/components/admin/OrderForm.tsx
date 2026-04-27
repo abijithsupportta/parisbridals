@@ -123,6 +123,39 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return { subtotal, gstAmount, grandTotal };
   }, [cartItems, isGstEnabled, gstPercentage]);
 
+  // ─── Live Availability Check (Search Dropdown) ──────────────────
+  const availableProducts = useMemo(() => {
+    return products.filter((p: any) => !cartItems.some((item: any) => item.product.id === p.id));
+  }, [products, cartItems]);
+
+  const searchItems = useMemo(() => {
+    if (!isProductDropdownOpen || productSearch.length === 0) return [];
+    return availableProducts.map((p: any) => ({
+      product_id: p.id,
+      quantity: 1,
+      product_name: p.name,
+    }));
+  }, [availableProducts, isProductDropdownOpen, productSearch]);
+
+  const { data: searchAvailabilityData, isLoading: isCheckingSearch } = useCheckOrderAvailability(
+    searchItems,
+    format(startDate, "yyyy-MM-dd"),
+    format(endDate, "yyyy-MM-dd"),
+    selectedBranchId || undefined,
+    initialData?.id,
+    searchItems.length > 0 && isProductDropdownOpen
+  );
+
+  const searchAvailabilityMap = useMemo(() => {
+    const map = new Map<string, { available: number; isAvailable: boolean; peakReserved: number; overlappingOrders: any[] }>();
+    if (searchAvailabilityData?.data?.items) {
+      for (const item of searchAvailabilityData.data.items) {
+        map.set(item.product_id, item);
+      }
+    }
+    return map;
+  }, [searchAvailabilityData]);
+
   // ─── Live Availability Check (Interval Scheduling) ─────────────────
   const availabilityItems = useMemo(() => {
     return cartItems.map(item => ({
@@ -160,9 +193,21 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       return;
     }
 
+    const searchAvail = searchAvailabilityMap.get(product.id);
+    if (searchAvail && searchAvail.available < 1) {
+      showError("Unavailable for Dates", `0 free for the selected dates.`);
+      return;
+    }
+
     const existing = cartItems.find(p => p.product.id === product.id);
     if (existing && product.available_quantity !== undefined && existing.quantity >= product.available_quantity) {
       showError("Stock Limit Reached", `Only ${product.available_quantity} available in stock.`);
+      return;
+    }
+
+    const cartAvail = availabilityMap.get(product.id);
+    if (existing && cartAvail && existing.quantity >= cartAvail.available) {
+      showError("Unavailable for Dates", `Only ${cartAvail.available} free for these dates.`);
       return;
     }
 
@@ -182,6 +227,12 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       const itemToUpdate = cartItems.find(p => p.product.id === productId);
       if (itemToUpdate && itemToUpdate.product.available_quantity !== undefined && itemToUpdate.quantity >= itemToUpdate.product.available_quantity) {
         showError("Stock Limit Reached", `Only ${itemToUpdate.product.available_quantity} available in stock.`);
+        return;
+      }
+
+      const cartAvail = availabilityMap.get(productId);
+      if (cartAvail && itemToUpdate && itemToUpdate.quantity >= cartAvail.available) {
+        showError("Unavailable for Dates", `Only ${cartAvail.available} free for these dates.`);
         return;
       }
     }
@@ -606,16 +657,18 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 {isProductDropdownOpen && productSearch.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
                     {(() => {
-                      const availableProducts = products.filter((p: any) => !cartItems.some(item => item.product.id === p.id));
                       return availableProducts.length > 0 ? (
                         <ul className="py-1">
                           {availableProducts.map((p: any) => {
                           const imgUrl = getImageUrl(p);
+                          const sAvail = searchAvailabilityMap.get(p.id);
+                          const isAvail = sAvail ? sAvail.available > 0 : p.available_quantity > 0;
+                          
                           return (
                             <li
                               key={p.id}
-                              className="px-3 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0"
-                              onClick={() => addToCart(p)}
+                              className={`px-3 py-2.5 flex items-center gap-3 border-b border-slate-50 last:border-0 ${isAvail ? 'hover:bg-slate-50 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                              onClick={() => isAvail ? addToCart(p) : null}
                             >
                               <div className="w-10 h-10 rounded-md bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden">
                                 {imgUrl ? (
@@ -630,8 +683,12 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                                 <div className="font-medium text-slate-900 text-sm truncate">{p.name}</div>
                                 <div className="text-xs text-slate-500 flex gap-2 mt-0.5">
                                   <span>{formatCurrency(p.price_per_day)}</span>
-                                  <span className={p.available_quantity > 0 ? "text-emerald-600" : "text-red-500 font-bold"}>
-                                    {p.available_quantity} in stock
+                                  <span className={isAvail ? "text-emerald-600" : "text-red-500 font-bold"}>
+                                    {isCheckingSearch 
+                                      ? "Checking dates..." 
+                                      : sAvail 
+                                        ? `${sAvail.available} free for dates` 
+                                        : `${p.available_quantity} in stock`}
                                   </span>
                                 </div>
                               </div>
