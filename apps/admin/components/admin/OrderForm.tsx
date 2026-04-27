@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays } from "date-fns";
+import { format, addDays, startOfDay } from "date-fns";
 import {
   Search, Plus, Minus, Trash2, Calendar, User, Package,
   ArrowLeft, ArrowRight, ShieldCheck, AlertTriangle, CheckCircle2, Loader2, Info
@@ -222,6 +222,11 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     }
     if (!selectedBranchId) {
       showError("Missing Branch", "Please select a branch from the top navigation.");
+      return;
+    }
+
+    if (startOfDay(endDate) < startOfDay(startDate)) {
+      showError("Invalid Dates", "Return date cannot be earlier than the pickup date.");
       return;
     }
 
@@ -446,7 +451,14 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                     <CalendarPicker
                       mode="single"
                       selected={startDate}
-                      onSelect={(date) => date && setStartDate(date)}
+                      onSelect={(date) => {
+                        if (date) {
+                          setStartDate(date);
+                          if (startOfDay(endDate) < startOfDay(date)) {
+                            setEndDate(date);
+                          }
+                        }
+                      }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -469,13 +481,21 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                       mode="single"
                       selected={endDate}
                       onSelect={(date) => date && setEndDate(date)}
-                      disabled={(date) => date < startDate}
+                      disabled={(date) => startOfDay(date) < startOfDay(startDate)}
                       initialFocus
                     />
                   </PopoverContent>
                 </Popover>
               </div>
             </div>
+            
+            {startOfDay(endDate) < startOfDay(startDate) && (
+              <div className="text-xs text-red-600 font-medium flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                Return date cannot be earlier than the pickup date.
+              </div>
+            )}
+
             <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-lg p-2.5 border border-slate-100">
               <span className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs">{rentalDays}</span>
               <span>Total rental days</span>
