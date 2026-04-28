@@ -8,6 +8,8 @@
     "build": "turbo build",
     "start": "turbo start",
     "lint": "turbo lint",
+    "check:admin": "pnpm --filter admin lint && pnpm --filter admin build",
+    "check:mobile": "cd apps/mobile && flutter analyze --no-pub",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo clean && rm -rf node_modules"
   },
