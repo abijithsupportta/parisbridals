@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays, startOfDay } from "date-fns";
 import {
@@ -112,6 +112,14 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return Math.max(1, diffDays);
   }, [startDate, endDate]);
 
+  // Date validation: return date must be strictly after pickup date
+  const isDateInvalid = useMemo(() => {
+    // Compare dates only (ignore time)
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    return end <= start;
+  }, [startDate, endDate]);
+
   // Cart Calculations — flat rent price, NOT per-day
   const cartTotals = useMemo(() => {
     let subtotal = 0;
@@ -157,6 +165,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   }, [searchAvailabilityData]);
 
   // ─── Live Availability Check (Interval Scheduling) ─────────────────
+  // Debounce the availability items so rapid qty clicks don't spam the API
   const availabilityItems = useMemo(() => {
     return cartItems.map(item => ({
       product_id: item.product.id,
@@ -165,13 +174,19 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     }));
   }, [cartItems]);
 
+  const [debouncedAvailItems, setDebouncedAvailItems] = useState(availabilityItems);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedAvailItems(availabilityItems), 500);
+    return () => clearTimeout(timer);
+  }, [availabilityItems]);
+
   const { data: availabilityData, isLoading: isCheckingAvailability } = useCheckOrderAvailability(
-    availabilityItems,
+    debouncedAvailItems,
     format(startDate, "yyyy-MM-dd"),
     format(endDate, "yyyy-MM-dd"),
     selectedBranchId || undefined,
     initialData?.id, // exclude current order when editing
-    cartItems.length > 0, // enabled
+    debouncedAvailItems.length > 0, // enabled
   );
 
   const availabilityMap = useMemo(() => {
@@ -183,6 +198,8 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     }
     return map;
   }, [availabilityData]);
+
+
 
   const hasUnavailableItems = availabilityData?.data ? !availabilityData.data.allAvailable : false;
 
@@ -536,11 +553,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 />
               </div>
             </div>
-            
-            {startOfDay(endDate) < startOfDay(startDate) && (
-              <div className="text-xs text-red-600 font-medium flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Return date cannot be earlier than the pickup date.
+            {isDateInvalid && (
+              <div className="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                <span>Return date must be after the pickup date. Please choose a valid return date.</span>
               </div>
             )}
 
@@ -823,10 +839,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
               )}
               <Button
                 onClick={handleCheckout}
-                disabled={isCreating || isUpdating || hasUnavailableItems}
-                className={`w-full h-14 font-bold text-lg mt-4 shadow-lg ${hasUnavailableItems ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20'}`}
+                disabled={isCreating || isUpdating || hasUnavailableItems || isDateInvalid}
+                className={`w-full h-14 font-bold text-lg mt-4 shadow-lg ${hasUnavailableItems || isDateInvalid ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20'}`}
               >
-                {isCreating || isUpdating ? "Processing..." : hasUnavailableItems ? "Items Unavailable" : isEditing ? "Save Changes" : "Confirm Order"}
+                {isCreating || isUpdating ? "Processing..." : isDateInvalid ? "Invalid Dates" : hasUnavailableItems ? "Items Unavailable" : isEditing ? "Save Changes" : "Confirm Order"}
               </Button>
             </div>
           </div>
