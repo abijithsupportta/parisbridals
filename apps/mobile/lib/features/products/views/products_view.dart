@@ -15,23 +15,7 @@ class ProductsView extends ConsumerStatefulWidget {
   @override
   ConsumerState<ProductsView> createState() => _ProductsViewState();
 }
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
-import '../../../core/responsive.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../providers/product_provider.dart';
-import '../models/product.dart';
-import 'product_form_view.dart';
-import 'product_detail_view.dart';
 
-class ProductsView extends ConsumerStatefulWidget {
-  const ProductsView({super.key});
-
-  @override
-  ConsumerState<ProductsView> createState() => _ProductsViewState();
-}
 
 class _ProductsViewState extends ConsumerState<ProductsView> {
   final TextEditingController _searchController = TextEditingController();
