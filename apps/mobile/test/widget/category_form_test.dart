@@ -5,6 +5,7 @@ import 'package:mobile/features/categories/models/category.dart';
 import 'package:mobile/features/categories/views/category_form_view.dart';
 import 'package:mobile/features/categories/providers/category_provider.dart';
 import 'package:mobile/features/categories/repositories/category_repository.dart';
+import 'package:dio/dio.dart';
 
 // ─── Mock Category Repository ────────────────────────────────────────────────
 // We use a simple in-memory fake instead of hitting the real API.
@@ -17,7 +18,7 @@ class MockCategoryRepository extends CategoryRepository {
   String? throwMessage;
 
   @override
-  Future<Category> createCategory(Map<String, dynamic> body) async {
+  Future<Category> createCategory(Map<String, dynamic> body, {CancelToken? cancelToken}) async {
     if (shouldThrow) throw Exception(throwMessage ?? 'Network error');
     createdBodies.add(body);
     return Category(
@@ -29,7 +30,7 @@ class MockCategoryRepository extends CategoryRepository {
   }
 
   @override
-  Future<Category> updateCategory(String id, Map<String, dynamic> body) async {
+  Future<Category> updateCategory(String id, Map<String, dynamic> body, {CancelToken? cancelToken}) async {
     if (shouldThrow) throw Exception(throwMessage ?? 'Network error');
     updatedBodies.add({...body, 'id': id});
     return Category(

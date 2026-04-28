@@ -122,7 +122,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                   _buildPickerOption(Icons.camera_alt_rounded, 'Camera', _primary, () async {
                     Navigator.pop(ctx);
                     try {
-                      final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 80);
+                      final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 60, maxWidth: 1024, maxHeight: 1024);
                       if (picked != null && mounted) {
                         setState(() {
                           _pickedFile = File(picked.path);
@@ -140,7 +140,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                   _buildPickerOption(Icons.photo_library_rounded, 'Gallery', const Color(0xFF26C6DA), () async {
                     Navigator.pop(ctx);
                     try {
-                      final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                      final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 60, maxWidth: 1024, maxHeight: 1024);
                       if (picked != null && mounted) {
                         setState(() {
                           _pickedFile = File(picked.path);
@@ -255,6 +255,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   @override
   Widget build(BuildContext context) {
+    Responsive.init(context);
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(

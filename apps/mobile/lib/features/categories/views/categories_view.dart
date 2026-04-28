@@ -25,6 +25,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
 
   @override
   Widget build(BuildContext context) {
+    Responsive.init(context);
     final categoriesAsync = ref.watch(categoriesProvider);
     final canManage = ref.watch(canManageProvider);
 

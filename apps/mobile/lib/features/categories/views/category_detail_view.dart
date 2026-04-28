@@ -32,6 +32,7 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    Responsive.init(context);
     final canManage = ref.watch(canManageProvider);
 
     return Scaffold(
