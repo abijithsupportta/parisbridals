@@ -22,6 +22,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Paris Bridals',
       debugShowCheckedModeBanner: false,
+      restorationScopeId: 'paris_bridals_app',
       theme: AppTheme.lightTheme,
       home: const SplashView(),
     );

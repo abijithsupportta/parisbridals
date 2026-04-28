@@ -58,6 +58,20 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
     // Auto-generate slug from name
     _nameController.addListener(_onNameChanged);
+
+    // Recover image if Android killed the activity during image picker
+    _retrieveLostImage();
+  }
+
+  /// Recovers a picked image if the Android OS killed our Activity
+  /// while the camera/gallery was open.
+  Future<void> _retrieveLostImage() async {
+    final LostDataResponse response = await _imagePicker.retrieveLostData();
+    if (response.isEmpty || response.file == null) return;
+    setState(() {
+      _pickedFile = File(response.file!.path);
+      _imageRemoved = false;
+    });
   }
 
   void _onNameChanged() {
