@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -34,7 +35,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
         children: [
           categoriesAsync.when(
             data: (categories) => _buildContent(context, categories, canManage),
-            loading: () => const Center(child: CircularProgressIndicator(color: _primary)),
+            loading: () => _buildShimmerList(),
             error: (error, _) => _buildError(error),
           ),
           // FAB — only for admin/manager
@@ -326,6 +327,42 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
             child: Text('Retry', style: TextStyle(fontSize: Responsive.sp(13))),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerList() {
+    return ListView.builder(
+      padding: Responsive.only(left: 16, right: 16, top: 16, bottom: 80),
+      itemCount: 6,
+      itemBuilder: (context, index) => Container(
+        margin: Responsive.only(bottom: 12),
+        padding: Responsive.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(Responsive.r(14)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: Responsive.r(8), offset: Offset(0, Responsive.h(2)))],
+        ),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Row(
+            children: [
+              Container(width: Responsive.w(56), height: Responsive.w(56), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(14)))),
+              SizedBox(width: Responsive.w(16)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(width: Responsive.w(120), height: Responsive.h(16), color: Colors.white),
+                    SizedBox(height: Responsive.h(10)),
+                    Container(width: Responsive.w(80), height: Responsive.h(12), color: Colors.white),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

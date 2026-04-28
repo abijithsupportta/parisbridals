@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -300,7 +301,7 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
                 )).toList(),
               );
             },
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => _buildChildrenShimmerList(),
             error: (e, _) => Text('Error loading', style: TextStyle(color: Colors.red)),
           ),
         ],
@@ -383,6 +384,40 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildChildrenShimmerList() {
+    return Column(
+      children: List.generate(3, (index) => Container(
+        margin: Responsive.only(bottom: 12),
+        padding: Responsive.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+        ),
+        child: Shimmer.fromColors(
+          baseColor: Colors.grey[300]!,
+          highlightColor: Colors.grey[100]!,
+          child: Row(
+            children: [
+              Container(width: Responsive.w(40), height: Responsive.w(40), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(8)))),
+              SizedBox(width: Responsive.w(12)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(width: Responsive.w(100), height: Responsive.h(14), color: Colors.white),
+                    SizedBox(height: Responsive.h(6)),
+                    Container(width: Responsive.w(60), height: Responsive.h(10), color: Colors.white),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      )),
     );
   }
 }
