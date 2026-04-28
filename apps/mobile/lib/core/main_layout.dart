@@ -9,6 +9,8 @@ import '../features/dashboard/views/dashboard_view.dart';
 import '../features/orders/views/orders_view.dart';
 import '../features/calendar/views/calendar_view.dart';
 import '../features/categories/views/categories_view.dart';
+import '../features/branches/views/branches_view.dart';
+import '../features/customers/views/customers_view.dart';
 import 'responsive.dart';
 
 class MainLayout extends StatefulWidget {
@@ -193,15 +195,26 @@ class _MainLayoutState extends State<MainLayout> {
                       padding: Responsive.symmetric(horizontal: 24),
                       child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
                     ),
-                    _buildDrawerSectionLabel('Settings'),
+                    _buildDrawerSectionLabel('Management'),
                     _buildDrawerItem(Icons.storefront_rounded, 'Branches', null, onTap: () {
                       Navigator.pop(context);
-                      // TODO: navigate to branches
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const BranchesView()),
+                      );
                     }),
-                    _buildDrawerItem(Icons.people_rounded, 'Staff', null, onTap: () {
+                    _buildDrawerItem(Icons.people_rounded, 'Customers', null, onTap: () {
                       Navigator.pop(context);
-                      // TODO: navigate to staff
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const CustomersView()),
+                      );
                     }),
+                    Padding(
+                      padding: Responsive.symmetric(horizontal: 24),
+                      child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
+                    ),
+                    _buildDrawerSectionLabel('Settings'),
                     _buildDrawerItem(Icons.settings_rounded, 'Settings', null, onTap: () {
                       Navigator.pop(context);
                       // TODO: navigate to settings
@@ -214,6 +227,25 @@ class _MainLayoutState extends State<MainLayout> {
                     _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
                     _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
                     _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
+                    Padding(
+                      padding: Responsive.symmetric(horizontal: 24),
+                      child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
+                    ),
+                    _buildDrawerSectionLabel('Management'),
+                    _buildDrawerItem(Icons.storefront_rounded, 'Branches', null, onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const BranchesView()),
+                      );
+                    }),
+                    _buildDrawerItem(Icons.people_rounded, 'Customers', null, onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const CustomersView()),
+                      );
+                    }),
                   ] else ...[
                     // Staff sees minimal menu
                     _buildDrawerSectionLabel('Navigation'),

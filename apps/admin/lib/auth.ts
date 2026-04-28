@@ -24,12 +24,44 @@ export interface AuthUser {
 }
 
 /**
- * Get the authenticated user + their role from request cookies.
+ * Get the authenticated user + their role from request cookies or Bearer token.
  * Returns null if not authenticated.
  */
 export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
   try {
-    // Create a request-scoped Supabase client with cookies
+    // First, try to get user from Bearer token (for mobile app)
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const adminClient = createAdminClient();
+      
+      const { data: { user }, error } = await adminClient.auth.getUser(token);
+      if (!error && user) {
+        // Look up the staff record to get role + branch + store
+        const { data: staff } = await adminClient
+          .from('staff')
+          .select('id, role, branch_id, store_id')
+          .eq('user_id', user.id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        const role = staff?.role || user.user_metadata?.role || 'admin';
+        const storeId = staff?.store_id || user.user_metadata?.store_id || null;
+        const branchId = staff?.branch_id || null;
+        const staffId = staff?.id || null;
+
+        return {
+          id: user.id,
+          email: user.email || '',
+          role: role as StaffRole,
+          store_id: storeId,
+          branch_id: branchId,
+          staff_id: staffId,
+        };
+      }
+    }
+
+    // Fall back to cookie-based auth (for web admin)
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

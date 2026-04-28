@@ -10,6 +10,7 @@ class ProductsNotifier extends AsyncNotifier<PaginatedProducts> {
   int _currentPage = 1;
   bool _isLoadingMore = false;
   String _currentSearch = '';
+  String? _currentBranchId;
 
   @override
   Future<PaginatedProducts> build() async {
@@ -17,7 +18,7 @@ class ProductsNotifier extends AsyncNotifier<PaginatedProducts> {
     ref.keepAlive();
     _currentPage = 1;
     final repo = ref.watch(productRepositoryProvider);
-    return repo.getProducts(page: _currentPage, search: _currentSearch);
+    return repo.getProducts(page: _currentPage, search: _currentSearch, branchId: _currentBranchId);
   }
 
   Future<void> search(String query) async {
@@ -26,7 +27,17 @@ class ProductsNotifier extends AsyncNotifier<PaginatedProducts> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(productRepositoryProvider);
-      return repo.getProducts(page: _currentPage, search: _currentSearch);
+      return repo.getProducts(page: _currentPage, search: _currentSearch, branchId: _currentBranchId);
+    });
+  }
+
+  Future<void> filterByBranch(String? branchId) async {
+    _currentBranchId = branchId;
+    _currentPage = 1;
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(productRepositoryProvider);
+      return repo.getProducts(page: _currentPage, search: _currentSearch, branchId: _currentBranchId);
     });
   }
 
@@ -118,4 +129,9 @@ final productsProvider = AsyncNotifierProvider<ProductsNotifier, PaginatedProduc
 final productByIdProvider = FutureProvider.family<Product, String>((ref, id) async {
   final repo = ref.read(productRepositoryProvider);
   return repo.getProductById(id);
+});
+
+final productBranchInventoryProvider = FutureProvider.family<List<BranchInventory>, String>((ref, productId) async {
+  final repo = ref.read(productRepositoryProvider);
+  return repo.getProductBranchInventory(productId);
 });

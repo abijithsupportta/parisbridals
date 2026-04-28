@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../../core/main_layout.dart';
+import '../../../core/providers/auth_provider.dart';
 
-class LoginView extends StatefulWidget {
+class LoginView extends ConsumerStatefulWidget {
   const LoginView({super.key});
 
   @override
-  State<LoginView> createState() => _LoginViewState();
+  ConsumerState<LoginView> createState() => _LoginViewState();
 }
 
-class _LoginViewState extends State<LoginView> {
+class _LoginViewState extends ConsumerState<LoginView> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
-  bool _isLoading = false;
 
   static const _primary = Color(0xFF434343);
 
@@ -27,21 +27,20 @@ class _LoginViewState extends State<LoginView> {
       return;
     }
 
-    setState(() { _isLoading = true; });
-
-    // TODO: Connect to actual authentication provider
-    await Future.delayed(const Duration(seconds: 1));
-    
-    // Save dummy token for persistence
-    const storage = FlutterSecureStorage();
-    await storage.write(key: 'auth_token', value: 'dummy_token');
-
-    if (!mounted) return;
-    setState(() { _isLoading = false; });
-
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainLayout()),
+    final success = await ref.read(authProvider.notifier).login(
+      _emailController.text.trim(),
+      _passwordController.text,
     );
+
+    if (success && mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainLayout()),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed. Please check your credentials.'), backgroundColor: Colors.redAccent),
+      );
+    }
   }
 
   @override
@@ -53,6 +52,8 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    
     Responsive.init(context);
     
     return Scaffold(
@@ -157,7 +158,7 @@ class _LoginViewState extends State<LoginView> {
                         width: double.infinity,
                         height: Responsive.h(56),
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
+                          onPressed: authState.isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _primary,
                             foregroundColor: Colors.white,
@@ -166,7 +167,7 @@ class _LoginViewState extends State<LoginView> {
                               borderRadius: BorderRadius.circular(Responsive.r(16)),
                             ),
                           ),
-                          child: _isLoading
+                          child: authState.isLoading
                               ? SizedBox(
                                   height: Responsive.icon(24),
                                   width: Responsive.icon(24),

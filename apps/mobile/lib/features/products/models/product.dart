@@ -1,3 +1,47 @@
+class BranchInventory {
+  final String id;
+  final String productId;
+  final String branchId;
+  final int stockCount;
+  final String? branchName;
+  final String createdAt;
+  final String updatedAt;
+
+  BranchInventory({
+    required this.id,
+    required this.productId,
+    required this.branchId,
+    required this.stockCount,
+    this.branchName,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory BranchInventory.fromJson(Map<String, dynamic> json) {
+    return BranchInventory(
+      id: json['id'] as String,
+      productId: json['product_id'] as String,
+      branchId: json['branch_id'] as String,
+      stockCount: json['stock_count'] as int? ?? 0,
+      branchName: json['branch_name'] as String?,
+      createdAt: json['created_at'] as String? ?? '',
+      updatedAt: json['updated_at'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'product_id': productId,
+      'branch_id': branchId,
+      'stock_count': stockCount,
+      'branch_name': branchName,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+}
+
 class ProductImage {
   final String url;
   final String altText;
@@ -54,6 +98,7 @@ class Product {
   final bool trackInventory;
   final int lowStockThreshold;
   final String createdAt;
+  final List<BranchInventory> branchInventory;
 
   Product({
     required this.id,
@@ -76,6 +121,7 @@ class Product {
     this.trackInventory = true,
     this.lowStockThreshold = 10,
     required this.createdAt,
+    this.branchInventory = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -103,6 +149,10 @@ class Product {
       trackInventory: json['track_inventory'] as bool? ?? true,
       lowStockThreshold: json['low_stock_threshold'] as int? ?? 10,
       createdAt: json['created_at'] as String? ?? '',
+      branchInventory: (json['branch_inventory'] as List<dynamic>?)
+              ?.map((e) => BranchInventory.fromJson(e))
+              .toList() ??
+          [],
     );
   }
 
@@ -128,6 +178,7 @@ class Product {
       'track_inventory': trackInventory,
       'low_stock_threshold': lowStockThreshold,
       'created_at': createdAt,
+      'branch_inventory': branchInventory.map((e) => e.toJson()).toList(),
     };
   }
 }
