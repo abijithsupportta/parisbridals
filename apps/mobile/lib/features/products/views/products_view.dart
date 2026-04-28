@@ -75,7 +75,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                     controller: _scrollController,
                     padding: Responsive.only(left: 12, right: 12, top: 6, bottom: 70),
                     itemCount: products.length + (paginatedData.page < paginatedData.totalPages ? 1 : 0),
-                    separatorBuilder: (_, __) => SizedBox(height: Responsive.h(8)),
+                    separatorBuilder: (context, index) => SizedBox(height: Responsive.h(8)),
                     itemBuilder: (context, index) {
                       if (index == products.length) {
                         return _buildShimmerCard();
@@ -215,7 +215,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                               highlightColor: const Color(0xFFF5F5F5),
                               child: Container(color: Colors.white),
                             ),
-                            errorWidget: (_, __, ___) => _buildFallbackImage(),
+                            errorWidget: (context, url, error) => _buildFallbackImage(),
                           ),
                         )
                       : _buildFallbackImage(),
@@ -417,8 +417,8 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     return ListView.separated(
       padding: Responsive.only(left: 12, right: 12, top: 6, bottom: 70),
       itemCount: 6,
-      separatorBuilder: (_, __) => SizedBox(height: Responsive.h(8)),
-      itemBuilder: (_, __) => _buildShimmerCard(),
+      separatorBuilder: (context, index) => SizedBox(height: Responsive.h(8)),
+      itemBuilder: (context, index) => _buildShimmerCard(),
     );
   }
 

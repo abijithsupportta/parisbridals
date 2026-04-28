@@ -51,7 +51,7 @@ class ProductDetailView extends StatelessWidget {
                             highlightColor: const Color(0xFFF5F5F5),
                             child: Container(color: Colors.white),
                           ),
-                          errorWidget: (_, __, ___) => Center(child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(40), color: Colors.grey[300])),
+                          errorWidget: (context, url, error) => Center(child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(40), color: Colors.grey[300])),
                         )
                       : Center(child: Icon(Icons.inventory_2_rounded, size: Responsive.icon(40), color: Colors.grey[300])),
                 ),

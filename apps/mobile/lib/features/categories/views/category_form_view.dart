@@ -11,7 +11,8 @@ import '../providers/category_provider.dart';
 /// If [category] is null → Create mode. Otherwise → Edit mode.
 class CategoryFormView extends ConsumerStatefulWidget {
   final Category? category;
-  const CategoryFormView({super.key, this.category});
+  final String? initialParentId;
+  const CategoryFormView({super.key, this.category, this.initialParentId});
 
   @override
   ConsumerState<CategoryFormView> createState() => _CategoryFormViewState();
@@ -52,7 +53,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
     _sortOrderController = TextEditingController(text: '${c?.sortOrder ?? 0}');
     _isActive = c?.isActive ?? true;
     _isGlobal = c?.isGlobal ?? false;
-    _parentId = c?.parentId;
+    _parentId = c?.parentId ?? widget.initialParentId;
     _uploadedImageUrl = c?.imageUrl;
 
     // Auto-generate slug from name
@@ -388,7 +389,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
             Image.file(_pickedFile!, fit: BoxFit.cover)
           else if (_uploadedImageUrl != null)
             Image.network(_uploadedImageUrl!, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildImagePlaceholder()),
+              errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder()),
           // Gradient overlay at bottom
           Positioned(
             bottom: 0, left: 0, right: 0,
@@ -516,3 +517,4 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
     );
   }
 }
+

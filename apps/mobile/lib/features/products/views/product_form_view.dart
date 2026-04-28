@@ -495,7 +495,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _images.length,
-                separatorBuilder: (_, __) => SizedBox(width: Responsive.w(12)),
+                separatorBuilder: (context, index) => SizedBox(width: Responsive.w(12)),
                 itemBuilder: (context, index) {
                   final img = _images[index];
                   return Stack(
@@ -520,7 +520,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
                                           child: Container(color: Colors.white),
                                         );
                                       },
-                                      errorBuilder: (_, __, ___) => Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
+                                      errorBuilder: (context, error, stackTrace) => Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
                                     )
                                   : Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
                         ),

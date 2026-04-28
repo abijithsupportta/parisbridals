@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../branches/providers/branch_provider.dart';
 import '../models/product.dart';
 import '../repositories/product_repository.dart';
 
@@ -17,6 +18,7 @@ class ProductsNotifier extends AsyncNotifier<PaginatedProducts> {
     // Keep data alive across tab switches to avoid re-fetching
     ref.keepAlive();
     _currentPage = 1;
+    _currentBranchId = ref.watch(effectiveBranchIdProvider);
     final repo = ref.watch(productRepositoryProvider);
     return repo.getProducts(page: _currentPage, search: _currentSearch, branchId: _currentBranchId);
   }
@@ -50,7 +52,7 @@ class ProductsNotifier extends AsyncNotifier<PaginatedProducts> {
     _isLoadingMore = true;
     try {
       final repo = ref.read(productRepositoryProvider);
-      final nextPageData = await repo.getProducts(page: _currentPage + 1, search: _currentSearch);
+      final nextPageData = await repo.getProducts(page: _currentPage + 1, search: _currentSearch, branchId: _currentBranchId);
       
       _currentPage++;
       state = AsyncValue.data(PaginatedProducts(

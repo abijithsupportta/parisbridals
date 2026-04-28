@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../branches/providers/branch_provider.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
 import 'order_detail_view.dart';
@@ -32,11 +33,13 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
 
   @override
   Widget build(BuildContext context) {
+    final branchId = ref.watch(effectiveBranchIdProvider);
     final ordersAsync = ref.watch(ordersProvider({
       'page': _page,
       'limit': _limit,
       'query': _searchController.text.isNotEmpty ? _searchController.text : null,
       'status': _selectedStatus,
+      'branchId': branchId,
     }));
 
     return Scaffold(
@@ -84,7 +87,7 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _selectedStatus,
+                  initialValue: _selectedStatus,
                   decoration: InputDecoration(
                     labelText: 'Filter by Status',
                     border: OutlineInputBorder(

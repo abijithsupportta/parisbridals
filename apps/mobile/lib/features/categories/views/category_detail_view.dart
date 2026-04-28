@@ -105,7 +105,7 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
             borderRadius: BorderRadius.circular(Responsive.r(16)),
             child: (_category.imageUrl != null && _category.imageUrl!.isNotEmpty)
                 ? Image.network(_category.imageUrl!, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildPlaceholder())
+                    errorBuilder: (context, error, stackTrace) => _buildPlaceholder())
                 : _buildPlaceholder(),
           ),
         ),
@@ -218,6 +218,93 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
             ],
           ),
         ],
+        
+        // ── Children Section ──
+        if (levelLabel != 'Variant') ...[
+          SizedBox(height: Responsive.h(24)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(levelLabel == 'Main Category' ? 'Sub Categories' : 'Variants', 
+                   style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold, color: _primary)),
+              if (canManage)
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => CategoryFormView(initialParentId: _category.id)),
+                    ).then((_) {
+                      ref.invalidate(categoriesProvider);
+                    });
+                  },
+                  icon: Icon(Icons.add, size: Responsive.icon(18)),
+                  label: Text(levelLabel == 'Main Category' ? 'Add Sub' : 'Add Variant', 
+                              style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold)),
+                  style: TextButton.styleFrom(foregroundColor: _primary),
+                ),
+            ],
+          ),
+          SizedBox(height: Responsive.h(12)),
+          ref.watch(categoriesProvider).when(
+            data: (all) {
+              final children = all.where((c) => c.parentId == _category.id).toList();
+              if (children.isEmpty) {
+                return Container(
+                  padding: Responsive.all(16),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(14))),
+                  child: Center(child: Text('No items found', style: TextStyle(color: Colors.grey, fontSize: Responsive.sp(13)))),
+                );
+              }
+              return Column(
+                children: children.map((child) => GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => CategoryDetailView(initialCategory: child)),
+                    ).then((_) {
+                      ref.invalidate(categoriesProvider);
+                    });
+                  },
+                  child: Container(
+                    margin: Responsive.only(bottom: 12),
+                    padding: Responsive.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(Responsive.r(12)),
+                      border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        if (child.imageUrl != null && child.imageUrl!.isNotEmpty)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(Responsive.r(8)),
+                            child: Image.network(child.imageUrl!, width: Responsive.w(40), height: Responsive.w(40), fit: BoxFit.cover,
+                                errorBuilder: (_, error, stackTrace) => _buildSmallPlaceholder()),
+                          )
+                        else
+                          _buildSmallPlaceholder(),
+                        SizedBox(width: Responsive.w(12)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(child.name, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: _primary)),
+                              SizedBox(height: Responsive.h(4)),
+                              Text(child.isActive ? 'Active' : 'Inactive', 
+                                   style: TextStyle(fontSize: Responsive.sp(11), color: child.isActive ? const Color(0xFF4CAF50) : Colors.grey)),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, color: Colors.grey[400]),
+                      ],
+                    ),
+                  ),
+                )).toList(),
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Text('Error loading', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+
         SizedBox(height: Responsive.h(32)),
       ],
     );
@@ -232,6 +319,14 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
         const Spacer(),
         Text(value, style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w700, color: _primary)),
       ],
+    );
+  }
+
+  Widget _buildSmallPlaceholder() {
+    return Container(
+      width: Responsive.w(40), height: Responsive.w(40),
+      decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(Responsive.r(8))),
+      child: Icon(Icons.category_outlined, size: Responsive.icon(20), color: Colors.grey[300]),
     );
   }
 
@@ -270,14 +365,14 @@ class _CategoryDetailViewState extends ConsumerState<CategoryDetailView> {
                 final repo = ref.read(categoryRepositoryProvider);
                 await repo.deleteCategory(_category.id);
                 ref.invalidate(categoriesProvider);
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Category deleted successfully'), backgroundColor: Color(0xFF4CAF50)),
                   );
-                  Navigator.pop(context);
+                  Navigator.of(context).pop();
                 }
               } catch (e) {
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Failed to delete.'), backgroundColor: Color(0xFFFF6B8A)),
                   );

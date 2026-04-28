@@ -93,15 +93,38 @@ class AuthService {
   /// Get the current user
   Future<AuthUser?> getCurrentUser() async {
     try {
+      final token = await getAuthToken();
+      if (token == null || token.isEmpty) return null;
+
+      final response = await _client.get('/auth/me');
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final userData = response.data['data']?['user'] as Map<String, dynamic>?;
+        if (userData != null) {
+          final authUser = AuthUser.fromJson({
+            ...userData,
+            'access_token': token,
+          });
+          await _storage.write(key: _userKey, value: jsonEncode(authUser.toJson()));
+          return authUser;
+        }
+      }
+
       final userDataString = await _storage.read(key: _userKey);
       if (userDataString == null) return null;
-      
-      // Parse the stored JSON string
+
       final Map<String, dynamic> userMap = jsonDecode(userDataString);
       return AuthUser.fromJson(userMap);
     } catch (e) {
       debugPrint('Get current user error: $e');
-      return null;
+      final userDataString = await _storage.read(key: _userKey);
+      if (userDataString == null) return null;
+
+      try {
+        final Map<String, dynamic> userMap = jsonDecode(userDataString);
+        return AuthUser.fromJson(userMap);
+      } catch (_) {
+        return null;
+      }
     }
   }
 

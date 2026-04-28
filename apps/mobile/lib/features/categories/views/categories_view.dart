@@ -199,166 +199,46 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
     );
   }
 
-  // ── Main Category Card ──
   Widget _buildMainCategoryCard(BuildContext context, Category main, List<Category> subs, List<Category> all, bool canManage) {
-    return Container(
-      margin: Responsive.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(14)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: Responsive.r(8), offset: Offset(0, Responsive.h(2)))],
-      ),
-      child: Theme(
-        data: ThemeData(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: Responsive.symmetric(horizontal: 16, vertical: 8),
-          childrenPadding: Responsive.only(left: 16, right: 16, bottom: 16),
-          leading: _buildCategoryImage(main, size: 56),
-          title: Text(main.name, style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, color: _primary)),
-          subtitle: Row(
-            children: [
-              _buildStatusDot(main.isActive),
-              SizedBox(width: Responsive.w(6)),
-              Text(main.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600], fontWeight: FontWeight.w500)),
-              if (subs.isNotEmpty) ...[
-                SizedBox(width: Responsive.w(10)),
-                Container(
-                  padding: Responsive.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(Responsive.r(8))),
-                  child: Text('${subs.length} sub', style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: _primary)),
-                ),
-              ],
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (canManage)
-                GestureDetector(
-                  onTap: () => _navigateToDetail(context, main),
-                  child: Padding(
-                    padding: Responsive.all(8),
-                    child: Icon(Icons.edit_outlined, size: Responsive.icon(22), color: _primary),
-                  ),
-                ),
-              Icon(Icons.keyboard_arrow_down_rounded, size: Responsive.icon(28), color: Colors.grey[400]),
-            ],
-          ),
-          children: subs.isEmpty
-              ? [
-                  Container(
-                    padding: Responsive.symmetric(vertical: 16),
-                    child: Text('No sub-categories yet', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[500])),
-                  ),
-                ]
-              : subs.map((sub) {
-                  final variants = all.where((c) => c.parentId == sub.id).toList();
-                  return _buildSubCategoryTile(context, sub, variants, canManage);
-                }).toList(),
-        ),
-      ),
-    );
-  }
-
-  // ── Sub Category Tile ──
-  Widget _buildSubCategoryTile(BuildContext context, Category sub, List<Category> variants, bool canManage) {
     return GestureDetector(
-      onTap: () => _navigateToDetail(context, sub),
+      onTap: () => _navigateToDetail(context, main),
       child: Container(
         margin: Responsive.only(bottom: 12),
+        padding: Responsive.all(16),
         decoration: BoxDecoration(
-          color: _bg,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(Responsive.r(14)),
-          border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: Responsive.r(8), offset: Offset(0, Responsive.h(2)))],
         ),
-        child: Column(
+        child: Row(
           children: [
-            // Sub header
-            Padding(
-              padding: Responsive.all(12),
-              child: Row(
+            _buildCategoryImage(main, size: 56),
+            SizedBox(width: Responsive.w(16)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCategoryImage(sub, size: 48),
-                  SizedBox(width: Responsive.w(14)),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(sub.name, style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w700, color: _primary)),
-                        SizedBox(height: Responsive.h(4)),
-                        Row(
-                          children: [
-                            _buildStatusDot(sub.isActive),
-                            SizedBox(width: Responsive.w(6)),
-                            Text(sub.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600], fontWeight: FontWeight.w500)),
-                            if (variants.isNotEmpty) ...[
-                              SizedBox(width: Responsive.w(8)),
-                              Container(
-                                padding: Responsive.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(Responsive.r(8))),
-                                child: Text('${variants.length} variant', style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: _primary)),
-                              ),
-                            ],
-                          ],
+                  Text(main.name, style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, color: _primary)),
+                  SizedBox(height: Responsive.h(6)),
+                  Row(
+                    children: [
+                      _buildStatusDot(main.isActive),
+                      SizedBox(width: Responsive.w(6)),
+                      Text(main.isActive ? 'Active' : 'Inactive', style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600], fontWeight: FontWeight.w500)),
+                      if (subs.isNotEmpty) ...[
+                        SizedBox(width: Responsive.w(10)),
+                        Container(
+                          padding: Responsive.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(Responsive.r(8))),
+                          child: Text(' sub-categories', style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: _primary)),
                         ),
                       ],
-                    ),
+                    ],
                   ),
-                  if (canManage)
-                    GestureDetector(
-                      onTap: () => _navigateToDetail(context, sub),
-                      child: Padding(
-                        padding: Responsive.all(8.0),
-                        child: Icon(Icons.edit_outlined, size: Responsive.icon(22), color: _primary),
-                      ),
-                    ),
                 ],
               ),
             ),
-            // Variant rows
-            if (variants.isNotEmpty)
-              Container(
-                margin: Responsive.only(left: 8, right: 8, bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(Responsive.r(10)),
-                ),
-                child: Column(
-                  children: variants.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final v = entry.value;
-                    return Column(
-                      children: [
-                        _buildVariantRow(context, v, canManage),
-                        if (i < variants.length - 1)
-                          Divider(height: 1, indent: Responsive.w(46), color: const Color(0xFFF0F0F0)),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Variant Row ──
-  Widget _buildVariantRow(BuildContext context, Category variant, bool canManage) {
-    return GestureDetector(
-      onTap: () => _navigateToDetail(context, variant),
-      child: Padding(
-        padding: Responsive.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            _buildCategoryImage(variant, size: 40),
-            SizedBox(width: Responsive.w(14)),
-            Expanded(
-              child: Text(variant.name, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w600, color: _primary)),
-            ),
-            _buildStatusDot(variant.isActive),
-            SizedBox(width: Responsive.w(8)),
-            Icon(Icons.edit_outlined, size: Responsive.icon(20), color: _primary),
+            Icon(Icons.chevron_right_rounded, size: Responsive.icon(28), color: Colors.grey[400]),
           ],
         ),
       ),
@@ -372,7 +252,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
       return ClipRRect(
         borderRadius: BorderRadius.circular(Responsive.r(size * 0.25)),
         child: Image.network(cat.imageUrl!, width: s, height: s, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildIconAvatar(s)),
+          errorBuilder: (context, error, stackTrace) => _buildIconAvatar(s)),
       );
     }
     return _buildIconAvatar(s);

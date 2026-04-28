@@ -152,7 +152,7 @@ class _CustomerFormViewState extends ConsumerState<CustomerFormView> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<IdType>(
-                value: _selectedIdType,
+                initialValue: _selectedIdType,
                 decoration: const InputDecoration(
                   labelText: 'ID Type',
                   border: OutlineInputBorder(),
