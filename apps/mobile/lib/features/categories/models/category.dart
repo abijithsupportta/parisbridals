@@ -63,22 +63,26 @@ class Category extends Equatable {
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      slug: json['slug'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
       description: json['description'] as String?,
       imageUrl: json['image_url'] as String?,
       parentId: json['parent_id'] as String?,
-      sortOrder: json['sort_order'] ?? 0,
-      isActive: json['is_active'] ?? true,
-      isGlobal: json['is_global'] ?? false,
-      createdAt: json['created_at'] as String,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+      isGlobal: json['is_global'] as bool? ?? true,
+      createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
-      parent: json['parent'] != null ? Category.fromJson(json['parent']) : null,
-      children: json['children'] != null
-          ? (json['children'] as List).map((c) => Category.fromJson(c)).toList()
+      parent: json['parent'] != null && json['parent'] is Map
+          ? Category.fromJson(Map<String, dynamic>.from(json['parent']))
           : null,
-      productCount: json['product_count'] as int?,
+      children: json['children'] != null && json['children'] is List
+          ? (json['children'] as List)
+              .map((c) => Category.fromJson(Map<String, dynamic>.from(c)))
+              .toList()
+          : null,
+      productCount: (json['product_count'] as num?)?.toInt(),
     );
   }
 
