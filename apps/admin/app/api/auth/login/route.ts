@@ -28,9 +28,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user session
-    const { data: sessionData } = await supabase.auth.getSession();
-    
     // Look up staff record to get role
     const { data: staff } = await supabase
       .from('staff')
@@ -53,7 +50,7 @@ export async function POST(request: NextRequest) {
         store_id: storeId,
         branch_id: branchId,
         staff_id: staffId,
-        access_token: sessionData?.session?.access_token || '',
+        access_token: data.session?.access_token || '',
       },
     });
   } catch (error) {
