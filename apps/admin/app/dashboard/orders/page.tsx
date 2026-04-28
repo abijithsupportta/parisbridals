@@ -28,6 +28,7 @@ import {
   FileText,
   XCircle,
   Loader2,
+  Clock,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -159,15 +160,20 @@ function OrdersContent() {
 
   // Stats (Using visible data for simple aggregations, though a real app might use a separate API)
   const stats = useMemo(() => {
+    const today = new Date(new Date().toDateString());
     const scheduled = visibleOrders.filter((o) => o.status === OrderStatus.SCHEDULED).length;
     const ongoing = visibleOrders.filter((o) => o.status === OrderStatus.ONGOING).length;
     const flagged = visibleOrders.filter((o) => o.status === OrderStatus.FLAGGED || o.status === OrderStatus.LATE_RETURN).length;
+    const actionNeeded = visibleOrders.filter((o) => 
+      o.status === OrderStatus.SCHEDULED && new Date(o.start_date) <= today
+    ).length;
 
     return {
       count: total,
       scheduled,
       ongoing,
       flagged,
+      actionNeeded,
     };
   }, [visibleOrders, total]);
 
@@ -258,6 +264,12 @@ function OrdersContent() {
               {selectedBranchId ? "Selected Branch" : "All Branches"}
             </span>
             <span>• {stats.count} total records</span>
+            {stats.actionNeeded > 0 && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 font-semibold border border-amber-200 text-xs animate-pulse">
+                <Clock className="w-3 h-3" />
+                {stats.actionNeeded} pending start
+              </span>
+            )}
           </p>
         </div>
         <Button asChild className="gap-2 bg-slate-900 text-white hover:bg-slate-800">
@@ -497,7 +509,18 @@ function OrdersContent() {
                         </td>
 
                         <td className="px-4 py-4">
-                          {getStatusBadge(order.status)}
+                          <div className="flex flex-col items-start gap-1">
+                            {getStatusBadge(order.status)}
+                            {order.status === OrderStatus.SCHEDULED && new Date(order.start_date) <= new Date(new Date().toDateString()) && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                </span>
+                                <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Action Needed</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-4 py-4 text-right">

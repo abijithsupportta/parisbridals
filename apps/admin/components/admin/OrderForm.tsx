@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
 import {
@@ -101,6 +101,14 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return Math.max(1, diffDays);
   }, [startDate, endDate]);
 
+  // Date validation: return date must be strictly after pickup date
+  const isDateInvalid = useMemo(() => {
+    // Compare dates only (ignore time)
+    const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+    return end <= start;
+  }, [startDate, endDate]);
+
   // Cart Calculations — flat rent price, NOT per-day
   const cartTotals = useMemo(() => {
     let subtotal = 0;
@@ -113,6 +121,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   }, [cartItems, isGstEnabled, gstPercentage]);
 
   // ─── Live Availability Check (Interval Scheduling) ─────────────────
+  // Debounce the availability items so rapid qty clicks don't spam the API
   const availabilityItems = useMemo(() => {
     return cartItems.map(item => ({
       product_id: item.product.id,
@@ -121,13 +130,19 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     }));
   }, [cartItems]);
 
+  const [debouncedAvailItems, setDebouncedAvailItems] = useState(availabilityItems);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedAvailItems(availabilityItems), 500);
+    return () => clearTimeout(timer);
+  }, [availabilityItems]);
+
   const { data: availabilityData, isLoading: isCheckingAvailability } = useCheckOrderAvailability(
-    availabilityItems,
+    debouncedAvailItems,
     format(startDate, "yyyy-MM-dd"),
     format(endDate, "yyyy-MM-dd"),
     selectedBranchId || undefined,
     initialData?.id, // exclude current order when editing
-    cartItems.length > 0, // enabled
+    debouncedAvailItems.length > 0, // enabled
   );
 
   const availabilityMap = useMemo(() => {
@@ -139,6 +154,33 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     }
     return map;
   }, [availabilityData]);
+
+  // ─── Dropdown Availability Check ────────────────────────────────────
+  const dropdownProducts = useMemo(() => {
+    if (!isProductDropdownOpen || productSearch.length === 0) return [];
+    return products
+      .filter((p: any) => !cartItems.some(item => item.product.id === p.id))
+      .map((p: any) => ({ product_id: p.id, quantity: 1, product_name: p.name }));
+  }, [products, cartItems, isProductDropdownOpen, productSearch]);
+
+  const { data: dropdownAvailData, isLoading: isCheckingDropdown } = useCheckOrderAvailability(
+    dropdownProducts,
+    format(startDate, "yyyy-MM-dd"),
+    format(endDate, "yyyy-MM-dd"),
+    selectedBranchId || undefined,
+    initialData?.id,
+    dropdownProducts.length > 0 && !isDateInvalid,
+  );
+
+  const dropdownAvailMap = useMemo(() => {
+    const map = new Map<string, { available: number; isAvailable: boolean }>();
+    if (dropdownAvailData?.data?.items) {
+      for (const item of dropdownAvailData.data.items) {
+        map.set(item.product_id, item);
+      }
+    }
+    return map;
+  }, [dropdownAvailData]);
 
   const hasUnavailableItems = availabilityData?.data ? !availabilityData.data.allAvailable : false;
 
@@ -425,6 +467,12 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 />
               </div>
             </div>
+            {isDateInvalid && (
+              <div className="flex items-center gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                <span>Return date must be after the pickup date. Please choose a valid return date.</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-lg p-2.5 border border-slate-100">
               <span className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs">{rentalDays}</span>
               <span>Total rental days</span>
@@ -550,9 +598,16 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                                 <div className="font-medium text-slate-900 text-sm truncate">{p.name}</div>
                                 <div className="text-xs text-slate-500 flex gap-2 mt-0.5">
                                   <span>{formatCurrency(p.price_per_day)}</span>
-                                  <span className={p.available_quantity > 0 ? "text-emerald-600" : "text-red-500 font-bold"}>
-                                    {p.available_quantity} in stock
-                                  </span>
+                                  {(() => {
+                                    const da = dropdownAvailMap.get(p.id);
+                                    if (isCheckingDropdown) return <span className="text-slate-400">checking...</span>;
+                                    if (!da) return null;
+                                    return da.available > 0 ? (
+                                      <span className="text-emerald-600">{da.available} available</span>
+                                    ) : (
+                                      <span className="text-red-500 font-bold">Unavailable</span>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                               <Plus className="w-4 h-4 text-slate-300 flex-shrink-0" />
@@ -686,10 +741,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
               )}
               <Button
                 onClick={handleCheckout}
-                disabled={isCreating || isUpdating || hasUnavailableItems}
-                className={`w-full h-14 font-bold text-lg mt-4 shadow-lg ${hasUnavailableItems ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20'}`}
+                disabled={isCreating || isUpdating || hasUnavailableItems || isDateInvalid}
+                className={`w-full h-14 font-bold text-lg mt-4 shadow-lg ${hasUnavailableItems || isDateInvalid ? 'bg-slate-400 cursor-not-allowed shadow-none' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-slate-900/20'}`}
               >
-                {isCreating || isUpdating ? "Processing..." : hasUnavailableItems ? "Items Unavailable" : isEditing ? "Save Changes" : "Confirm Order"}
+                {isCreating || isUpdating ? "Processing..." : isDateInvalid ? "Invalid Dates" : hasUnavailableItems ? "Items Unavailable" : isEditing ? "Save Changes" : "Confirm Order"}
               </Button>
             </div>
           </div>

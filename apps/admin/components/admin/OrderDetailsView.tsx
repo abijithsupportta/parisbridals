@@ -275,7 +275,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           )}
 
           {/* Primary Action Button */}
-          {order.status === OrderStatus.SCHEDULED && (
+          {order.status === OrderStatus.SCHEDULED && new Date(order.start_date) <= new Date(new Date().toDateString()) && (
             <Button onClick={handleStartOrder} disabled={isUpdating} className="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
               Start Rental
             </Button>
