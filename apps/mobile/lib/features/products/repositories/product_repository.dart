@@ -22,13 +22,16 @@ class ProductRepository {
   final Dio _client = apiClient;
 
   /// Fetch all products from the Next.js API with pagination.
-  Future<PaginatedProducts> getProducts({int page = 1, int limit = 20, String? search}) async {
+  Future<PaginatedProducts> getProducts({int page = 1, int limit = 20, String? search, String? branchId}) async {
     final Map<String, dynamic> queryParams = {
       'page': page,
       'limit': limit,
     };
     if (search != null && search.isNotEmpty) {
       queryParams['query'] = search;
+    }
+    if (branchId != null && branchId.isNotEmpty) {
+      queryParams['branch_id'] = branchId;
     }
 
     final response = await _client.get('/products', queryParameters: queryParams);
@@ -94,5 +97,21 @@ class ProductRepository {
     if (response.statusCode != 200) {
       throw Exception('Failed to delete product');
     }
+  }
+
+  /// Fetch branch inventory for a product.
+  Future<List<BranchInventory>> getProductBranchInventory(String productId) async {
+    final response = await _client.get('/branch-inventory', queryParameters: {
+      'product_id': productId,
+    });
+
+    if (response.statusCode == 200) {
+      final data = response.data;
+      if (data['success'] == true && data['data'] != null) {
+        final inventoryData = data['data'] as List;
+        return inventoryData.map((e) => BranchInventory.fromJson(e)).toList();
+      }
+    }
+    return [];
   }
 }

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays } from "date-fns";
+import { format, addDays, startOfDay } from "date-fns";
 import {
   Search, Plus, Minus, Trash2, Calendar, User, Package,
   ArrowLeft, ArrowRight, ShieldCheck, AlertTriangle, CheckCircle2, Loader2, Info
@@ -55,6 +55,10 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   const [isQuickAddMode, setIsQuickAddMode] = useState(false);
   const [quickAddName, setQuickAddName] = useState("");
   const [quickAddPhone, setQuickAddPhone] = useState("");
+  const [quickAddAddress, setQuickAddAddress] = useState("");
+
+  // Delivery / Customer Address
+  const [deliveryAddress, setDeliveryAddress] = useState(initialData?.delivery_address || "");
 
   // Cart State
   const [cartItems, setCartItems] = useState<any[]>(
@@ -90,6 +94,13 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Sync selected customer's address to delivery address if empty
+  useEffect(() => {
+    if (selectedCustomer?.address && !deliveryAddress && !isEditing) {
+      setDeliveryAddress(selectedCustomer.address);
+    }
+  }, [selectedCustomer, deliveryAddress, isEditing]);
+
   // Set Dates Quick Action — uses the currently selected start date
   const handleQuickDate = (days: number) => {
     setEndDate(addDays(startDate, days));
@@ -119,6 +130,39 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     const grandTotal = subtotal + gstAmount;
     return { subtotal, gstAmount, grandTotal };
   }, [cartItems, isGstEnabled, gstPercentage]);
+
+  // ─── Live Availability Check (Search Dropdown) ──────────────────
+  const availableProducts = useMemo(() => {
+    return products.filter((p: any) => !cartItems.some((item: any) => item.product.id === p.id));
+  }, [products, cartItems]);
+
+  const searchItems = useMemo(() => {
+    if (!isProductDropdownOpen || productSearch.length === 0) return [];
+    return availableProducts.map((p: any) => ({
+      product_id: p.id,
+      quantity: 1,
+      product_name: p.name,
+    }));
+  }, [availableProducts, isProductDropdownOpen, productSearch]);
+
+  const { data: searchAvailabilityData, isLoading: isCheckingSearch } = useCheckOrderAvailability(
+    searchItems,
+    format(startDate, "yyyy-MM-dd"),
+    format(endDate, "yyyy-MM-dd"),
+    selectedBranchId || undefined,
+    initialData?.id,
+    searchItems.length > 0 && isProductDropdownOpen
+  );
+
+  const searchAvailabilityMap = useMemo(() => {
+    const map = new Map<string, { available: number; isAvailable: boolean; peakReserved: number; overlappingOrders: any[] }>();
+    if (searchAvailabilityData?.data?.items) {
+      for (const item of searchAvailabilityData.data.items) {
+        map.set(item.product_id, item);
+      }
+    }
+    return map;
+  }, [searchAvailabilityData]);
 
   // ─── Live Availability Check (Interval Scheduling) ─────────────────
   // Debounce the availability items so rapid qty clicks don't spam the API
@@ -155,40 +199,38 @@ export default function OrderForm({ initialData }: OrderFormProps) {
     return map;
   }, [availabilityData]);
 
-  // ─── Dropdown Availability Check ────────────────────────────────────
-  const dropdownProducts = useMemo(() => {
-    if (!isProductDropdownOpen || productSearch.length === 0) return [];
-    return products
-      .filter((p: any) => !cartItems.some(item => item.product.id === p.id))
-      .map((p: any) => ({ product_id: p.id, quantity: 1, product_name: p.name }));
-  }, [products, cartItems, isProductDropdownOpen, productSearch]);
 
-  const { data: dropdownAvailData, isLoading: isCheckingDropdown } = useCheckOrderAvailability(
-    dropdownProducts,
-    format(startDate, "yyyy-MM-dd"),
-    format(endDate, "yyyy-MM-dd"),
-    selectedBranchId || undefined,
-    initialData?.id,
-    dropdownProducts.length > 0 && !isDateInvalid,
-  );
-
-  const dropdownAvailMap = useMemo(() => {
-    const map = new Map<string, { available: number; isAvailable: boolean }>();
-    if (dropdownAvailData?.data?.items) {
-      for (const item of dropdownAvailData.data.items) {
-        map.set(item.product_id, item);
-      }
-    }
-    return map;
-  }, [dropdownAvailData]);
 
   const hasUnavailableItems = availabilityData?.data ? !availabilityData.data.allAvailable : false;
 
   // Handlers
   const addToCart = (product: any) => {
+    if (product.available_quantity !== undefined && product.available_quantity < 1) {
+      showError("Out of Stock", "This product is currently out of stock.");
+      return;
+    }
+
+    const searchAvail = searchAvailabilityMap.get(product.id);
+    if (searchAvail && searchAvail.available < 1) {
+      showError("Unavailable for Dates", `0 free for the selected dates.`);
+      return;
+    }
+
+    const existing = cartItems.find(p => p.product.id === product.id);
+    if (existing && product.available_quantity !== undefined && existing.quantity >= product.available_quantity) {
+      showError("Stock Limit Reached", `Only ${product.available_quantity} available in stock.`);
+      return;
+    }
+
+    const cartAvail = availabilityMap.get(product.id);
+    if (existing && cartAvail && existing.quantity >= cartAvail.available) {
+      showError("Unavailable for Dates", `Only ${cartAvail.available} free for these dates.`);
+      return;
+    }
+
     setCartItems(prev => {
-      const existing = prev.find(p => p.product.id === product.id);
-      if (existing) {
+      const ex = prev.find(p => p.product.id === product.id);
+      if (ex) {
         return prev.map(p => p.product.id === product.id ? { ...p, quantity: p.quantity + 1 } : p);
       }
       return [...prev, { product, quantity: 1, price_per_day: product.price_per_day }];
@@ -198,6 +240,20 @@ export default function OrderForm({ initialData }: OrderFormProps) {
   };
 
   const updateCartQty = (productId: string, delta: number) => {
+    if (delta > 0) {
+      const itemToUpdate = cartItems.find(p => p.product.id === productId);
+      if (itemToUpdate && itemToUpdate.product.available_quantity !== undefined && itemToUpdate.quantity >= itemToUpdate.product.available_quantity) {
+        showError("Stock Limit Reached", `Only ${itemToUpdate.product.available_quantity} available in stock.`);
+        return;
+      }
+
+      const cartAvail = availabilityMap.get(productId);
+      if (cartAvail && itemToUpdate && itemToUpdate.quantity >= cartAvail.available) {
+        showError("Unavailable for Dates", `Only ${cartAvail.available} free for these dates.`);
+        return;
+      }
+    }
+
     setCartItems(prev => prev.map(p => {
       if (p.product.id === productId) {
         const newQty = Math.max(1, p.quantity + delta);
@@ -225,7 +281,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       showError("Validation Error", "Name and Phone are required.");
       return;
     }
-    createCustomer({ name: quickAddName, phone: quickAddPhone }, {
+    createCustomer({ name: quickAddName, phone: quickAddPhone, address: quickAddAddress || undefined }, {
       onSuccess: (res: any) => {
         const newCustomer = res.customer;
         setSelectedCustomer(newCustomer);
@@ -234,6 +290,7 @@ export default function OrderForm({ initialData }: OrderFormProps) {
         setCustomerSearch("");
         setQuickAddName("");
         setQuickAddPhone("");
+        setQuickAddAddress("");
       }
     });
   };
@@ -253,8 +310,14 @@ export default function OrderForm({ initialData }: OrderFormProps) {
       return;
     }
 
+    if (startOfDay(endDate) < startOfDay(startDate)) {
+      showError("Invalid Dates", "Return date cannot be earlier than the pickup date.");
+      return;
+    }
+
     const basePayload = {
       notes: notes || undefined,
+      delivery_address: deliveryAddress || undefined,
       deposit_collected: depositCollected,
       security_deposit: depositCollected ? depositAmount : 0,
       deposit_payment_method: depositCollected ? depositPaymentMethod : undefined,
@@ -363,6 +426,16 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                               className="h-9 border-slate-200 focus:border-slate-900"
                             />
                           </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Address (Optional)</label>
+                            <textarea
+                              value={quickAddAddress}
+                              onChange={e => setQuickAddAddress(e.target.value)}
+                              placeholder="Customer address"
+                              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 resize-none"
+                              rows={2}
+                            />
+                          </div>
                           <div className="flex gap-2 pt-1">
                             <Button type="button" variant="outline" size="sm" onClick={() => setIsQuickAddMode(false)} className="flex-1 h-9 border-slate-200 text-slate-600">
                               Cancel
@@ -453,7 +526,15 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                   type="date"
                   className="h-12 border-slate-200 focus:border-slate-900 text-base"
                   value={format(startDate, "yyyy-MM-dd")}
-                  onChange={(e) => setStartDate(new Date(e.target.value))}
+                  onChange={(e) => {
+                    const newDate = new Date(e.target.value);
+                    if (!isNaN(newDate.getTime())) {
+                      setStartDate(newDate);
+                      if (startOfDay(endDate) < startOfDay(newDate)) {
+                        setEndDate(newDate);
+                      }
+                    }
+                  }}
                 />
               </div>
               <div className="space-y-1.5">
@@ -463,7 +544,12 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                   className="h-12 border-slate-200 focus:border-slate-900 text-base"
                   value={format(endDate, "yyyy-MM-dd")}
                   min={format(startDate, "yyyy-MM-dd")}
-                  onChange={(e) => setEndDate(new Date(e.target.value))}
+                  onChange={(e) => {
+                    const newDate = new Date(e.target.value);
+                    if (!isNaN(newDate.getTime())) {
+                      setEndDate(newDate);
+                    }
+                  }}
                 />
               </div>
             </div>
@@ -473,22 +559,35 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 <span>Return date must be after the pickup date. Please choose a valid return date.</span>
               </div>
             )}
+
             <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 rounded-lg p-2.5 border border-slate-100">
               <span className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs">{rentalDays}</span>
               <span>Total rental days</span>
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Notes</h3>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Optional notes about this order..."
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
-              rows={3}
-            />
+          {/* Address & Notes */}
+          <div className="bg-white border border-slate-200 rounded-lg p-5 space-y-5">
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Customer / Delivery Address</h3>
+              <textarea
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                placeholder="Enter address for delivery or record..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900">Notes</h3>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Optional notes about this order..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none resize-y"
+                rows={2}
+              />
+            </div>
           </div>
 
           {/* Security Deposit */}
@@ -574,16 +673,18 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                 {isProductDropdownOpen && productSearch.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-72 overflow-y-auto">
                     {(() => {
-                      const availableProducts = products.filter((p: any) => !cartItems.some(item => item.product.id === p.id));
                       return availableProducts.length > 0 ? (
                         <ul className="py-1">
                           {availableProducts.map((p: any) => {
                           const imgUrl = getImageUrl(p);
+                          const sAvail = searchAvailabilityMap.get(p.id);
+                          const isAvail = sAvail ? sAvail.available > 0 : p.available_quantity > 0;
+                          
                           return (
                             <li
                               key={p.id}
-                              className="px-3 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0"
-                              onClick={() => addToCart(p)}
+                              className={`px-3 py-2.5 flex items-center gap-3 border-b border-slate-50 last:border-0 ${isAvail ? 'hover:bg-slate-50 cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}
+                              onClick={() => isAvail ? addToCart(p) : null}
                             >
                               <div className="w-10 h-10 rounded-md bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden">
                                 {imgUrl ? (
@@ -598,16 +699,13 @@ export default function OrderForm({ initialData }: OrderFormProps) {
                                 <div className="font-medium text-slate-900 text-sm truncate">{p.name}</div>
                                 <div className="text-xs text-slate-500 flex gap-2 mt-0.5">
                                   <span>{formatCurrency(p.price_per_day)}</span>
-                                  {(() => {
-                                    const da = dropdownAvailMap.get(p.id);
-                                    if (isCheckingDropdown) return <span className="text-slate-400">checking...</span>;
-                                    if (!da) return null;
-                                    return da.available > 0 ? (
-                                      <span className="text-emerald-600">{da.available} available</span>
-                                    ) : (
-                                      <span className="text-red-500 font-bold">Unavailable</span>
-                                    );
-                                  })()}
+                                  <span className={isAvail ? "text-emerald-600" : "text-red-500 font-bold"}>
+                                    {isCheckingSearch 
+                                      ? "Checking dates..." 
+                                      : sAvail 
+                                        ? `${sAvail.available} free for dates` 
+                                        : `${p.available_quantity} in stock`}
+                                  </span>
                                 </div>
                               </div>
                               <Plus className="w-4 h-4 text-slate-300 flex-shrink-0" />
