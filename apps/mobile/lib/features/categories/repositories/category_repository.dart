@@ -79,11 +79,14 @@ class CategoryRepository {
 
   /// Delete a category (server enforces safety checks).
   Future<void> deleteCategory(String id, {CancelToken? cancelToken}) async {
-    final response = await _client.delete('/categories/$id', cancelToken: cancelToken);
-
-    if (response.statusCode != 200) {
-      final msg = response.data?['error'] ?? 'Failed to delete category';
-      throw Exception(msg);
+    try {
+      final response = await _client.delete('/categories/$id', cancelToken: cancelToken);
+      if (response.statusCode != 200) {
+        final msg = response.data?['error'] ?? 'Failed to delete category';
+        throw Exception(msg);
+      }
+    } catch (e) {
+      throw Exception(_extractError(e, 'Failed to delete category'));
     }
   }
 }

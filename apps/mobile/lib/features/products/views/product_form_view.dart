@@ -66,6 +66,21 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     if (p != null) {
       _images.addAll(p.images.map((e) => e.url));
     }
+
+    // Recover images if Android killed the activity during image picker
+    _retrieveLostImages();
+  }
+
+  /// Recovers picked images if the Android OS killed our Activity
+  /// while the camera/gallery was open.
+  Future<void> _retrieveLostImages() async {
+    final picker = ImagePicker();
+    final LostDataResponse response = await picker.retrieveLostData();
+    if (response.isEmpty || response.file == null) return;
+    if (!mounted) return;
+    setState(() {
+      _images.add(response.file!);
+    });
   }
 
   @override
