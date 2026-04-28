@@ -187,11 +187,13 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
       String? finalImageUrl = _imageRemoved ? null : _uploadedImageUrl;
       if (_pickedFile != null) {
         setState(() => _isUploading = true);
+        debugPrint('[CategoryForm] Uploading image: ${_pickedFile!.path}');
         finalImageUrl = await _uploadRepo.uploadFile(_pickedFile!, folder: 'categories');
+        debugPrint('[CategoryForm] Upload success: $finalImageUrl');
         setState(() => _isUploading = false);
       }
 
-      final body = {
+      final body = <String, dynamic>{
         'name': _nameController.text.trim(),
         'slug': _slugController.text.trim(),
         if (_descriptionController.text.trim().isNotEmpty) 'description': _descriptionController.text.trim(),
@@ -202,12 +204,15 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         'is_global': _isGlobal,
       };
 
+      debugPrint('[CategoryForm] Submitting body: $body');
+
       final repo = ref.read(categoryRepositoryProvider);
       if (isEditing) {
         await repo.updateCategory(widget.category!.id, body);
       } else {
         await repo.createCategory(body);
       }
+      debugPrint('[CategoryForm] Success!');
       ref.invalidate(categoriesProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -215,7 +220,9 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[CategoryForm] ERROR: $e');
+      debugPrint('[CategoryForm] Stack: $stackTrace');
       if (mounted) {
         final errorMsg = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(

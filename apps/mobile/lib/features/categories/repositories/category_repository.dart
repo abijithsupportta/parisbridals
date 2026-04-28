@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import '../../../core/api_client.dart';
 import '../models/category.dart';
 
@@ -52,13 +53,17 @@ class CategoryRepository {
   /// Create a new category.
   Future<Category> createCategory(Map<String, dynamic> body, {CancelToken? cancelToken}) async {
     try {
+      debugPrint('[CategoryRepo] POST /categories body: $body');
       final response = await _client.post('/categories', data: body, cancelToken: cancelToken);
+      debugPrint('[CategoryRepo] Response status: ${response.statusCode}');
+      debugPrint('[CategoryRepo] Response data: ${response.data}');
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data;
         return Category.fromJson(data['data']);
       }
       throw Exception('Failed to create category');
     } catch (e) {
+      debugPrint('[CategoryRepo] createCategory ERROR: $e');
       throw Exception(_extractError(e, 'Failed to create category'));
     }
   }

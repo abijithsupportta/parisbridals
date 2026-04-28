@@ -20,10 +20,17 @@ class UploadRepository {
         'folder': folder,
       });
 
+      // Do NOT set contentType manually — Dio auto-generates
+      // 'multipart/form-data; boundary=...' from the FormData object.
+      // Setting it manually strips the boundary and breaks the upload.
       final response = await _client.post(
         '/upload',
         data: formData,
-        options: Options(contentType: 'multipart/form-data'),
+        options: Options(
+          // Remove the default application/json header so Dio can
+          // auto-set the correct multipart content type with boundary
+          headers: {'Content-Type': null},
+        ),
       );
 
       if (response.statusCode == 200) {
