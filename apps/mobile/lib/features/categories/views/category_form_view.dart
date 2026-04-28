@@ -214,8 +214,6 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   @override
   Widget build(BuildContext context) {
-    final allCategoriesAsync = ref.watch(categoriesProvider);
-
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -244,15 +242,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
               validator: (v) => v == null || v.trim().isEmpty ? 'Slug is required' : null),
             SizedBox(height: Responsive.h(16)),
 
-            // Parent Category
-            _buildLabel('Parent Category'),
-            SizedBox(height: Responsive.h(6)),
-            allCategoriesAsync.when(
-              data: (categories) => _buildParentDropdown(categories),
-              loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text('Failed to load categories', style: TextStyle(fontSize: Responsive.sp(12), color: Colors.red)),
-            ),
-            SizedBox(height: Responsive.h(16)),
+            
 
             // Description
             _buildLabel('Description'),
@@ -457,48 +447,6 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: const BorderSide(color: Color(0xFFE0E0E0))),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(12)), borderSide: BorderSide(color: _primary, width: 2)),
-      ),
-    );
-  }
-
-  Widget _buildParentDropdown(List<Category> categories) {
-    final selectableCategories = categories.where((c) {
-      if (isEditing && c.id == widget.category!.id) return false;
-      return true;
-    }).toList();
-
-    return Container(
-      padding: Responsive.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          isExpanded: true,
-          value: _parentId,
-          hint: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey)),
-          style: TextStyle(fontSize: Responsive.sp(15), color: Colors.black),
-          items: [
-            DropdownMenuItem<String?>(value: null,
-              child: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(15)))),
-            ...selectableCategories.map((c) {
-              String prefix = '';
-              if (c.parentId != null) {
-                final parent = categories.where((p) => p.id == c.parentId).firstOrNull;
-                if (parent != null && parent.parentId != null) {
-                  prefix = '    ↳ ';
-                } else {
-                  prefix = '  ↳ ';
-                }
-              }
-              return DropdownMenuItem<String?>(value: c.id,
-                child: Text('$prefix${c.name}', style: TextStyle(fontSize: Responsive.sp(15))));
-            }),
-          ],
-          onChanged: (val) => setState(() => _parentId = val),
-        ),
       ),
     );
   }
