@@ -101,6 +101,12 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   // ── Image Picking ──
   void _showImagePicker() {
+    // CRITICAL: Unfocus any text field before launching external camera/gallery.
+    // When a TextField holds focus, the keyboard + text input system keeps
+    // extra native resources alive. This inflates the app's memory footprint
+    // and makes Android's OOM killer more likely to terminate the process
+    // while the camera Activity is in the foreground.
+    FocusScope.of(context).unfocus();
     showModalBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Responsive.r(20)))),
