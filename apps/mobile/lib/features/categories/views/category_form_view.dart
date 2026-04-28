@@ -68,6 +68,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
   Future<void> _retrieveLostImage() async {
     final LostDataResponse response = await _imagePicker.retrieveLostData();
     if (response.isEmpty || response.file == null) return;
+    if (!mounted) return;
     setState(() {
       _pickedFile = File(response.file!.path);
       _imageRemoved = false;
@@ -117,7 +118,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                   _buildPickerOption(Icons.camera_alt_rounded, 'Camera', _primary, () async {
                     Navigator.pop(ctx);
                     final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 80);
-                    if (picked != null) {
+                    if (picked != null && mounted) {
                       setState(() {
                         _pickedFile = File(picked.path);
                         _imageRemoved = false;
@@ -128,7 +129,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                   _buildPickerOption(Icons.photo_library_rounded, 'Gallery', const Color(0xFF26C6DA), () async {
                     Navigator.pop(ctx);
                     final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-                    if (picked != null) {
+                    if (picked != null && mounted) {
                       setState(() {
                         _pickedFile = File(picked.path);
                         _imageRemoved = false;

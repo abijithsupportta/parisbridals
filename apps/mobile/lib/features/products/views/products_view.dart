@@ -15,6 +15,23 @@ class ProductsView extends ConsumerStatefulWidget {
   @override
   ConsumerState<ProductsView> createState() => _ProductsViewState();
 }
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:shimmer/shimmer.dart';
+import '../../../core/responsive.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../providers/product_provider.dart';
+import '../models/product.dart';
+import 'product_form_view.dart';
+import 'product_detail_view.dart';
+
+class ProductsView extends ConsumerStatefulWidget {
+  const ProductsView({super.key});
+
+  @override
+  ConsumerState<ProductsView> createState() => _ProductsViewState();
+}
 
 class _ProductsViewState extends ConsumerState<ProductsView> {
   final TextEditingController _searchController = TextEditingController();
@@ -23,6 +40,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
 
   static const _primary = Color(0xFF434343);
   static const _accent  = Color(0xFFF7C873);
+  static const _bg      = Color(0xFFF8F8F8);
 
   @override
   void initState() {
@@ -54,92 +72,152 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     final canManage = ref.watch(canManageProvider);
     final productsAsyncValue = ref.watch(productsProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
-      body: Column(
+    return Container(
+      color: _bg,
+      child: Stack(
         children: [
-          _buildSearchBar(),
-          Expanded(
-            child: productsAsyncValue.when(
-              data: (paginatedData) {
-                final products = paginatedData.products;
-
-                if (products.isEmpty) {
-                  return _buildEmptyState();
-                }
-
-                return RefreshIndicator(
-                  color: _primary,
-                  onRefresh: () async => ref.refresh(productsProvider),
-                  child: ListView.separated(
-                    controller: _scrollController,
-                    padding: Responsive.only(left: 12, right: 12, top: 6, bottom: 70),
-                    itemCount: products.length + (paginatedData.page < paginatedData.totalPages ? 1 : 0),
-                    separatorBuilder: (context, index) => SizedBox(height: Responsive.h(8)),
-                    itemBuilder: (context, index) {
-                      if (index == products.length) {
-                        return _buildShimmerCard();
-                      }
-                      return _buildProductCard(products[index], canManage);
-                    },
-                  ),
-                );
-              },
-              loading: () => _buildShimmerList(),
-              error: (error, stack) => _buildErrorState(error.toString()),
-            ),
+          productsAsyncValue.when(
+            data: (paginatedData) {
+              final products = paginatedData.products;
+              return _buildContent(context, products, paginatedData.total, canManage);
+            },
+            loading: () => _buildShimmerList(),
+            error: (error, stack) => _buildErrorState(error.toString()),
           ),
+          if (canManage)
+            Positioned(
+              right: Responsive.w(16),
+              bottom: Responsive.h(16),
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ProductFormView()),
+                  );
+                },
+                backgroundColor: _accent,
+                foregroundColor: _primary,
+                icon: Icon(Icons.add_rounded, size: Responsive.icon(24)),
+                label: Text(
+                  'Add Product',
+                  style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
+                ),
+                elevation: 3,
+              ),
+            ),
         ],
       ),
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProductFormView()),
-                );
-              },
-              backgroundColor: _accent,
-              icon: Icon(Icons.add_rounded, size: Responsive.icon(20), color: _primary),
-              label: Text(
-                'New Product',
-                style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: _primary),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, List<Product> products, int totalProducts, bool canManage) {
+    if (products.isEmpty && _searchQuery.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return Column(
+      children: [
+        _buildSearchBar(),
+        
+        // Stats row
+        Padding(
+          padding: Responsive.symmetric(horizontal: 16, vertical: 4),
+          child: Row(
+            children: [
+              _buildMiniStat('Total', '$totalProducts', _primary),
+              SizedBox(width: Responsive.w(8)),
+              _buildMiniStat('Listed', '${products.length}', _primary),
+              SizedBox(width: Responsive.w(8)),
+              _buildMiniStat('Low Stock', '${products.where((p) => p.availableQuantity <= p.lowStockThreshold).length}', _primary),
+            ],
+          ),
+        ),
+        SizedBox(height: Responsive.h(6)),
+
+        if (products.isEmpty && _searchQuery.isNotEmpty)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off_rounded, size: Responsive.icon(48), color: Colors.grey[300]),
+                  SizedBox(height: Responsive.h(12)),
+                  Text('No results for "$_searchQuery"', style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey)),
+                ],
               ),
-              elevation: 3,
-            )
-          : null,
+            ),
+          )
+        else
+          Expanded(
+            child: RefreshIndicator(
+              color: _primary,
+              onRefresh: () async => ref.refresh(productsProvider),
+              child: ListView.separated(
+                controller: _scrollController,
+                padding: Responsive.only(left: 16, right: 16, top: 6, bottom: 80),
+                itemCount: products.length + (products.isNotEmpty && products.length < totalProducts ? 1 : 0),
+                separatorBuilder: (context, index) => SizedBox(height: Responsive.h(12)),
+                itemBuilder: (context, index) {
+                  if (index == products.length) {
+                    return _buildShimmerCard();
+                  }
+                  return _buildProductCard(products[index], canManage);
+                },
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ── Mini Stat ──
+  Widget _buildMiniStat(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: Responsive.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: _primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
+        ),
+        child: Column(
+          children: [
+            Text(value, style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w800, color: _primary)),
+            SizedBox(height: Responsive.h(2)),
+            Text(label, style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: _primary.withValues(alpha: 0.7))),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildSearchBar() {
-    return Container(
-      color: Colors.white,
-      padding: Responsive.all(12),
+    return Padding(
+      padding: Responsive.only(left: 16, right: 16, top: 12, bottom: 6),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFFF5F5F7),
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-          border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(Responsive.r(14)),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: Responsive.r(12), offset: Offset(0, Responsive.h(2)))],
         ),
         child: TextField(
           controller: _searchController,
           onSubmitted: _onSearchChanged,
           textInputAction: TextInputAction.search,
-          style: TextStyle(fontSize: Responsive.sp(13)),
+          style: TextStyle(fontSize: Responsive.sp(15)),
           decoration: InputDecoration(
             hintText: 'Search products or SKU...',
-            hintStyle: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[500]),
-            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(20), color: _primary),
+            hintStyle: TextStyle(fontSize: Responsive.sp(15), color: Colors.grey[400]),
+            prefixIcon: Icon(Icons.search_rounded, size: Responsive.icon(24), color: _primary),
             suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.close_rounded, size: Responsive.icon(18), color: Colors.grey[500]),
+                    icon: Icon(Icons.close_rounded, size: Responsive.icon(22), color: Colors.grey),
                     onPressed: () {
                       _searchController.clear();
                       _onSearchChanged('');
                     },
                   )
                 : null,
-            border: InputBorder.none,
-            contentPadding: Responsive.symmetric(vertical: 12),
+            border: InputBorder.none, enabledBorder: InputBorder.none, focusedBorder: InputBorder.none,
+            contentPadding: Responsive.symmetric(horizontal: 18, vertical: 16),
           ),
         ),
       ),
@@ -165,30 +243,24 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(12)),
+        borderRadius: BorderRadius.circular(Responsive.r(14)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: Responsive.r(6),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: Responsive.r(8),
             offset: Offset(0, Responsive.h(2)),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(Responsive.r(12)),
+        borderRadius: BorderRadius.circular(Responsive.r(14)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
+          borderRadius: BorderRadius.circular(Responsive.r(14)),
           onTap: () {
-            if (canManage) {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => ProductFormView(product: product),
-              ));
-            } else {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => ProductDetailView(product: product),
-              ));
-            }
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => ProductDetailView(product: product),
+            )).then((_) => ref.invalidate(productsProvider));
           },
           child: Padding(
             padding: Responsive.all(10),
@@ -199,7 +271,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                   width: Responsive.w(68),
                   height: Responsive.w(68),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFAEBCD),
+                    color: _primary.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(Responsive.r(10)),
                   ),
                   child: imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')
@@ -415,7 +487,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   /// Full-page shimmer skeleton shown during initial load
   Widget _buildShimmerList() {
     return ListView.separated(
-      padding: Responsive.only(left: 12, right: 12, top: 6, bottom: 70),
+      padding: Responsive.only(left: 12, right: 12, top: 120, bottom: 70),
       itemCount: 6,
       separatorBuilder: (context, index) => SizedBox(height: Responsive.h(8)),
       itemBuilder: (context, index) => _buildShimmerCard(),
@@ -424,15 +496,16 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
 
   /// Single shimmer card skeleton matching the product card layout
   Widget _buildShimmerCard() {
-    return Shimmer.fromColors(
-      baseColor: const Color(0xFFE8E8E8),
-      highlightColor: const Color(0xFFF5F5F5),
-      child: Container(
-        padding: Responsive.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-        ),
+    return Container(
+      padding: Responsive.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(Responsive.r(14)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: Responsive.r(8), offset: Offset(0, Responsive.h(2)))],
+      ),
+      child: Shimmer.fromColors(
+        baseColor: Colors.grey[300]!,
+        highlightColor: Colors.grey[100]!,
         child: Row(
           children: [
             Container(
