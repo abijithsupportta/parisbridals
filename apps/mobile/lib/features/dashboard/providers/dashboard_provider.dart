@@ -7,7 +7,7 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
 });
 
 // Dashboard metrics provider
-final dashboardMetricsProvider = FutureProvider.family<DashboardMetrics, Map<String, dynamic>>((ref, params) async {
+final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
   final repo = ref.read(dashboardRepositoryProvider);
   return repo.getMetrics();
 });

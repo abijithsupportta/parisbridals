@@ -69,15 +69,16 @@ class DashboardMetrics {
   });
 
   factory DashboardMetrics.fromJson(Map<String, dynamic> json) {
-    final products = (json['data'] as List?)
+    final data = json['data'] as Map<String, dynamic>? ?? {};
+    final products = (data['products'] as List?)
             ?.map((e) => Product.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [];
 
     return DashboardMetrics(
-      totalProducts: json['total'] as int? ?? 0,
+      totalProducts: data['total'] as int? ?? products.length,
       availableProducts: products.where((p) => p.availableQuantity > 0).length,
-      lowStockCount: products.where((p) => p.availableQuantity < 10).length,
+      lowStockCount: products.where((p) => p.isActive && p.availableQuantity < 10).length,
       featuredProducts: products.where((p) => p.isFeatured).length,
       avgPrice: products.isEmpty
           ? 0.0

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'api_client.dart';
@@ -73,7 +74,7 @@ class AuthService {
       }
       return null;
     } catch (e) {
-      print('Login error: $e');
+      debugPrint('Login error: $e');
       return null;
     }
   }
@@ -99,7 +100,7 @@ class AuthService {
       final Map<String, dynamic> userMap = jsonDecode(userDataString);
       return AuthUser.fromJson(userMap);
     } catch (e) {
-      print('Get current user error: $e');
+      debugPrint('Get current user error: $e');
       return null;
     }
   }

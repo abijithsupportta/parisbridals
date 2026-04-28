@@ -22,7 +22,7 @@ class DashboardView extends ConsumerStatefulWidget {
 class _DashboardViewState extends ConsumerState<DashboardView> {
   @override
   Widget build(BuildContext context) {
-    final metricsAsync = ref.watch(dashboardMetricsProvider({}));
+    final metricsAsync = ref.watch(dashboardMetricsProvider);
 
     return Container(
       color: DashboardView._bg,
@@ -383,62 +383,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[600]),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildActionButton('New Order', Icons.add_shopping_cart, () {
-            Navigator.pushNamed(context, '/orders/create');
-          }),
-        ),
-        SizedBox(width: Responsive.w(10)),
-        Expanded(
-          child: _buildActionButton('Inventory', Icons.inventory_2, () {
-            Navigator.pushNamed(context, '/products');
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(String label, IconData icon, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Responsive.r(12)),
-      child: Container(
-        padding: Responsive.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: Responsive.r(6),
-              offset: Offset(0, Responsive.h(2)),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: Responsive.all(10),
-              decoration: BoxDecoration(
-                color: DashboardView._surface,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: Responsive.icon(22), color: DashboardView._primary),
-            ),
-            SizedBox(height: Responsive.h(6)),
-            Text(
-              label,
-              style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w700, color: DashboardView._primary),
-            ),
-          ],
-        ),
       ),
     );
   }
