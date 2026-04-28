@@ -1,9 +1,11 @@
+import 'package:equatable/equatable.dart';
+
 /// Category model matching the admin panel's domain/types/category.ts
 ///
 /// Core entity fields: id, name, slug, description, image_url,
 /// parent_id (for hierarchy: Main → Sub → Variant), sort_order,
 /// is_active, is_global, created_at, updated_at.
-class Category {
+class Category extends Equatable {
   final String id;
   final String name;
   final String slug;
@@ -21,7 +23,7 @@ class Category {
   final List<Category>? children;
   final int? productCount;
 
-  Category({
+  const Category({
     required this.id,
     required this.name,
     required this.slug,
@@ -40,6 +42,24 @@ class Category {
 
   /// Whether this is a Main (root) category.
   bool get isMain => parentId == null;
+
+  @override
+  List<Object?> get props => [
+        id,
+        name,
+        slug,
+        description,
+        imageUrl,
+        parentId,
+        sortOrder,
+        isActive,
+        isGlobal,
+        createdAt,
+        updatedAt,
+        parent,
+        children,
+        productCount,
+      ];
 
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(

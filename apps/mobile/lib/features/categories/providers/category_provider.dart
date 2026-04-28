@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/category.dart';
 import '../repositories/category_repository.dart';
@@ -8,16 +9,32 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 });
 
 /// Fetches all categories via the repository layer.
-final categoriesProvider = FutureProvider<List<Category>>((ref) async {
-  ref.keepAlive();
-  final repo = ref.read(categoryRepositoryProvider);
-  return repo.getCategories();
-});
+final categoriesProvider = AsyncNotifierProvider<CategoriesNotifier, List<Category>>(CategoriesNotifier.new);
+
+class CategoriesNotifier extends AsyncNotifier<List<Category>> {
+  @override
+  Future<List<Category>> build() async {
+    ref.keepAlive();
+    final cancelToken = CancelToken();
+    ref.onDispose(cancelToken.cancel);
+    
+    final repo = ref.read(categoryRepositoryProvider);
+    return repo.getCategories(cancelToken: cancelToken);
+  }
+
+  /// Refreshes the categories list.
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() => build());
+  }
+}
 
 /// Fetches a single category by ID.
 final categoryByIdProvider = FutureProvider.family<Category, String>((ref, id) async {
+  final cancelToken = CancelToken();
+  ref.onDispose(cancelToken.cancel);
   final repo = ref.read(categoryRepositoryProvider);
-  return repo.getCategoryById(id);
+  return repo.getCategoryById(id, cancelToken: cancelToken);
 });
 
 /// Derived provider: Main categories only (no parent).
