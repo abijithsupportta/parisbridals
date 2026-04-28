@@ -66,13 +66,17 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
   /// Recovers a picked image if the Android OS killed our Activity
   /// while the camera/gallery was open.
   Future<void> _retrieveLostImage() async {
-    final LostDataResponse response = await _imagePicker.retrieveLostData();
-    if (response.isEmpty || response.file == null) return;
-    if (!mounted) return;
-    setState(() {
-      _pickedFile = File(response.file!.path);
-      _imageRemoved = false;
-    });
+    try {
+      final LostDataResponse response = await _imagePicker.retrieveLostData();
+      if (response.isEmpty || response.file == null) return;
+      if (!mounted) return;
+      setState(() {
+        _pickedFile = File(response.file!.path);
+        _imageRemoved = false;
+      });
+    } catch (e) {
+      debugPrint('Error retrieving lost image: $e');
+    }
   }
 
   void _onNameChanged() {
@@ -117,23 +121,37 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                 children: [
                   _buildPickerOption(Icons.camera_alt_rounded, 'Camera', _primary, () async {
                     Navigator.pop(ctx);
-                    final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 80);
-                    if (picked != null && mounted) {
-                      setState(() {
-                        _pickedFile = File(picked.path);
-                        _imageRemoved = false;
-                      });
+                    try {
+                      final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 80);
+                      if (picked != null && mounted) {
+                        setState(() {
+                          _pickedFile = File(picked.path);
+                          _imageRemoved = false;
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint('Camera error: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open camera: $e')));
+                      }
                     }
                   }),
                   SizedBox(width: Responsive.w(16)),
                   _buildPickerOption(Icons.photo_library_rounded, 'Gallery', const Color(0xFF26C6DA), () async {
                     Navigator.pop(ctx);
-                    final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-                    if (picked != null && mounted) {
-                      setState(() {
-                        _pickedFile = File(picked.path);
-                        _imageRemoved = false;
-                      });
+                    try {
+                      final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+                      if (picked != null && mounted) {
+                        setState(() {
+                          _pickedFile = File(picked.path);
+                          _imageRemoved = false;
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint('Gallery error: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open gallery: $e')));
+                      }
                     }
                   }),
                 ],
@@ -397,7 +415,11 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         fit: StackFit.expand,
         children: [
           if (_pickedFile != null)
-            Image.file(_pickedFile!, fit: BoxFit.cover)
+            Image.file(
+              _pickedFile!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
+            )
           else if (_uploadedImageUrl != null)
             Image.network(_uploadedImageUrl!, fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder()),

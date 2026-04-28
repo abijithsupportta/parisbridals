@@ -18,7 +18,7 @@ class DashboardView extends ConsumerStatefulWidget {
 
   static const _primary = Color(0xFF434343);
   static const _accent = Color(0xFFF7C873);
-  static const _surface = Color(0xFFFAEBCD);
+
   static const _bg = Color(0xFFF8F8F8);
   static const _danger = Color(0xFFFF6B8A);
   static const _success = Color(0xFF10B981);
@@ -613,7 +613,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
     if (metrics.recentProducts.isEmpty) {
       return Container(
         padding: Responsive.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(10))),
+        decoration: BoxDecoration(color: DashboardView._primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(Responsive.r(8))),
         child: Text(
           'No recent products',
           style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[500]),
@@ -654,7 +654,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
       margin: Responsive.only(bottom: 8),
       padding: Responsive.all(10),
       decoration: BoxDecoration(
-        color: DashboardView._surface.withValues(alpha: 0.3),
+        color: DashboardView._primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(Responsive.r(8)),
       ),
       child: Row(

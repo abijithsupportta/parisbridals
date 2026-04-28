@@ -21,7 +21,6 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
 
   static const _primary = Color(0xFF434343); // Charcoal
   static const _accent  = Color(0xFFF7C873); // Golden
-  static const _surface = Color(0xFFFAEBCD); // Almond
   static const _bg      = Color(0xFFF8F8F8); // Off-white
 
   @override
@@ -186,7 +185,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
       child: Container(
         padding: Responsive.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: _surface,
+          color: _primary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(Responsive.r(12)),
         ),
         child: Column(
@@ -230,7 +229,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
                         SizedBox(width: Responsive.w(10)),
                         Container(
                           padding: Responsive.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(Responsive.r(8))),
+                          decoration: BoxDecoration(color: _primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(Responsive.r(8))),
                           child: Text(' sub-categories', style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.bold, color: _primary)),
                         ),
                       ],
@@ -263,7 +262,7 @@ class _CategoriesViewState extends ConsumerState<CategoriesView> {
     return Container(
       width: size, height: size,
       decoration: BoxDecoration(
-        color: _surface,
+        color: _primary.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(Responsive.r(size * 0.25)),
       ),
       child: Icon(Icons.folder_rounded, size: size * 0.45, color: _primary),
