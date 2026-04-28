@@ -203,8 +203,9 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
       }
     } catch (e) {
       if (mounted) {
+        final errorMsg = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $errorMsg'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
