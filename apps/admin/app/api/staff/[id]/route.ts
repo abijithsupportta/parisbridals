@@ -6,9 +6,12 @@
  */
 
 import { NextRequest } from 'next/server';
-import { branchService } from '@/services/branchService';
+import { staffService } from '@/services/staffService';
 import { adminOnly } from '@/lib/apiGuard';
+import { getAuthUser } from '@/lib/auth';
 import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from '@/lib/apiResponse';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   request: NextRequest,
@@ -18,8 +21,14 @@ export async function GET(
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
 
+    staffService.setUserContext(
+      guard.user.staff_id,
+      guard.user.branch_id,
+      guard.user.store_id
+    );
+
     const { id } = await params;
-    const result = await branchService.getStaffById(id);
+    const result = await staffService.getStaffById(id);
     if (!result.success || !result.data) {
       return apiNotFound('Staff member');
     }
@@ -38,9 +47,23 @@ export async function PATCH(
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
 
+    staffService.setUserContext(
+      guard.user.staff_id,
+      guard.user.branch_id,
+      guard.user.store_id
+    );
+
     const { id } = await params;
     const body = await request.json();
-    const result = await branchService.updateStaff(id, body);
+
+    // Field whitelisting — prevent mass-assignment
+    const allowedFields = ['name', 'email', 'phone', 'role', 'branch_id', 'is_active'];
+    const sanitized: Record<string, any> = {};
+    for (const key of allowedFields) {
+      if (key in body) sanitized[key] = body[key];
+    }
+
+    const result = await staffService.updateStaff(id, sanitized);
     if (!result.success) {
       return apiRepositoryError(result.error, 'Failed to update staff');
     }
@@ -59,12 +82,18 @@ export async function DELETE(
     const guard = await adminOnly(request);
     if (guard.error) return guard.error;
 
+    staffService.setUserContext(
+      guard.user.staff_id,
+      guard.user.branch_id,
+      guard.user.store_id
+    );
+
     const { id } = await params;
-    const result = await branchService.deleteStaff(id);
+    const result = await staffService.deactivateStaff(id);
     if (!result.success) {
-      return apiRepositoryError(result.error, 'Failed to delete staff');
+      return apiRepositoryError(result.error, 'Failed to deactivate staff');
     }
-    return apiSuccess(null, { message: 'Staff member deleted successfully' });
+    return apiSuccess(null, { message: 'Staff member deactivated successfully' });
   } catch (error: any) {
     console.error('[API] DELETE /api/staff/[id] error:', error);
     return apiInternalError(error.message);

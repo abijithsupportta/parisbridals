@@ -11,7 +11,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores';
-import type { BranchWithStaffCount, CreateBranchDTO, UpdateBranchDTO } from '@/domain/types/branch';
+import type { Branch, BranchWithStaffCount, CreateBranchDTO, UpdateBranchDTO } from '@/domain/types/branch';
 import type { ApiSuccessResponse } from '@/lib/apiResponse';
 
 const branchKeys = {
@@ -22,6 +22,7 @@ const branchKeys = {
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
     ...options,
   });
   if (!res.ok) {
@@ -38,10 +39,29 @@ export function useBranches() {
       const response = await apiFetch<ApiSuccessResponse<BranchWithStaffCount[]>>('/api/branches');
       return response.data;
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes - increased from 2
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnMount: false, // Don't refetch on mount if data exists
+    staleTime: 0,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
+  return {
+    branches: query.data || [],
+    isLoading: query.isLoading,
+    error: query.error,
+  };
+}
+
+export function useSimpleBranches() {
+  const query = useQuery({
+    queryKey: ['branches', 'simple'],
+    queryFn: async () => {
+      const response = await apiFetch<ApiSuccessResponse<Branch[]>>('/api/branches?simple=true');
+      return response.data;
+    },
+    staleTime: 0,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    retry: 1,
   });
 
   return {
@@ -59,9 +79,9 @@ export function useBranch(id: string) {
       return response.data;
     },
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 
   return {
