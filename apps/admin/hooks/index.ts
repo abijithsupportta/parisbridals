@@ -17,6 +17,7 @@ export {
   useBulkProductOperation,
   useProductForm,
   useProductSelection,
+  useLookupProductByBarcode,
 } from './useProducts';
 
 // Category hooks

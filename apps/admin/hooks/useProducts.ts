@@ -473,3 +473,35 @@ export function useProductSelection() {
     hasSelection: selectedCount > 0,
   };
 }
+
+/**
+ * Hook for looking up a product by barcode.
+ * Used by BarcodeScanner and USB/keyboard scanner in order forms.
+ */
+export function useLookupProductByBarcode() {
+  const { showError } = useAppStore();
+
+  const mutation = useMutation({
+    mutationFn: async (barcode: string) => {
+      const res = await fetch(`/api/products/by-barcode?code=${encodeURIComponent(barcode)}`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Product not available');
+      }
+      const json = await res.json();
+      return json.data as ProductWithRelations;
+    },
+    onError: (error) => {
+      showError('Barcode Lookup', error.message || 'Product not available');
+    },
+  });
+
+  return {
+    ...mutation,
+    lookupByBarcode: mutation.mutateAsync,
+    isLooking: mutation.isPending,
+  };
+}
+

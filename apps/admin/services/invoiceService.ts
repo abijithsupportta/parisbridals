@@ -205,10 +205,25 @@ export class InvoiceService {
         doc.setFont('helvetica', 'normal');
         doc.text(`Security Deposit Paid: ₹${formatMoney(depositPayment.amount)}`, 20, yPosition);
         yPosition += 5;
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Balance Due: ₹${formatMoney(Number(data.order.total_amount || 0) - Number(depositPayment.amount || 0))}`, 20, yPosition);
-        yPosition += 8;
       }
+
+      // Show advance payment if any
+      const advancePayment = data.payments?.find((p) => p.payment_type === 'advance');
+      const advanceAmount = advancePayment ? advancePayment.amount : (data.order as any).advance_amount || 0;
+      if (advanceAmount > 0) {
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Advance Paid: -₹${formatMoney(advanceAmount)}`, 20, yPosition);
+        yPosition += 5;
+      }
+
+      // Calculate balance due accounting for advance and other payments
+      const totalPaid = (data.payments || [])
+        .filter((p) => p.payment_type !== 'refund')
+        .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+      const balanceDue = Math.max(0, Number(data.order.total_amount || 0) - totalPaid);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Balance Due: ₹${formatMoney(balanceDue)}`, 20, yPosition);
+      yPosition += 8;
     } else {
       // Deposit invoice
       doc.setFontSize(10);
