@@ -9,7 +9,7 @@
 
 import { branchRepository } from '@/repository/branchRepository';
 import { staffRepository } from '@/repository/staffRepository';
-import { CreateBranchSchema, UpdateBranchSchema, CreateStaffSchema, UpdateStaffSchema } from '@/domain/schemas/branch.schema';
+import { CreateBranchSchema, UpdateBranchSchema } from '@/domain/schemas/branch.schema';
 import { createAdminClient } from '@/lib/supabase/server';
 import type {
   Branch, BranchWithStaffCount, CreateBranchDTO, UpdateBranchDTO,
@@ -44,6 +44,10 @@ class BranchService {
 
   async getBranches(): Promise<RepositoryResult<BranchWithStaffCount[]>> {
     return branchRepository.findAllWithStaffCount(this.currentStoreId || '');
+  }
+
+  async getSimpleBranches(): Promise<RepositoryResult<Branch[]>> {
+    return branchRepository.findAll(this.currentStoreId || '');
   }
 
   async getBranchById(id: string): Promise<RepositoryResult<Branch>> {
@@ -131,112 +135,42 @@ class BranchService {
     return branchRepository.canDelete(id);
   }
 
-  // ─── Staff Operations ────────────────────────────────────────────────
+  // ─── Staff Operations (Delegated to staffService) ─────────────────────
 
   async getStaff(): Promise<RepositoryResult<StaffWithBranch[]>> {
-    return staffRepository.findAll(this.currentStoreId || '');
+    const { staffService } = await import('./staffService');
+    staffService.setUserContext(this.currentUserId, this.currentBranchId, this.currentStoreId);
+    return staffService.getStaff();
   }
 
   async getStaffByBranch(branchId: string): Promise<RepositoryResult<Staff[]>> {
-    return staffRepository.findByBranch(branchId);
+    const { staffService } = await import('./staffService');
+    staffService.setUserContext(this.currentUserId, this.currentBranchId, this.currentStoreId);
+    return staffService.getStaffByBranch(branchId);
   }
 
   async getStaffById(id: string): Promise<RepositoryResult<StaffWithBranch>> {
-    return staffRepository.findById(id);
+    const { staffService } = await import('./staffService');
+    staffService.setUserContext(this.currentUserId, this.currentBranchId, this.currentStoreId);
+    return staffService.getStaffById(id);
   }
 
-  /**
-   * Create a staff member:
-   * 1. Validate input
-   * 2. Create Supabase Auth user (email + password)
-   * 3. Insert staff record with user_id linked to auth user
-   */
   async createStaff(data: Omit<CreateStaffDTO, 'store_id'>): Promise<RepositoryResult<Staff>> {
-    const payload = { ...data, store_id: this.currentStoreId || '' };
-    const validation = CreateStaffSchema.safeParse(payload);
-    if (!validation.success) {
-      return validationError(validation.error.issues.map(i => i.message).join(', '));
-    }
-
-    // Check unique email in staff table
-    const existing = await staffRepository.findByEmail(payload.email);
-    if (existing.success && existing.data) {
-      return validationError('A staff member with this email already exists', 'DUPLICATE_EMAIL');
-    }
-
-    // Step 1: Create Supabase Auth user
-    const supabase = createAdminClient();
-    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-      email: payload.email,
-      password: payload.password,
-      email_confirm: true, // auto-confirm email
-      user_metadata: {
-        name: payload.name,
-        role: payload.role,
-        branch_id: payload.branch_id,
-        store_id: this.currentStoreId,
-      },
-    });
-
-    if (authError) {
-      return validationError(`Failed to create auth user: ${authError.message}`, 'AUTH_ERROR');
-    }
-
-    // Step 2: Insert staff record with user_id
-    const { password: _pw, ...staffData } = payload; // strip password from DB insert
-    const result = await staffRepository.create({
-      ...staffData,
-      user_id: authUser.user.id,
-    } as any);
-
-    if (!result.success) {
-      // Rollback: delete the auth user if staff record creation failed
-      await supabase.auth.admin.deleteUser(authUser.user.id);
-      return result;
-    }
-
-    return result;
+    const { staffService } = await import('./staffService');
+    staffService.setUserContext(this.currentUserId, this.currentBranchId, this.currentStoreId);
+    return staffService.createStaff(data);
   }
 
   async updateStaff(id: string, data: UpdateStaffDTO): Promise<RepositoryResult<Staff>> {
-    const validation = UpdateStaffSchema.safeParse(data);
-    if (!validation.success) {
-      return validationError(validation.error.issues.map(i => i.message).join(', '));
-    }
-
-    // Check email uniqueness if changing email
-    if (data.email) {
-      const existing = await staffRepository.findByEmail(data.email);
-      if (existing.success && existing.data && existing.data.id !== id) {
-        return validationError('Another staff member already uses this email', 'DUPLICATE_EMAIL');
-      }
-    }
-
-    return staffRepository.update(id, data);
+    const { staffService } = await import('./staffService');
+    staffService.setUserContext(this.currentUserId, this.currentBranchId, this.currentStoreId);
+    return staffService.updateStaff(id, data);
   }
 
-  async deleteStaff(id: string): Promise<RepositoryResult<boolean>> {
-    // Get staff to find user_id for auth cleanup
-    const staff = await staffRepository.findById(id);
-    if (!staff.success || !staff.data) {
-      return validationError('Staff member not found', 'NOT_FOUND');
-    }
-
-    // Delete auth user first — must succeed before deleting staff record
-    if (staff.data.user_id) {
-      try {
-        const supabase = createAdminClient();
-        const { error } = await supabase.auth.admin.deleteUser(staff.data.user_id);
-        if (error) {
-          return validationError(`Failed to remove login access: ${error.message}`, 'AUTH_DELETE_FAILED');
-        }
-      } catch (err: any) {
-        return validationError(`Failed to remove login access: ${err.message}`, 'AUTH_DELETE_FAILED');
-      }
-    }
-
-    // Auth user removed — now delete staff record
-    return staffRepository.delete(id);
+  async deactivateStaff(id: string): Promise<RepositoryResult<boolean>> {
+    const { staffService } = await import('./staffService');
+    staffService.setUserContext(this.currentUserId, this.currentBranchId, this.currentStoreId);
+    return staffService.deactivateStaff(id);
   }
 }
 

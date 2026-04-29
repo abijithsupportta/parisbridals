@@ -11,6 +11,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase/server';
+import { cache } from 'react';
 import type { NextRequest } from 'next/server';
 import type { StaffRole } from '@/domain/types/branch';
 
@@ -24,10 +25,9 @@ export interface AuthUser {
 }
 
 /**
- * Get the authenticated user + their role from request cookies or Bearer token.
- * Returns null if not authenticated.
+ * Internal implementation of getAuthUser
  */
-export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
+async function getAuthUserImpl(request: NextRequest): Promise<AuthUser | null> {
   try {
     // First, try to get user from Bearer token (for mobile app)
     const authHeader = request.headers.get('authorization');
@@ -117,3 +117,12 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
     return null;
   }
 }
+
+/**
+ * Get the authenticated user + their role from request cookies or Bearer token.
+ * Returns null if not authenticated.
+ * Cached per-request using React cache().
+ */
+export const getAuthUser = cache(async (request: NextRequest) => {
+  return getAuthUserImpl(request);
+});
