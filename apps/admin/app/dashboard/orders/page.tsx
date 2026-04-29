@@ -218,8 +218,8 @@ function OrdersContent() {
 
   const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
-      case OrderStatus.SCHEDULED:
       case OrderStatus.CONFIRMED:
+      case OrderStatus.SCHEDULED:
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Scheduled</Badge>;
       case OrderStatus.ONGOING:
       case OrderStatus.IN_USE:
@@ -243,12 +243,13 @@ function OrdersContent() {
 
   const filterChips = [
     { label: "All", value: "ALL" },
-    { label: "Ongoing", value: OrderStatus.ONGOING },
     { label: "Scheduled", value: OrderStatus.SCHEDULED },
+    { label: "Ongoing", value: OrderStatus.ONGOING },
     { label: "Late", value: OrderStatus.LATE_RETURN },
     { label: "Partial", value: OrderStatus.PARTIAL },
     { label: "Returned", value: OrderStatus.RETURNED },
     { label: "Flagged", value: OrderStatus.FLAGGED },
+    { label: "Cancelled", value: OrderStatus.CANCELLED },
   ];
 
   return (
@@ -550,13 +551,29 @@ function OrdersContent() {
                               </Button>
                             )}
 
-                            <Button variant="ghost" size="icon" className="w-8 h-8 text-slate-400 hover:text-slate-900" asChild>
-                              <Link href={`/dashboard/orders/${order.id}/edit`}>
-                                <Edit className="w-4 h-4" />
-                              </Link>
-                            </Button>
+                            {(() => {
+                              const isEditDisabled = order.status === OrderStatus.CANCELLED || order.status === OrderStatus.COMPLETED || order.status === OrderStatus.RETURNED || order.status === OrderStatus.ONGOING || order.status === OrderStatus.IN_USE;
+                              return (
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className={`w-8 h-8 ${isEditDisabled ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-900'}`}
+                                  disabled={isEditDisabled}
+                                  asChild={!isEditDisabled}
+                                  onClick={(e) => { if (isEditDisabled) e.stopPropagation(); }}
+                                >
+                                  {!isEditDisabled ? (
+                                    <Link href={`/dashboard/orders/${order.id}/edit`}>
+                                      <Edit className="w-4 h-4" />
+                                    </Link>
+                                  ) : (
+                                    <span><Edit className="w-4 h-4" /></span>
+                                  )}
+                                </Button>
+                              );
+                            })()}
                             
-                            {canDelete && (
+                            {canDelete && (order.status === OrderStatus.PENDING || order.status === OrderStatus.CONFIRMED || order.status === OrderStatus.SCHEDULED || order.status === OrderStatus.CANCELLED) && (
                               <Button
                                 variant="ghost"
                                 size="icon"

@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, RefreshCw, Store, Wand2, ArrowLeft } from "lucide-react";
 
@@ -82,6 +82,11 @@ export default function ProductForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+  // Barcode uniqueness validation
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
+  const [isCheckingBarcode, setIsCheckingBarcode] = useState(false);
+  const barcodeCheckTimer = useRef<NodeJS.Timeout | null>(null);
 
   const existingImages: string[] = (product?.images || [])
     .map((img) => (typeof img === "string" ? img : img.url))
@@ -172,7 +177,38 @@ export default function ProductForm({
       .substring(2, 6)
       .toUpperCase()}`;
     setFormData((prev) => ({ ...prev, barcode }));
+    setBarcodeError(null);
+    checkBarcodeUniqueness(barcode);
   };
+
+  // Debounced barcode uniqueness check
+  const checkBarcodeUniqueness = useCallback((barcode: string) => {
+    if (barcodeCheckTimer.current) clearTimeout(barcodeCheckTimer.current);
+    if (!barcode || barcode.trim().length === 0) {
+      setBarcodeError(null);
+      setIsCheckingBarcode(false);
+      return;
+    }
+    setIsCheckingBarcode(true);
+    barcodeCheckTimer.current = setTimeout(async () => {
+      try {
+        const excludeParam = product?.id ? `&exclude=${product.id}` : '';
+        const res = await fetch(`/api/products/check-barcode?code=${encodeURIComponent(barcode.trim())}${excludeParam}`);
+        const json = await res.json();
+        if (json.success && json.data) {
+          if (!json.data.unique) {
+            setBarcodeError(`Already assigned to "${json.data.existing_product}"`);
+          } else {
+            setBarcodeError(null);
+          }
+        }
+      } catch {
+        // Silently ignore network errors for validation
+      } finally {
+        setIsCheckingBarcode(false);
+      }
+    }, 500);
+  }, [product?.id]);
 
   const generateSKU = () => {
     const catName = categories.find((c) => c.id === formData.category_id)?.name;
@@ -244,6 +280,12 @@ export default function ProductForm({
 
         if (!formData.name.trim()) {
           showError("Product name is required");
+          setLoading(false);
+          return;
+        }
+
+        if (barcodeError) {
+          showError("Please fix the barcode error before saving");
           setLoading(false);
           return;
         }
@@ -562,11 +604,13 @@ export default function ProductForm({
               <div className="flex gap-1.5">
                 <Input
                   value={formData.barcode}
-                  onChange={(e) =>
-                    setFormData({ ...formData, barcode: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({ ...formData, barcode: val });
+                    checkBarcodeUniqueness(val);
+                  }}
+                  className={`h-9 border-slate-200 focus:border-slate-900 font-mono text-xs flex-1 ${barcodeError ? 'border-red-400 focus:border-red-500' : ''}`}
                   placeholder="Auto-generated"
-                  className="h-9 border-slate-200 focus:border-slate-900 font-mono text-xs flex-1"
                 />
                 <Button
                   type="button"
@@ -579,6 +623,15 @@ export default function ProductForm({
                   <RefreshCw className="w-3.5 h-3.5" />
                 </Button>
               </div>
+              {barcodeError && (
+                <p className="text-xs text-red-600 font-medium mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {barcodeError}
+                </p>
+              )}
+              {isCheckingBarcode && (
+                <p className="text-xs text-slate-400 mt-1">Checking availability...</p>
+              )}
             </div>
             {/* URL Slug (collapsed, auto-generated) */}
             <div className="space-y-1.5">
