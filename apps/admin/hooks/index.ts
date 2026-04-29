@@ -136,4 +136,6 @@ export {
 // Calendar hooks
 export {
   useCalendarOrders,
+  useCalendarView,
+  useCalendarNavigation,
 } from './useCalendar';
