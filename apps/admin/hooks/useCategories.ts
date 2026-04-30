@@ -10,9 +10,9 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Category, 
-  CreateCategoryDTO, 
+import {
+  Category,
+  CreateCategoryDTO,
   UpdateCategoryDTO,
   CategoryWithRelations,
 } from '@/domain';
@@ -35,6 +35,10 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 
 /**
  * Hook for fetching all categories
+ *
+ * isLoading = true only on the initial load (no cached data).
+ * isFetching = true during any background refetch (e.g., after invalidation).
+ * The page should show shimmer ONLY when isLoading is true, NOT when isFetching.
  */
 export function useCategories() {
   const query = useQuery({
@@ -49,7 +53,8 @@ export function useCategories() {
   return {
     ...query,
     categories: query.data || [],
-    isLoading: query.isLoading || query.isFetching,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
   };
 }
 
@@ -70,7 +75,8 @@ export function useCategory(id: string) {
   return {
     ...query,
     category: query.data,
-    isLoading: query.isLoading || query.isFetching,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
   };
 }
 
@@ -91,7 +97,8 @@ export function useCategoryChildren(parentId: string) {
   return {
     ...query,
     children: query.data || [],
-    isLoading: query.isLoading || query.isFetching,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
   };
 }
 
@@ -185,7 +192,8 @@ export function useCanDeleteCategory(id: string) {
     ...query,
     canDelete: query.data?.canDelete ?? false,
     reason: query.data?.reason,
-    isLoading: query.isLoading || query.isFetching,
+    isLoading: query.isLoading,
+    isFetching: query.isFetching,
   };
 }
 
@@ -200,7 +208,7 @@ export function useCategorySearch(query: string, enabled: boolean = true) {
       isLoading: false,
     };
   }
-  
+
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(query.toLowerCase()) ||
     category.slug.toLowerCase().includes(query.toLowerCase()) ||
@@ -218,12 +226,12 @@ export function useCategorySearch(query: string, enabled: boolean = true) {
  */
 export function useCategoryTree() {
   const { categories } = useCategories();
-  
+
   const buildTree = useCallback((categories: Category[]) => {
     interface CategoryNode extends Category {
       children: CategoryNode[];
     }
-    
+
     const categoryMap = new Map(categories.map(cat => [cat.id, { ...cat, children: [] } as CategoryNode]));
     const roots: CategoryNode[] = [];
 
