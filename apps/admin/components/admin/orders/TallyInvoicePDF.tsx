@@ -92,9 +92,9 @@ function numberToWords(num: number): string {
   return result + ' Only';
 }
 
-/** Format number with ₹ symbol and Indian locale */
+/** Format number with Rs. prefix and Indian locale */
 function rs(val: number): string {
-  return '\u20B9' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return 'Rs. ' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
@@ -297,18 +297,8 @@ const s = StyleSheet.create({
 
   // ── Footer ──
   footerRow: {
-    flexDirection: 'row' as const,
     flexGrow: 1,
-  },
-  footerLeft: {
-    width: '55%',
-    borderRight: BORDER,
     padding: 8,
-  },
-  footerRight: {
-    width: '45%',
-    padding: 8,
-    justifyContent: 'space-between' as const,
   },
   footerLabel: {
     fontFamily: 'Helvetica-Bold',
@@ -321,16 +311,6 @@ const s = StyleSheet.create({
     fontSize: 7,
     lineHeight: 1.5,
     color: '#333',
-  },
-  sigTop: {
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 9,
-    textAlign: 'right' as const,
-  },
-  sigBottom: {
-    fontSize: 8,
-    textAlign: 'right' as const,
-    marginTop: 4,
   },
   eoe: {
     fontSize: 7,
@@ -502,16 +482,10 @@ export function TallyInvoicePDF(props: TallyInvoiceProps) {
 
           {/* ── Footer ── */}
           <View style={s.footerRow}>
-            <View style={s.footerLeft}>
-              <Text style={s.footerLabel}>Declaration / Terms & Conditions</Text>
-              {termsAndConditions ? (
-                <Text style={s.footerTerms}>{termsAndConditions}</Text>
-              ) : null}
-            </View>
-            <View style={s.footerRight}>
-              <Text style={s.sigTop}>for {companyName}</Text>
-              <Text style={s.sigBottom}>Authorised Signatory</Text>
-            </View>
+            <Text style={s.footerLabel}>Terms & Conditions</Text>
+            {termsAndConditions ? (
+              <Text style={s.footerTerms}>{termsAndConditions}</Text>
+            ) : null}
           </View>
         </View>
       </Page>
