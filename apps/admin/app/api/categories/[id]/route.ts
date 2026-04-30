@@ -24,10 +24,31 @@
  */
 
 import { NextRequest } from "next/server";
+import type { UpdateCategoryDTO } from "@/domain";
 import { categoryService } from "@/services/categoryService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
 import { apiSuccess, apiRepositoryError, apiNotFound, apiInternalError } from "@/lib/apiResponse";
+
+const UPDATE_FIELDS = [
+  'name',
+  'slug',
+  'description',
+  'image_url',
+  'parent_id',
+  'sort_order',
+  'is_active',
+  'is_global',
+  'store_id',
+] as const;
+
+function pickCategoryFields(body: Record<string, unknown>) {
+  return Object.fromEntries(
+    UPDATE_FIELDS
+      .filter((field) => Object.prototype.hasOwnProperty.call(body, field))
+      .map((field) => [field, body[field]])
+  );
+}
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -61,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     categoryService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
 
     const { id } = await params;
-    const body = await request.json();
+    const body = pickCategoryFields(await request.json()) as UpdateCategoryDTO;
 
     const result = await categoryService.updateCategory(id, body);
     if (!result.success) {

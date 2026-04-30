@@ -22,6 +22,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronRight,
   ChevronDown,
@@ -73,6 +74,7 @@ interface CategoryTreeProps {
 }
 
 export default function CategoryTree({ categories }: CategoryTreeProps) {
+  const router = useRouter();
   const { mains, subs, variants } = buildHierarchy(categories);
 
   // Set of category ids that are currently EXPANDED.
@@ -118,11 +120,17 @@ export default function CategoryTree({ categories }: CategoryTreeProps) {
         return (
           <Card key={main.id} className="border-0 shadow-lg overflow-hidden">
             {/* Main header — clickable chevron toggles all subs */}
-            <div className="bg-slate-50 border-b border-slate-100 p-4">
+            <div
+              className="bg-slate-50 border-b border-slate-100 p-4 cursor-pointer hover:bg-slate-100 transition-colors"
+              onClick={() => router.push(`/dashboard/categories/${main.id}`)}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => toggle(main.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggle(main.id);
+                    }}
                     className="p-1 hover:bg-slate-200 rounded-md transition-colors flex-shrink-0"
                     title={isMainOpen ? "Collapse" : "Expand"}
                   >
@@ -167,11 +175,17 @@ export default function CategoryTree({ categories }: CategoryTreeProps) {
 
                   return (
                     <div key={sub.id}>
-                      <div className="p-4 pl-12 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                      <div
+                        className="p-4 pl-12 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                        onClick={() => router.push(`/dashboard/categories/${sub.id}`)}
+                      >
                         <div className="flex items-center gap-3">
                           {/* Sub toggle chevron */}
                           <button
-                            onClick={() => toggle(sub.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(sub.id);
+                            }}
                             className="p-1 hover:bg-slate-200 rounded-md transition-colors flex-shrink-0"
                             title={isSubOpen ? "Collapse variants" : "Expand variants"}
                           >
@@ -204,7 +218,8 @@ export default function CategoryTree({ categories }: CategoryTreeProps) {
                           {subVariants.map((variant) => (
                             <div
                               key={variant.id}
-                              className="p-4 pl-20 flex items-center justify-between hover:bg-slate-50 transition-colors"
+                              className="p-4 pl-20 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                              onClick={() => router.push(`/dashboard/categories/${variant.id}`)}
                             >
                               <div className="flex items-center gap-3">
                                 {/* Indent spacer where chevron would be */}

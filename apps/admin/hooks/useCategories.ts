@@ -15,18 +15,11 @@ import {
   CreateCategoryDTO, 
   UpdateCategoryDTO,
   CategoryWithRelations,
-  CategoryHierarchy
 } from '@/domain';
 import { useAppStore } from '@/stores';
 import { useCallback } from 'react';
 import type { ApiSuccessResponse } from '@/lib/apiResponse';
-
-const categoryKeys = {
-  all: ['categories'] as const,
-  detail: (id: string) => ['categories', id] as const,
-  children: (id: string) => ['categories', id, 'children'] as const,
-  hierarchy: ['categories-hierarchy'] as const,
-};
+import { queryKeys } from '@/lib/query-client';
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -45,7 +38,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
  */
 export function useCategories() {
   const query = useQuery({
-    queryKey: categoryKeys.all,
+    queryKey: queryKeys.categories,
     queryFn: async () => {
       const response = await apiFetch<ApiSuccessResponse<Category[]>>('/api/categories');
       return response.data;
@@ -65,7 +58,7 @@ export function useCategories() {
  */
 export function useCategory(id: string) {
   const query = useQuery({
-    queryKey: categoryKeys.detail(id),
+    queryKey: queryKeys.category(id),
     queryFn: async () => {
       const response = await apiFetch<ApiSuccessResponse<Category>>(`/api/categories/${id}`);
       return response.data;
@@ -86,7 +79,7 @@ export function useCategory(id: string) {
  */
 export function useCategoryChildren(parentId: string) {
   const query = useQuery({
-    queryKey: categoryKeys.children(parentId),
+    queryKey: queryKeys.categoryChildren(parentId),
     queryFn: async () => {
       const response = await apiFetch<ApiSuccessResponse<{ children: Category[]; parent: Category; level: string }>>(`/api/categories/${parentId}/children`);
       return response.data.children;
@@ -112,8 +105,8 @@ export function useCreateCategory() {
   const mutation = useMutation({
     mutationFn: (data: CreateCategoryDTO) =>
       apiFetch('/api/categories', { method: 'POST', body: JSON.stringify(data) }),
-    onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       showSuccess('Category created successfully');
     },
     onError: (error) => showError('Failed to create category', error.message),
@@ -137,8 +130,8 @@ export function useUpdateCategory() {
     mutationFn: ({ id, data }: { id: string; data: UpdateCategoryDTO }) =>
       apiFetch(`/api/categories/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-      queryClient.invalidateQueries({ queryKey: categoryKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
+      queryClient.invalidateQueries({ queryKey: queryKeys.category(variables.id) });
       showSuccess('Category updated successfully');
     },
     onError: (error) => showError('Failed to update category', error.message),
@@ -162,7 +155,7 @@ export function useDeleteCategory() {
     mutationFn: (id: string) =>
       apiFetch(`/api/categories/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: categoryKeys.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       showSuccess('Category deleted successfully');
     },
     onError: (error) => showError('Failed to delete category', error.message),
@@ -201,6 +194,12 @@ export function useCanDeleteCategory(id: string) {
  */
 export function useCategorySearch(query: string, enabled: boolean = true) {
   const { categories } = useCategories();
+  if (!enabled) {
+    return {
+      filteredCategories: [],
+      isLoading: false,
+    };
+  }
   
   const filteredCategories = categories.filter(category =>
     category.name.toLowerCase().includes(query.toLowerCase()) ||

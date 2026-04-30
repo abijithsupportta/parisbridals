@@ -406,9 +406,10 @@ export class CategoryService {
   ): CategoryValidationResult {
     const errors: CategoryValidationError[] = [];
     const warnings: CategoryValidationError[] = [];
+    const isCreate = !existingCategory;
 
     // Name validation
-    if ('name' in data) {
+    if (isCreate || 'name' in data) {
       if (!data.name || data.name.trim().length === 0) {
         errors.push({
           field: 'name',

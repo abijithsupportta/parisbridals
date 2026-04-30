@@ -22,6 +22,8 @@ import { Trash2, Edit, AlertTriangle, X, Eye } from "lucide-react";
 import { type Category } from "@/domain/types/category";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-client";
 
 /** Shape returned by GET /api/categories/:id/can-delete */
 interface DeleteStatus {
@@ -33,6 +35,7 @@ interface DeleteStatus {
 
 export default function CategoryTreeActions({ category }: { category: Category }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Controls visibility of the delete confirmation modal
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -56,7 +59,8 @@ export default function CategoryTreeActions({ category }: { category: Category }
     try {
       const res = await fetch(`/api/categories/${category.id}/can-delete`);
       if (!res.ok) throw new Error("Failed to check delete eligibility");
-      const status: DeleteStatus = await res.json();
+      const payload = await res.json();
+      const status: DeleteStatus = payload.data ?? payload;
       setDeleteStatus(status);
     } catch {
       setDeleteStatus({
@@ -83,8 +87,9 @@ export default function CategoryTreeActions({ category }: { category: Category }
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        throw new Error(payload.error || `Delete failed (${res.status})`);
+        throw new Error(payload.error?.message || payload.error || `Delete failed (${res.status})`);
       }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.categories });
       setShowDeleteDialog(false);
       router.refresh();
     } catch (err) {
@@ -99,7 +104,7 @@ export default function CategoryTreeActions({ category }: { category: Category }
   return (
     <>
       {/* Inline action buttons: View, Edit, Delete */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         {/* Open the category detail page (shows children + add-child affordance) */}
         <Link href={`/dashboard/categories/${category.id}`}>
           <button

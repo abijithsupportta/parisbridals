@@ -111,6 +111,10 @@ export default function CategoryForm({
     const parent = allCategories.find((p) => p.id === c.parent_id);
     return parent && !parent.parent_id && c.id !== category?.id;
   });
+  const fixedParent = defaultParentId
+    ? allCategories.find((c) => c.id === defaultParentId)
+    : null;
+  const isParentLocked = !isEdit;
 
   /**
    * Determines the hierarchy level based on the currently selected parent.
@@ -175,7 +179,7 @@ export default function CategoryForm({
 
       if (!res.ok) {
         const payload = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(payload.error || `Request failed (${res.status})`);
+        throw new Error(payload.error?.message || payload.error || `Request failed (${res.status})`);
       }
 
       // Redirect back to the parent's detail page if this was a child creation
@@ -284,35 +288,46 @@ export default function CategoryForm({
           </div>
 
           {/* Parent Category Selection */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700 block">Parent Category</label>
-            <select
-              value={formData.parent_id || ""}
-              onChange={(e) => setFormData({ ...formData, parent_id: e.target.value || null })}
-              className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
-            >
-              <option value="">None (Main Category)</option>
-              <optgroup label="Main Categories">
-                {mains.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </optgroup>
-              {subs.length > 0 && (
-                <optgroup label="Sub Categories">
-                  {subs.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {allCategories.find((p) => p.id === s.parent_id)?.name} &gt; {s.name}
+          {isParentLocked ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-700">Hierarchy Placement</p>
+              <p className="text-sm text-slate-600 mt-1">
+                {fixedParent
+                  ? `This will be created under "${fixedParent.name}".`
+                  : "This will be created as a Main Category."}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700 block">Parent Category</label>
+              <select
+                value={formData.parent_id || ""}
+                onChange={(e) => setFormData({ ...formData, parent_id: e.target.value || null })}
+                className="w-full h-12 px-3 rounded-md border border-slate-300 bg-white text-sm focus:border-primary focus:ring-2 focus:ring-primary/10 outline-none"
+              >
+                <option value="">None (Main Category)</option>
+                <optgroup label="Main Categories">
+                  {mains.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
                     </option>
                   ))}
                 </optgroup>
-              )}
-            </select>
-            <p className="text-xs text-slate-500">
-              Select a parent to create a Sub Category or Variant. Leave empty for Main Category.
-            </p>
-          </div>
+                {subs.length > 0 && (
+                  <optgroup label="Sub Categories">
+                    {subs.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {allCategories.find((p) => p.id === s.parent_id)?.name} &gt; {s.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <p className="text-xs text-slate-500">
+                Select a parent to create a Sub Category or Variant. Leave empty for Main Category.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">

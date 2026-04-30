@@ -30,16 +30,21 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     const { id } = await params;
     const result = await categoryService.canDeleteCategory(id);
     
-    if (!result.success) {
-      return apiSuccess({ 
-        canDelete: false, 
-        reason: result.error?.message,
+    if (!result.success || !result.data) {
+      return apiSuccess({
+        canDelete: false,
+        reason: result.error?.message || 'Unable to verify delete safety',
         productCount: 0,
-        childCount: 0
+        childCount: 0,
       });
     }
 
-    return apiSuccess(result.data);
+    return apiSuccess({
+      canDelete: result.data.canDelete,
+      reason: result.data.reason,
+      productCount: result.data.relatedData?.productCount ?? 0,
+      childCount: result.data.relatedData?.childCount ?? 0,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return apiInternalError(message);

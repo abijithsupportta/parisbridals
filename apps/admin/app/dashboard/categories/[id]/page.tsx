@@ -31,9 +31,7 @@ import {
   Globe,
   CheckCircle2,
   XCircle,
-  Hash,
   Image as ImageIcon,
-  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,8 +44,24 @@ import {
 import { Badge } from "@/components/ui/badge";
 import Modal from "@/components/admin/Modal";
 import { useCategory, useCategories, useCategoryChildren, useDeleteCategory } from "@/hooks";
-import { useAppStore } from "@/stores";
 import { type Category } from "@/domain";
+
+type DeleteCheck = {
+  canDelete: boolean;
+  reason?: string;
+  productCount?: number;
+  childCount?: number;
+};
+
+function readDeleteCheck(payload: any): DeleteCheck {
+  const data = payload?.data ?? payload ?? {};
+  return {
+    canDelete: Boolean(data.canDelete),
+    reason: data.reason,
+    productCount: data.productCount ?? data.relatedData?.productCount ?? 0,
+    childCount: data.childCount ?? data.relatedData?.childCount ?? 0,
+  };
+}
 
 export default function CategoryDetailPage() {
   const params = useParams();
@@ -58,7 +72,6 @@ export default function CategoryDetailPage() {
   const { categories: allCategories } = useCategories();
   const { children, isLoading: isLoadingChildren } = useCategoryChildren(categoryId);
   const deleteCategory = useDeleteCategory();
-  const { showSuccess, showError } = useAppStore();
 
   // Delete modal state
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -111,8 +124,9 @@ export default function CategoryDetailPage() {
     if (!categoryId) return;
     fetch(`/api/categories/${categoryId}/can-delete`)
       .then((r) => r.json())
-      .then((data) => {
-        setProductCount(data.productCount ?? data.relatedData?.productCount ?? 0);
+      .then((payload) => {
+        const data = readDeleteCheck(payload);
+        setProductCount(data.productCount ?? 0);
       })
       .catch(() => setProductCount(0));
   }, [categoryId]);
@@ -121,8 +135,8 @@ export default function CategoryDetailPage() {
     setIsCheckingDelete(true);
     try {
       const res = await fetch(`/api/categories/${categoryId}/can-delete`);
-      const data = await res.json();
-      setDeleteCheckResult(data);
+      const payload = await res.json();
+      setDeleteCheckResult(readDeleteCheck(payload));
     } catch {
       setDeleteCheckResult({
         canDelete: false,

@@ -84,16 +84,29 @@ function CategoriesContent() {
     return { total, active, inactive, mains, subs, variants };
   }, [categories]);
 
-  // Filter categories when searching
+  // Filter categories while preserving parents so the tree stays navigable.
   const filteredCategories = useMemo(() => {
     if (!debouncedQuery) return categories;
     const q = debouncedQuery.toLowerCase();
-    return categories.filter(
+    const matching = categories.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.slug.toLowerCase().includes(q) ||
         (c.description && c.description.toLowerCase().includes(q))
     );
+    const visibleIds = new Set<string>();
+
+    matching.forEach((category) => {
+      let current: typeof category | undefined = category;
+      while (current) {
+        visibleIds.add(current.id);
+        current = current.parent_id
+          ? categories.find((c) => c.id === current?.parent_id)
+          : undefined;
+      }
+    });
+
+    return categories.filter((category) => visibleIds.has(category.id));
   }, [categories, debouncedQuery]);
 
   const showShimmer = isLoading;
@@ -118,7 +131,7 @@ function CategoriesContent() {
         >
           <Link href="/dashboard/categories/create">
             <Plus className="w-4 h-4" />
-            Add Category
+            Add Main Category
           </Link>
         </Button>
       </div>
@@ -155,7 +168,7 @@ function CategoriesContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
               type="text"
-              placeholder="Search categories by name or slug..."
+              placeholder="Search main, sub, or variant categories..."
               className="pl-9 border-slate-200 focus:border-slate-900"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -188,14 +201,14 @@ function CategoriesContent() {
             <p className="text-sm text-slate-500 max-w-sm mx-auto">
               {searchInput
                 ? `No categories matched your search for "${searchInput}".`
-                : "There are no categories yet. Create your first one to get started."}
+                : "There are no categories yet. Create your first main category to get started."}
             </p>
             {!searchInput && (
               <Button
                 className="mt-6 bg-slate-900 text-white hover:bg-slate-800"
                 onClick={() => router.push("/dashboard/categories/create")}
               >
-                Create First Category
+                Create First Main Category
               </Button>
             )}
           </div>

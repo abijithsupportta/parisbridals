@@ -27,10 +27,31 @@
  */
 
 import { NextRequest } from "next/server";
+import type { CreateCategoryDTO } from "@/domain";
 import { categoryService } from "@/services/categoryService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
 import { apiSuccess, apiRepositoryError, apiInternalError } from "@/lib/apiResponse";
+
+const CREATE_FIELDS = [
+  'name',
+  'slug',
+  'description',
+  'image_url',
+  'parent_id',
+  'sort_order',
+  'is_active',
+  'is_global',
+  'store_id',
+] as const;
+
+function pickCategoryFields(body: Record<string, unknown>) {
+  return Object.fromEntries(
+    CREATE_FIELDS
+      .filter((field) => Object.prototype.hasOwnProperty.call(body, field))
+      .map((field) => [field, body[field]])
+  );
+}
 
 /** GET /api/categories — list all categories */
 export async function GET(request: NextRequest) {
@@ -68,7 +89,7 @@ export async function POST(request: NextRequest) {
       authUser?.store_id || null
     );
 
-    const body = await request.json();
+    const body = pickCategoryFields(await request.json()) as unknown as CreateCategoryDTO;
 
     const result = await categoryService.createCategory(body);
     if (!result.success) {
