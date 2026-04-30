@@ -23,8 +23,11 @@ class ApiClient {
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
+        // Use Dio's built-in contentType (NOT in headers map).
+        // This lets Dio auto-switch to multipart/form-data for FormData
+        // without needing headers: {'Content-Type': null} hacks.
+        contentType: Headers.jsonContentType,
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
       ),
