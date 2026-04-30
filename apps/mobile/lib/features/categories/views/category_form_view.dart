@@ -11,7 +11,8 @@ import '../providers/category_provider.dart';
 /// If [category] is null → Create mode. Otherwise → Edit mode.
 class CategoryFormView extends ConsumerStatefulWidget {
   final Category? category;
-  const CategoryFormView({super.key, this.category});
+  final String? initialParentId;
+  const CategoryFormView({super.key, this.category, this.initialParentId});
 
   @override
   ConsumerState<CategoryFormView> createState() => _CategoryFormViewState();
@@ -51,12 +52,31 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
     _descriptionController = TextEditingController(text: c?.description ?? '');
     _sortOrderController = TextEditingController(text: '${c?.sortOrder ?? 0}');
     _isActive = c?.isActive ?? true;
-    _isGlobal = c?.isGlobal ?? false;
-    _parentId = c?.parentId;
+    _isGlobal = c?.isGlobal ?? true;
+    _parentId = c?.parentId ?? widget.initialParentId;
     _uploadedImageUrl = c?.imageUrl;
 
     // Auto-generate slug from name
     _nameController.addListener(_onNameChanged);
+
+    // Recover image if Android killed the activity during image picker
+    _retrieveLostImage();
+  }
+
+  /// Recovers a picked image if the Android OS killed our Activity
+  /// while the camera/gallery was open.
+  Future<void> _retrieveLostImage() async {
+    try {
+      final LostDataResponse response = await _imagePicker.retrieveLostData();
+      if (response.isEmpty || response.file == null) return;
+      if (!mounted) return;
+      setState(() {
+        _pickedFile = File(response.file!.path);
+        _imageRemoved = false;
+      });
+    } catch (e) {
+      debugPrint('Error retrieving lost image: $e');
+    }
   }
 
   void _onNameChanged() {
@@ -81,6 +101,12 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   // ── Image Picking ──
   void _showImagePicker() {
+    // CRITICAL: Unfocus any text field before launching external camera/gallery.
+    // When a TextField holds focus, the keyboard + text input system keeps
+    // extra native resources alive. This inflates the app's memory footprint
+    // and makes Android's OOM killer more likely to terminate the process
+    // while the camera Activity is in the foreground.
+    FocusScope.of(context).unfocus();
     showModalBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(Responsive.r(20)))),
@@ -101,23 +127,37 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
                 children: [
                   _buildPickerOption(Icons.camera_alt_rounded, 'Camera', _primary, () async {
                     Navigator.pop(ctx);
-                    final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 80);
-                    if (picked != null) {
-                      setState(() {
-                        _pickedFile = File(picked.path);
-                        _imageRemoved = false;
-                      });
+                    try {
+                      final picked = await _imagePicker.pickImage(source: ImageSource.camera, imageQuality: 60, maxWidth: 1024, maxHeight: 1024);
+                      if (picked != null && mounted) {
+                        setState(() {
+                          _pickedFile = File(picked.path);
+                          _imageRemoved = false;
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint('Camera error: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open camera: $e')));
+                      }
                     }
                   }),
                   SizedBox(width: Responsive.w(16)),
                   _buildPickerOption(Icons.photo_library_rounded, 'Gallery', const Color(0xFF26C6DA), () async {
                     Navigator.pop(ctx);
-                    final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-                    if (picked != null) {
-                      setState(() {
-                        _pickedFile = File(picked.path);
-                        _imageRemoved = false;
-                      });
+                    try {
+                      final picked = await _imagePicker.pickImage(source: ImageSource.gallery, imageQuality: 60, maxWidth: 1024, maxHeight: 1024);
+                      if (picked != null && mounted) {
+                        setState(() {
+                          _pickedFile = File(picked.path);
+                          _imageRemoved = false;
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint('Gallery error: $e');
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to open gallery: $e')));
+                      }
                     }
                   }),
                 ],
@@ -172,20 +212,24 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
       String? finalImageUrl = _imageRemoved ? null : _uploadedImageUrl;
       if (_pickedFile != null) {
         setState(() => _isUploading = true);
+        debugPrint('[CategoryForm] Uploading image: ${_pickedFile!.path}');
         finalImageUrl = await _uploadRepo.uploadFile(_pickedFile!, folder: 'categories');
+        debugPrint('[CategoryForm] Upload success: $finalImageUrl');
         setState(() => _isUploading = false);
       }
 
-      final body = {
+      final body = <String, dynamic>{
         'name': _nameController.text.trim(),
         'slug': _slugController.text.trim(),
-        'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-        'image_url': finalImageUrl,
-        'parent_id': _parentId,
+        if (_descriptionController.text.trim().isNotEmpty) 'description': _descriptionController.text.trim(),
+        if (finalImageUrl != null) 'image_url': finalImageUrl, // ignore: use_null_aware_elements
+        if (_parentId != null) 'parent_id': _parentId, // ignore: use_null_aware_elements
         'sort_order': int.tryParse(_sortOrderController.text) ?? 0,
         'is_active': _isActive,
         'is_global': _isGlobal,
       };
+
+      debugPrint('[CategoryForm] Submitting body: $body');
 
       final repo = ref.read(categoryRepositoryProvider);
       if (isEditing) {
@@ -193,6 +237,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
       } else {
         await repo.createCategory(body);
       }
+      debugPrint('[CategoryForm] Success!');
       ref.invalidate(categoriesProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -200,10 +245,13 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         );
         Navigator.pop(context);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('[CategoryForm] ERROR: $e');
+      debugPrint('[CategoryForm] Stack: $stackTrace');
       if (mounted) {
+        final errorMsg = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: $errorMsg'), backgroundColor: Colors.red, duration: const Duration(seconds: 5)),
         );
       }
     } finally {
@@ -213,8 +261,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
 
   @override
   Widget build(BuildContext context) {
-    final allCategoriesAsync = ref.watch(categoriesProvider);
-
+    Responsive.init(context);
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -243,15 +290,7 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
               validator: (v) => v == null || v.trim().isEmpty ? 'Slug is required' : null),
             SizedBox(height: Responsive.h(16)),
 
-            // Parent Category
-            _buildLabel('Parent Category'),
-            SizedBox(height: Responsive.h(6)),
-            allCategoriesAsync.when(
-              data: (categories) => _buildParentDropdown(categories),
-              loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text('Failed to load categories', style: TextStyle(fontSize: Responsive.sp(12), color: Colors.red)),
-            ),
-            SizedBox(height: Responsive.h(16)),
+            
 
             // Description
             _buildLabel('Description'),
@@ -272,8 +311,6 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
               child: Column(
                 children: [
                   _buildToggleRow('Active', _isActive, (v) => setState(() => _isActive = v)),
-                  Divider(height: Responsive.h(20), color: const Color(0xFFF0F0F0)),
-                  _buildToggleRow('Global Category', _isGlobal, (v) => setState(() => _isGlobal = v)),
                 ],
               ),
             ),
@@ -385,10 +422,14 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
         fit: StackFit.expand,
         children: [
           if (_pickedFile != null)
-            Image.file(_pickedFile!, fit: BoxFit.cover)
+            Image.file(
+              _pickedFile!,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
+            )
           else if (_uploadedImageUrl != null)
             Image.network(_uploadedImageUrl!, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildImagePlaceholder()),
+              errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder()),
           // Gradient overlay at bottom
           Positioned(
             bottom: 0, left: 0, right: 0,
@@ -460,48 +501,6 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
     );
   }
 
-  Widget _buildParentDropdown(List<Category> categories) {
-    final selectableCategories = categories.where((c) {
-      if (isEditing && c.id == widget.category!.id) return false;
-      return true;
-    }).toList();
-
-    return Container(
-      padding: Responsive.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          isExpanded: true,
-          value: _parentId,
-          hint: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(14), color: Colors.grey)),
-          style: TextStyle(fontSize: Responsive.sp(15), color: Colors.black),
-          items: [
-            DropdownMenuItem<String?>(value: null,
-              child: Text('None (Main Category)', style: TextStyle(fontSize: Responsive.sp(15)))),
-            ...selectableCategories.map((c) {
-              String prefix = '';
-              if (c.parentId != null) {
-                final parent = categories.where((p) => p.id == c.parentId).firstOrNull;
-                if (parent != null && parent.parentId != null) {
-                  prefix = '    ↳ ';
-                } else {
-                  prefix = '  ↳ ';
-                }
-              }
-              return DropdownMenuItem<String?>(value: c.id,
-                child: Text('$prefix${c.name}', style: TextStyle(fontSize: Responsive.sp(15))));
-            }),
-          ],
-          onChanged: (val) => setState(() => _parentId = val),
-        ),
-      ),
-    );
-  }
-
   Widget _buildToggleRow(String label, bool value, ValueChanged<bool> onChanged) {
     return Row(
       children: [
@@ -516,3 +515,4 @@ class _CategoryFormViewState extends ConsumerState<CategoryFormView> {
     );
   }
 }
+

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'providers/auth_provider.dart' as core_auth;
 import '../features/auth/providers/auth_provider.dart';
 import '../features/auth/views/login_view.dart';
 import '../features/products/views/products_view.dart';
@@ -9,6 +9,8 @@ import '../features/dashboard/views/dashboard_view.dart';
 import '../features/orders/views/orders_view.dart';
 import '../features/calendar/views/calendar_view.dart';
 import '../features/categories/views/categories_view.dart';
+import '../features/branches/models/branch.dart';
+import '../features/branches/providers/branch_provider.dart';
 import '../features/branches/views/branches_view.dart';
 import '../features/customers/views/customers_view.dart';
 import 'responsive.dart';
@@ -22,14 +24,7 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
-  String _selectedBranch = 'Main Branch - Paris';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
-  final List<String> _branches = [
-    'Main Branch - Paris',
-    'Downtown Boutique',
-    'Wedding Expo Popup',
-  ];
 
   static const _primary = Color(0xFF434343);
 
@@ -40,9 +35,10 @@ class _MainLayoutState extends State<MainLayout> {
     return Consumer(
       builder: (context, ref, _) {
         final user = ref.watch(authUserProvider);
+        final branchesAsync = ref.watch(branchesProvider);
         return Scaffold(
           key: _scaffoldKey,
-          appBar: _buildAppBar(),
+          appBar: _buildAppBar(ref, user, branchesAsync),
           drawer: _buildDrawer(context, user, ref),
           body: _buildBody(),
           bottomNavigationBar: _buildBottomNav(),
@@ -52,7 +48,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   // ── App Bar ──
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(WidgetRef ref, AuthUser? user, AsyncValue<List<Branch>> branchesAsync) {
     if (_selectedIndex == 0) {
       return AppBar(
         backgroundColor: _primary,
@@ -77,7 +73,7 @@ class _MainLayoutState extends State<MainLayout> {
           style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, letterSpacing: 1.5, color: Colors.white),
         ),
         actions: [
-          _buildBranchSwitcher(),
+          _buildBranchSwitcher(ref, user, branchesAsync),
           IconButton(
             icon: Icon(Icons.notifications_none_rounded, size: Responsive.icon(24), color: Colors.white),
             onPressed: () {},
@@ -108,7 +104,7 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       title: Text(titles[_selectedIndex], style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700, color: Colors.white)),
       actions: [
-        _buildBranchSwitcher(),
+        _buildBranchSwitcher(ref, user, branchesAsync),
         SizedBox(width: Responsive.w(8)),
       ],
     );
@@ -170,7 +166,7 @@ class _MainLayoutState extends State<MainLayout> {
                       borderRadius: BorderRadius.circular(Responsive.r(20)),
                     ),
                     child: Text(
-                      (user?.role.name ?? 'staff').toUpperCase(),
+                      user?.roleLabel ?? 'STAFF',
                       style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 1),
                     ),
                   ),
@@ -263,7 +259,7 @@ class _MainLayoutState extends State<MainLayout> {
                 width: double.infinity,
                 height: Responsive.h(52),
                 child: OutlinedButton.icon(
-                  onPressed: () => _confirmLogout(context),
+                  onPressed: () => _confirmLogout(context, ref),
                   icon: Icon(Icons.logout_rounded, size: Responsive.icon(20)),
                   label: Text('Log Out', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
@@ -337,7 +333,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  void _confirmLogout(BuildContext context) {
+  void _confirmLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -375,13 +371,12 @@ class _MainLayoutState extends State<MainLayout> {
                   height: Responsive.h(46),
                   child: ElevatedButton(
                     onPressed: () async {
-                      // Clear session
-                      const storage = FlutterSecureStorage();
-                      await storage.delete(key: 'auth_token');
+                      await ref.read(core_auth.authProvider.notifier).logout();
+                      ref.read(selectedBranchIdProvider.notifier).select(null);
                       
-                      if (!mounted) return;
-                      Navigator.pop(ctx); // close dialog
-                      Navigator.pop(context); // close drawer
+                      if (!context.mounted || !ctx.mounted) return;
+                      Navigator.of(ctx).pop();
+                      Navigator.of(context).pop();
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => const LoginView()),
                         (route) => false,
@@ -403,62 +398,107 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   // ── Branch Switcher ──
-  Widget _buildBranchSwitcher() {
-    return PopupMenuButton<String>(
-      onSelected: (String result) => setState(() => _selectedBranch = result),
-      offset: Offset(0, Responsive.h(50)),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(14))),
-      itemBuilder: (BuildContext context) {
-        return _branches.map((String branch) {
-          final isSelected = _selectedBranch == branch;
-          return PopupMenuItem<String>(
-            value: branch,
-            height: Responsive.h(48),
+  Widget _buildBranchSwitcher(WidgetRef ref, AuthUser? user, AsyncValue<List<Branch>> branchesAsync) {
+    if (user?.canSwitchBranches != true) {
+      return const SizedBox.shrink();
+    }
+
+    final selectedBranchId = ref.watch(selectedBranchIdProvider);
+
+    return branchesAsync.when(
+      loading: () => Padding(
+        padding: Responsive.symmetric(horizontal: 12),
+        child: SizedBox(
+          width: Responsive.icon(18),
+          height: Responsive.icon(18),
+          child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ),
+      ),
+      error: (error, stackTrace) => IconButton(
+        tooltip: 'Reload branches',
+        icon: Icon(Icons.storefront_rounded, size: Responsive.icon(20), color: Colors.white),
+        onPressed: () => ref.invalidate(branchesProvider),
+      ),
+      data: (branches) {
+        final activeBranches = branches.where((branch) => branch.isActive).toList();
+        
+        // Auto-select first branch if none selected
+        if (selectedBranchId == null && activeBranches.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(selectedBranchIdProvider.notifier).select(activeBranches.first.id);
+          });
+        }
+        
+        Branch? selectedBranch;
+        for (final branch in activeBranches) {
+          if (branch.id == selectedBranchId) {
+            selectedBranch = branch;
+            break;
+          }
+        }
+
+        final label = selectedBranch?.name ?? (activeBranches.isNotEmpty ? activeBranches.first.name : 'No Branch');
+
+        return PopupMenuButton<String>(
+          onSelected: (String branchId) {
+            ref.read(selectedBranchIdProvider.notifier).select(branchId);
+          },
+          offset: Offset(0, Responsive.h(50)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(14))),
+          itemBuilder: (BuildContext context) {
+            return activeBranches.map((branch) => _buildBranchMenuItem(branch.id, branch.name, selectedBranchId == branch.id)).toList();
+          },
+          child: Container(
+            padding: Responsive.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(Responsive.r(20)),
+            ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                  size: Responsive.icon(18),
-                  color: isSelected ? _primary : Colors.grey,
-                ),
-                SizedBox(width: Responsive.w(12)),
-                Expanded(
+                Icon(Icons.storefront_rounded, size: Responsive.icon(14), color: Colors.white),
+                SizedBox(width: Responsive.w(6)),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: Responsive.w(92)),
                   child: Text(
-                    branch,
-                    style: TextStyle(
-                      fontSize: Responsive.sp(14),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? _primary : Colors.black87,
-                    ),
+                    label,
+                    style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: Colors.white),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                Icon(Icons.arrow_drop_down_rounded, size: Responsive.icon(18), color: Colors.white),
               ],
             ),
-          );
-        }).toList();
+          ),
+        );
       },
-      child: Container(
-        padding: Responsive.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(Responsive.r(20)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.storefront_rounded, size: Responsive.icon(14), color: Colors.white),
-            SizedBox(width: Responsive.w(6)),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: Responsive.w(80)),
-              child: Text(
-                _selectedBranch,
-                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: Colors.white),
-                overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  PopupMenuItem<String> _buildBranchMenuItem(String value, String label, bool isSelected) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: Responsive.h(48),
+      child: Row(
+        children: [
+          Icon(
+            isSelected ? Icons.check_circle : Icons.circle_outlined,
+            size: Responsive.icon(18),
+            color: isSelected ? _primary : Colors.grey,
+          ),
+          SizedBox(width: Responsive.w(12)),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: Responsive.sp(14),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? _primary : Colors.black87,
               ),
             ),
-            Icon(Icons.arrow_drop_down_rounded, size: Responsive.icon(18), color: Colors.white),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

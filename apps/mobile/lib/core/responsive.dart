@@ -3,11 +3,16 @@ import 'package:flutter/material.dart';
 /// Responsive utility that scales all sizes relative to a base design.
 /// Base design: 375 x 812 (iPhone X / standard mobile design).
 class Responsive {
-  static late double _screenWidth;
-  static late double _screenHeight;
-  static late double _scaleWidth;
-  static late double _scaleHeight;
-  static late double _scaleText;
+  // Use safe defaults so that if init() hasn't been called yet
+  // (e.g. after Android activity recreation), we don't crash with
+  // LateInitializationError. The defaults match a 375x812 device
+  // (scale = 1.0) which produces identical output to the base design.
+  static double _screenWidth = 375.0;
+  static double _screenHeight = 812.0;
+  static double _scaleWidth = 1.0;
+  static double _scaleHeight = 1.0;
+  static double _scaleText = 1.0;
+  static bool _initialized = false;
 
   /// Call once from the top-level widget's build (or in MainLayout).
   static void init(BuildContext context) {
@@ -19,7 +24,11 @@ class Responsive {
     // Text scale uses width but is slightly dampened so fonts
     // don't grow too aggressively on tablets.
     _scaleText = _scaleWidth.clamp(0.8, 1.4);
+    _initialized = true;
   }
+
+  /// Whether init() has been called at least once.
+  static bool get isInitialized => _initialized;
 
   // ── Getters ────────────────────────────────────────────
   static double get screenWidth => _screenWidth;

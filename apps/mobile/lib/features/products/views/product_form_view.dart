@@ -66,6 +66,21 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     if (p != null) {
       _images.addAll(p.images.map((e) => e.url));
     }
+
+    // Recover images if Android killed the activity during image picker
+    _retrieveLostImages();
+  }
+
+  /// Recovers picked images if the Android OS killed our Activity
+  /// while the camera/gallery was open.
+  Future<void> _retrieveLostImages() async {
+    final picker = ImagePicker();
+    final LostDataResponse response = await picker.retrieveLostData();
+    if (response.isEmpty || response.file == null) return;
+    if (!mounted) return;
+    setState(() {
+      _images.add(response.file!);
+    });
   }
 
   @override
@@ -261,10 +276,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F8F8),
       appBar: AppBar(
-        backgroundColor: _primary,
-        iconTheme: const IconThemeData(color: Colors.white),
-        titleSpacing: 0,
-        title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(18))),
         actions: [
           if (widget.product != null && !_isSaving)
             IconButton(
@@ -275,9 +287,9 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
           TextButton.icon(
             onPressed: _isSaving ? null : _handleSave,
             icon: _isSaving
-                ? SizedBox(width: Responsive.icon(16), height: Responsive.icon(16), child: const CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFF7C873)))
-                : Icon(Icons.check_rounded, size: Responsive.icon(18), color: const Color(0xFFF7C873)),
-            label: Text(_isSaving ? 'Saving...' : 'Save', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: const Color(0xFFF7C873))),
+                ? SizedBox(width: Responsive.icon(16), height: Responsive.icon(16), child: const CircularProgressIndicator(strokeWidth: 2, color: _primary))
+                : Icon(Icons.check_rounded, size: Responsive.icon(18), color: _primary),
+            label: Text(_isSaving ? 'Saving...' : 'Save', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: _primary)),
           ),
           SizedBox(width: Responsive.w(4)),
         ],
@@ -495,7 +507,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _images.length,
-                separatorBuilder: (_, __) => SizedBox(width: Responsive.w(12)),
+                separatorBuilder: (context, index) => SizedBox(width: Responsive.w(12)),
                 itemBuilder: (context, index) {
                   final img = _images[index];
                   return Stack(
@@ -520,7 +532,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
                                           child: Container(color: Colors.white),
                                         );
                                       },
-                                      errorBuilder: (_, __, ___) => Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
+                                      errorBuilder: (context, error, stackTrace) => Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
                                     )
                                   : Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
                         ),

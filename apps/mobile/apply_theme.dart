@@ -49,5 +49,5 @@ void main() {
       }
     }
   }
-  print('Theme colors updated globally.');
+  stdout.writeln('Theme colors updated globally.');
 }
