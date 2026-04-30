@@ -11,6 +11,7 @@ import {
   Order, 
   OrderWithRelations,
   OrderStatus,
+  PaymentStatus,
   CreateOrderDTO,
   UpdateOrderDTO,
   OrderSearchParams,
@@ -253,7 +254,31 @@ export class OrderService {
       }
     }
 
-    return await orderRepository.update(id, data);
+    // Block financial adjustments on finalized orders
+    const currentStatus = existingOrder.data.status;
+    if (currentStatus === OrderStatus.COMPLETED || currentStatus === OrderStatus.CANCELLED) {
+      const financialFields = ['security_deposit', 'discount', 'late_fee', 'damage_charges_total', 'total_amount', 'subtotal'];
+      const attemptedFinancialChange = financialFields.some(field => (data as any)[field] !== undefined);
+      if (attemptedFinancialChange) {
+        return {
+          data: null,
+          error: {
+            message: `Cannot modify financial fields on a ${currentStatus} order`,
+            code: 'ORDER_FINALIZED'
+          } as any,
+          success: false,
+        };
+      }
+    }
+
+    const result = await orderRepository.update(id, data);
+
+    // After any update that changes payment_status or deposit_returned, check auto-complete
+    if (result.success && (data.payment_status || data.deposit_returned || data.status)) {
+      await this.checkAndAutoComplete(id);
+    }
+
+    return result;
   }
 
   /**
@@ -366,7 +391,14 @@ export class OrderService {
       }
     }
 
-    return await orderRepository.processReturn(orderId, returnData);
+    const result = await orderRepository.processReturn(orderId, returnData);
+    
+    // After return processing, check if both tracks are done for auto-complete
+    if (result.success) {
+      await this.checkAndAutoComplete(orderId);
+    }
+
+    return result;
   }
 
   /**
@@ -412,6 +444,35 @@ export class OrderService {
     }
 
     return await orderRepository.markDepositReturned(orderId);
+  }
+
+  /**
+   * Check if both item and payment tracks are complete, and auto-transition to 'completed'.
+   * Called server-side after:
+   *   1. processReturn() sets status to 'returned'
+   *   2. A payment is recorded that makes payment_status = 'paid'
+   *   3. Deposit is refunded
+   *
+   * Conditions for auto-complete:
+   *   - status === 'returned'
+   *   - payment_status === 'paid'
+   *   - deposit_returned === true OR security_deposit === 0
+   */
+  async checkAndAutoComplete(orderId: string): Promise<void> {
+    const orderResult = await orderRepository.findById(orderId);
+    if (!orderResult.success || !orderResult.data) return;
+
+    const order = orderResult.data;
+
+    const itemsDone = order.status === OrderStatus.RETURNED;
+    const paymentDone = order.payment_status === PaymentStatus.PAID;
+    const depositDone = order.deposit_returned || (order.security_deposit || 0) === 0;
+
+    if (itemsDone && paymentDone && depositDone) {
+      await orderRepository.update(orderId, { status: OrderStatus.COMPLETED } as any);
+      // Add status history entry
+      await orderRepository.addStatusHistory(orderId, OrderStatus.COMPLETED, 'Auto-completed: items returned + payment settled');
+    }
   }
 }
 

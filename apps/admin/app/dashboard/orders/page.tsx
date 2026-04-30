@@ -216,7 +216,7 @@ function OrdersContent() {
     }
   };
 
-  const getStatusBadge = (status: OrderStatus) => {
+  const getItemStatusBadge = (status: OrderStatus) => {
     switch (status) {
       case OrderStatus.CONFIRMED:
       case OrderStatus.SCHEDULED:
@@ -225,6 +225,7 @@ function OrdersContent() {
       case OrderStatus.IN_USE:
         return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Ongoing</Badge>;
       case OrderStatus.RETURNED:
+        return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">Returned</Badge>;
       case OrderStatus.COMPLETED:
         return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Completed</Badge>;
       case OrderStatus.PARTIAL:
@@ -239,6 +240,13 @@ function OrdersContent() {
     }
   };
 
+  const getPaymentBadge = (order: OrderWithRelations) => {
+    const ps = (order as any).payment_status;
+    if (ps === 'paid') return <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[10px] py-0 px-1.5">Paid</Badge>;
+    if (ps === 'partial') return <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-[10px] py-0 px-1.5">Partial</Badge>;
+    return <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-[10px] py-0 px-1.5">Unpaid</Badge>;
+  };
+
   const showShimmer = isLoading;
 
   const filterChips = [
@@ -248,6 +256,7 @@ function OrdersContent() {
     { label: "Late", value: OrderStatus.LATE_RETURN },
     { label: "Partial", value: OrderStatus.PARTIAL },
     { label: "Returned", value: OrderStatus.RETURNED },
+    { label: "Completed", value: OrderStatus.COMPLETED },
     { label: "Flagged", value: OrderStatus.FLAGGED },
     { label: "Cancelled", value: OrderStatus.CANCELLED },
   ];
@@ -511,7 +520,15 @@ function OrdersContent() {
 
                         <td className="px-4 py-4">
                           <div className="flex flex-col items-start gap-1">
-                            {getStatusBadge(order.status)}
+                            {getItemStatusBadge(order.status)}
+                            {/* Show payment badge for active (non-terminal) orders */}
+                            {order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && (
+                              getPaymentBadge(order)
+                            )}
+                            {/* Show refund-due indicator for cancelled orders with payments */}
+                            {order.status === OrderStatus.CANCELLED && (order as any).amount_paid > 0 && (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-[10px] py-0 px-1.5">Refund Due</Badge>
+                            )}
                             {order.status === OrderStatus.SCHEDULED && new Date(order.start_date) <= new Date(new Date().toDateString()) && (
                               <div className="flex items-center gap-1 mt-1">
                                 <span className="relative flex h-2 w-2">

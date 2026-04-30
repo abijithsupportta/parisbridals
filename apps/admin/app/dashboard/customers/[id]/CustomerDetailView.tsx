@@ -115,6 +115,12 @@ export default function CustomerDetailView({ customer }: CustomerDetailViewProps
                   value={customer.phone}
                 />
                 <InfoField
+                  icon={<Phone className="w-4 h-4" />}
+                  label="Alternate Phone"
+                  value={customer.alt_phone || "Not provided"}
+                  muted={!customer.alt_phone}
+                />
+                <InfoField
                   icon={<Mail className="w-4 h-4" />}
                   label="Email"
                   value={customer.email || "Not provided"}

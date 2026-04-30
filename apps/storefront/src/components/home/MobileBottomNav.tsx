@@ -30,7 +30,7 @@ export default function MobileBottomNav() {
   return (
     <nav
       className={cn(
-        "lg:hidden fixed bottom-8 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 w-[92%] max-w-md animate-in slide-in-from-bottom-10",
+        "lg:hidden fixed bottom-1 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 w-[92%] max-w-md animate-in slide-in-from-bottom-10",
         isProductPage && "translate-y-24 opacity-0 pointer-events-none"
       )}
     >

@@ -8,6 +8,7 @@ export const ID_TYPES = ['Aadhaar', 'PAN', 'Driving Licence', 'Passport', 'Other
 const baseCustomerSchema = {
   name: z.string().min(2, "Name must be at least 2 characters").max(255),
   phone: z.string().min(10, "Phone number must be at least 10 characters").max(20),
+  alt_phone: z.string().min(10, "Alternate phone must be at least 10 characters").max(20).optional().or(z.literal('')).nullable(),
   email: z.string().email("Invalid email address").optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
   gstin: z.string().optional().or(z.literal('')),

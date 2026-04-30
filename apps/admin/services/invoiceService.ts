@@ -140,6 +140,10 @@ export class InvoiceService {
     yPosition += 5;
     doc.text(`Phone: ${data.order.customer.phone}`, 20, yPosition);
     yPosition += 5;
+    if ((data.order.customer as any).alt_phone) {
+      doc.text(`Alt Phone: ${(data.order.customer as any).alt_phone}`, 20, yPosition);
+      yPosition += 5;
+    }
     if (data.order.customer.email) {
       doc.text(`Email: ${data.order.customer.email}`, 20, yPosition);
       yPosition += 5;
