@@ -1,9 +1,11 @@
+import 'package:equatable/equatable.dart';
+
 /// Category model matching the admin panel's domain/types/category.ts
 ///
 /// Core entity fields: id, name, slug, description, image_url,
 /// parent_id (for hierarchy: Main → Sub → Variant), sort_order,
 /// is_active, is_global, created_at, updated_at.
-class Category {
+class Category extends Equatable {
   final String id;
   final String name;
   final String slug;
@@ -21,7 +23,7 @@ class Category {
   final List<Category>? children;
   final int? productCount;
 
-  Category({
+  const Category({
     required this.id,
     required this.name,
     required this.slug,
@@ -41,24 +43,46 @@ class Category {
   /// Whether this is a Main (root) category.
   bool get isMain => parentId == null;
 
+  @override
+  List<Object?> get props => [
+        id,
+        name,
+        slug,
+        description,
+        imageUrl,
+        parentId,
+        sortOrder,
+        isActive,
+        isGlobal,
+        createdAt,
+        updatedAt,
+        parent,
+        children,
+        productCount,
+      ];
+
   factory Category.fromJson(Map<String, dynamic> json) {
     return Category(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      slug: json['slug'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
       description: json['description'] as String?,
       imageUrl: json['image_url'] as String?,
       parentId: json['parent_id'] as String?,
-      sortOrder: json['sort_order'] ?? 0,
-      isActive: json['is_active'] ?? true,
-      isGlobal: json['is_global'] ?? false,
-      createdAt: json['created_at'] as String,
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+      isActive: json['is_active'] as bool? ?? true,
+      isGlobal: json['is_global'] as bool? ?? true,
+      createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
-      parent: json['parent'] != null ? Category.fromJson(json['parent']) : null,
-      children: json['children'] != null
-          ? (json['children'] as List).map((c) => Category.fromJson(c)).toList()
+      parent: json['parent'] != null && json['parent'] is Map
+          ? Category.fromJson(Map<String, dynamic>.from(json['parent']))
           : null,
-      productCount: json['product_count'] as int?,
+      children: json['children'] != null && json['children'] is List
+          ? (json['children'] as List)
+              .map((c) => Category.fromJson(Map<String, dynamic>.from(c)))
+              .toList()
+          : null,
+      productCount: (json['product_count'] as num?)?.toInt(),
     );
   }
 

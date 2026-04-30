@@ -244,7 +244,7 @@ class _OrderFormViewState extends ConsumerState<OrderFormView> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<DeliveryMethod>(
-                value: _selectedDeliveryMethod,
+                initialValue: _selectedDeliveryMethod,
                 decoration: const InputDecoration(
                   labelText: 'Delivery Method',
                   border: OutlineInputBorder(),
@@ -359,7 +359,7 @@ class _OrderFormViewState extends ConsumerState<OrderFormView> {
               if (isEditing) ...[
                 const SizedBox(height: 16),
                 DropdownButtonFormField<OrderStatus>(
-                  value: _selectedStatus,
+                  initialValue: _selectedStatus,
                   decoration: const InputDecoration(
                     labelText: 'Status',
                     border: OutlineInputBorder(),
@@ -378,7 +378,7 @@ class _OrderFormViewState extends ConsumerState<OrderFormView> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<PaymentStatus>(
-                  value: _selectedPaymentStatus,
+                  initialValue: _selectedPaymentStatus,
                   decoration: const InputDecoration(
                     labelText: 'Payment Status',
                     border: OutlineInputBorder(),

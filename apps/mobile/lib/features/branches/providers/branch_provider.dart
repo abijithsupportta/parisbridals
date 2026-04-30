@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../models/branch.dart';
 import '../repositories/branch_repository.dart';
 
@@ -17,6 +18,55 @@ final branchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
 final branchProvider = FutureProvider.family.autoDispose<Branch, String>((ref, id) async {
   final repository = ref.watch(branchRepositoryProvider);
   return repository.getBranchById(id);
+});
+
+/// Selected branch ID. Defaults to first active branch for admins.
+class SelectedBranchNotifier extends Notifier<String?> {
+  @override
+  String? build() {
+    // Auto-select first branch for admins on initial load
+    final user = ref.watch(authUserProvider);
+    if (user?.canSwitchBranches == true) {
+      ref.listen(branchesProvider, (previous, next) {
+        next.whenData((branches) {
+          if (state == null && branches.isNotEmpty) {
+            final firstActive = branches.firstWhere((b) => b.isActive, orElse: () => branches.first);
+            state = firstActive.id;
+          }
+        });
+      });
+    }
+    return null;
+  }
+
+  void select(String? branchId) {
+    state = branchId;
+  }
+}
+
+final selectedBranchIdProvider = NotifierProvider<SelectedBranchNotifier, String?>(
+  SelectedBranchNotifier.new,
+);
+
+final effectiveBranchIdProvider = Provider<String?>((ref) {
+  final user = ref.watch(authUserProvider);
+  final selectedBranchId = ref.watch(selectedBranchIdProvider);
+
+  if (user == null) return null;
+  if (user.canSwitchBranches) return selectedBranchId;
+  return user.branchId;
+});
+
+final selectedBranchProvider = Provider<AsyncValue<Branch?>>((ref) {
+  final selectedBranchId = ref.watch(selectedBranchIdProvider);
+  if (selectedBranchId == null) return const AsyncData<Branch?>(null);
+
+  return ref.watch(branchesProvider).whenData((branches) {
+    for (final branch in branches) {
+      if (branch.id == selectedBranchId) return branch;
+    }
+    return null;
+  });
 });
 
 // Branch operations - simple function-based approach

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'api_client.dart';
@@ -11,6 +12,7 @@ class AuthUser {
   final String? branchId;
   final String? staffId;
   final String accessToken;
+  final String? refreshToken;
 
   AuthUser({
     required this.id,
@@ -20,6 +22,7 @@ class AuthUser {
     this.branchId,
     this.staffId,
     required this.accessToken,
+    this.refreshToken,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -31,6 +34,7 @@ class AuthUser {
       branchId: json['branch_id'] as String?,
       staffId: json['staff_id'] as String?,
       accessToken: json['access_token'] as String,
+      refreshToken: json['refresh_token'] as String?,
     );
   }
 
@@ -43,6 +47,7 @@ class AuthUser {
       'branch_id': branchId,
       'staff_id': staffId,
       'access_token': accessToken,
+      'refresh_token': refreshToken,
     };
   }
 }
@@ -51,6 +56,7 @@ class AuthService {
   final Dio _client = apiClient;
   final _storage = const FlutterSecureStorage();
   static const _tokenKey = 'auth_token';
+  static const _refreshKey = 'refresh_token';
   static const _userKey = 'auth_user';
 
   /// Login with email and password
@@ -67,13 +73,16 @@ class AuthService {
         
         // Store token and user data securely as JSON
         await _storage.write(key: _tokenKey, value: authUser.accessToken);
+        if (authUser.refreshToken != null) {
+          await _storage.write(key: _refreshKey, value: authUser.refreshToken!);
+        }
         await _storage.write(key: _userKey, value: jsonEncode(authUser.toJson()));
         
         return authUser;
       }
       return null;
     } catch (e) {
-      print('Login error: $e');
+      debugPrint('Login error: $e');
       return null;
     }
   }
@@ -81,6 +90,7 @@ class AuthService {
   /// Logout the user
   Future<void> logout() async {
     await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _refreshKey);
     await _storage.delete(key: _userKey);
   }
 
@@ -92,15 +102,38 @@ class AuthService {
   /// Get the current user
   Future<AuthUser?> getCurrentUser() async {
     try {
+      final token = await getAuthToken();
+      if (token == null || token.isEmpty) return null;
+
+      final response = await _client.get('/auth/me');
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final userData = response.data['data']?['user'] as Map<String, dynamic>?;
+        if (userData != null) {
+          final authUser = AuthUser.fromJson({
+            ...userData,
+            'access_token': token,
+          });
+          await _storage.write(key: _userKey, value: jsonEncode(authUser.toJson()));
+          return authUser;
+        }
+      }
+
       final userDataString = await _storage.read(key: _userKey);
       if (userDataString == null) return null;
-      
-      // Parse the stored JSON string
+
       final Map<String, dynamic> userMap = jsonDecode(userDataString);
       return AuthUser.fromJson(userMap);
     } catch (e) {
-      print('Get current user error: $e');
-      return null;
+      debugPrint('Get current user error: $e');
+      final userDataString = await _storage.read(key: _userKey);
+      if (userDataString == null) return null;
+
+      try {
+        final Map<String, dynamic> userMap = jsonDecode(userDataString);
+        return AuthUser.fromJson(userMap);
+      } catch (_) {
+        return null;
+      }
     }
   }
 

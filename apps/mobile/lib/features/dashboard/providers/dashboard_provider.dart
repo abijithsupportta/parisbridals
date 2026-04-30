@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../branches/providers/branch_provider.dart';
 import '../repositories/dashboard_repository.dart';
 
 // Repository provider
@@ -7,7 +8,8 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
 });
 
 // Dashboard metrics provider
-final dashboardMetricsProvider = FutureProvider.family<DashboardMetrics, Map<String, dynamic>>((ref, params) async {
+final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
   final repo = ref.read(dashboardRepositoryProvider);
-  return repo.getMetrics();
+  final branchId = ref.watch(effectiveBranchIdProvider);
+  return repo.getMetrics(branchId: branchId);
 });
