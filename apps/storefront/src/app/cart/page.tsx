@@ -166,7 +166,7 @@ export default function CartPage() {
                 ))}
               </div>
 
-              <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-[var(--border-silk)] lg:hidden z-50">
+              <div className="fixed bottom-24 left-3 right-3 p-4 bg-white/95 backdrop-blur-md border border-[var(--border-silk)] rounded-2xl lg:hidden z-40 shadow-lg">
                 <Button
                   onClick={bookViaWhatsApp}
                   className="w-full shimmer-btn py-4 rounded-full text-sm uppercase tracking-widest font-bold flex items-center justify-center gap-3"

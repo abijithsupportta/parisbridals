@@ -63,7 +63,7 @@ export default function Header({ store, categories }: HeaderProps) {
   const storeName = store?.name || "Paris Bridals";
   const logoUrl = store?.logo_url || "/logo_paris.svg";
 
-  const displayCategories = categories?.filter(c => !c.parent_id) || [];
+  const displayCategories = categories || [];
 
   const navLinks = [
     { label: "Collections", href: "/collections" },

@@ -14,7 +14,7 @@ export default function Footer({ store }: FooterProps) {
   const storePhone = DISPLAY_PHONE;
 
   return (
-    <footer className="bg-white border-t border-border-silk pt-8 sm:pt-12 md:pt-16 pb-6 sm:pb-8">
+    <footer className="bg-white border-t border-border-silk pt-8 sm:pt-12 md:pt-16 pb-28 lg:pb-8">
       <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 sm:gap-12 mb-8 sm:mb-10">
           <div className="lg:col-span-1">
@@ -55,7 +55,6 @@ export default function Footer({ store }: FooterProps) {
             <ul className="space-y-2 sm:space-y-3">
               {[
                 { label: "Our Story", href: "/about" },
-                { label: "Privé Membership", href: "/membership" },
                 { label: "FAQs", href: "/faqs" },
                 { label: "Policies", href: "/legal/terms" },
               ].map((link) => (
