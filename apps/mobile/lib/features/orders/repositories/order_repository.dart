@@ -131,6 +131,8 @@ class OrderRepository {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to delete order');
+    }
+  }
 
   /// Start rental (update status to ongoing)
   Future<Order> startRental(String id) async {
@@ -143,8 +145,5 @@ class OrderRepository {
   /// Cancel order
   Future<Order> cancelOrder(String id) async {
     return updateOrder(id, {'status': 'cancelled'});
-  }
-
-    }
   }
 }

@@ -30,7 +30,6 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
   bool _isSubmitting = false;
 
   static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
 
   @override
   void dispose() {

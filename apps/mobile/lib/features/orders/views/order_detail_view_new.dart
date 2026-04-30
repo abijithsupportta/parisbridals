@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
@@ -23,7 +24,6 @@ class OrderDetailViewNew extends ConsumerStatefulWidget {
 
 class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
   static const _bg = Color(0xFFF8F8F8);
 
   // Return processing state
@@ -68,6 +68,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         child: Column(
           children: [
             _buildHeroBanner(canManage),
+            if (canManage) _buildActionButtons(),
             _buildLogisticsBar(),
             _buildOrderItemsSection(),
             _buildCustomerCard(),
@@ -272,6 +273,132 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         ],
       ),
     );
+  }
+  Widget _buildActionButtons() {
+    final status = widget.order.status;
+    final isScheduled = status == OrderStatus.scheduled || status == OrderStatus.confirmed || status == OrderStatus.pending;
+    final isCancellable = status == OrderStatus.pending || status == OrderStatus.confirmed || status == OrderStatus.scheduled;
+
+    if (!isScheduled && !isCancellable) return const SizedBox.shrink();
+
+    return Padding(
+      padding: Responsive.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          if (isScheduled)
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _isProcessing ? null : () => _startRental(),
+                icon: Icon(Icons.play_arrow_rounded, size: Responsive.icon(20)),
+                label: Text('Start Rental', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2ECC71),
+                  foregroundColor: Colors.white,
+                  padding: Responsive.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
+                ),
+              ),
+            ),
+          if (isScheduled && isCancellable) SizedBox(width: Responsive.w(10)),
+          if (isCancellable)
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _isProcessing ? null : () => _cancelOrder(),
+                icon: Icon(Icons.cancel_outlined, size: Responsive.icon(20)),
+                label: Text('Cancel', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red[700],
+                  side: BorderSide(color: Colors.red[300]!),
+                  padding: Responsive.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool _isProcessing = false;
+
+  Future<void> _startRental() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Start Rental'),
+        content: const Text('Mark this order as ongoing? This will set today as the start date.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2ECC71)),
+            child: const Text('Start', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      final repo = ref.read(orderRepositoryProvider);
+      await repo.startRental(widget.order.id);
+      if (mounted) {
+        ref.invalidate(ordersProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rental started!'), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _cancelOrder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Cancel Order'),
+        content: const Text('Are you sure you want to cancel this order? This cannot be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Cancel Order', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isProcessing = true);
+    try {
+      final repo = ref.read(orderRepositoryProvider);
+      await repo.cancelOrder(widget.order.id);
+      if (mounted) {
+        ref.invalidate(ordersProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Order cancelled'), backgroundColor: Colors.orange),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 
   Widget _buildLogisticsBar() {
@@ -677,11 +804,44 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     });
   }
 
-  void _submitReturn() {
-    // TODO: Implement return submission
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Return processing not yet implemented')),
-    );
+  Future<void> _submitReturn() async {
+    // Validate all items have been inspected
+    final uninspected = _returnItems.entries.where((e) => e.value.status == null).toList();
+    if (uninspected.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please inspect all items before completing return'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+
+    final items = _returnItems.entries.map((e) => {
+      'order_item_id': e.key,
+      'condition': e.value.status,
+      'damage_notes': e.value.notes.isNotEmpty ? e.value.notes : null,
+      'damage_fee': e.value.damageFee,
+    }).toList();
+
+    try {
+      await ref.read(ordersProvider.notifier).updateOrder(widget.order.id, {
+        'status': 'returned',
+        'late_fee': _lateFee,
+        'discount': _discount,
+        'return_items': items,
+      });
+      if (mounted) {
+        ref.invalidate(ordersProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Return processed successfully'), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Widget _buildCustomerCard() {
@@ -722,8 +882,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           ),
           SizedBox(height: Responsive.h(12)),
           InkWell(
-            onTap: () {
-              // TODO: Implement phone call
+            onTap: () async {
+              final phone = widget.order.customer?.phone;
+              if (phone != null && phone.isNotEmpty) {
+                final uri = Uri(scheme: 'tel', path: phone);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+              }
             },
             child: Container(
               padding: Responsive.symmetric(vertical: 12),
