@@ -320,11 +320,10 @@ const s = StyleSheet.create({
     paddingVertical: 2,
     borderBottom: '0.25pt solid #ccc',
   },
-  payColType:   { width: '20%', fontSize: 7.5 },
-  payColMode:   { width: '18%', fontSize: 7.5 },
-  payColDate:   { width: '22%', fontSize: 7.5 },
-  payColAmount: { width: '20%', fontSize: 7.5, textAlign: 'right' as const },
-  payColTxn:    { width: '20%', fontSize: 7.5, textAlign: 'right' as const, color: '#555' },
+  payColMode:   { width: '25%', fontSize: 7.5 },
+  payColDate:   { width: '25%', fontSize: 7.5 },
+  payColAmount: { width: '25%', fontSize: 7.5, textAlign: 'right' as const },
+  payColTxn:    { width: '25%', fontSize: 7.5, textAlign: 'right' as const, color: '#555' },
   payHeaderText: { fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: '#444' },
 
   // ── Footer ──
@@ -508,7 +507,6 @@ export function TallyInvoicePDF(props: TallyInvoiceProps) {
             <View style={s.paymentSection}>
               <Text style={s.sectionLabel}>Payment History</Text>
               <View style={s.paymentTableHeader}>
-                <Text style={{ ...s.payColType, ...s.payHeaderText }}>Type</Text>
                 <Text style={{ ...s.payColMode, ...s.payHeaderText }}>Mode</Text>
                 <Text style={{ ...s.payColDate, ...s.payHeaderText }}>Date</Text>
                 <Text style={{ ...s.payColAmount, ...s.payHeaderText, textAlign: 'right' as const }}>Amount</Text>
@@ -516,7 +514,6 @@ export function TallyInvoicePDF(props: TallyInvoiceProps) {
               </View>
               {payments.map((p, i) => (
                 <View key={i} style={s.paymentTableRow}>
-                  <Text style={s.payColType}>{p.type}</Text>
                   <Text style={s.payColMode}>{p.mode}</Text>
                   <Text style={s.payColDate}>{p.date}</Text>
                   <Text style={s.payColAmount}>{rs(p.amount)}</Text>
