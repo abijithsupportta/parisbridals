@@ -127,6 +127,18 @@ export class SettingsService {
   }
 
   /**
+   * Set a generic string value for a setting key
+   */
+  async setValue(key: SettingKey, value: string): Promise<RepositoryResult<Setting>> {
+    return await settingsRepository.upsert(
+      this.storeId,
+      key,
+      value,
+      this.currentUserId
+    );
+  }
+
+  /**
    * Get all settings for the store
    */
   async getAllSettings(): Promise<RepositoryResult<Setting[]>> {

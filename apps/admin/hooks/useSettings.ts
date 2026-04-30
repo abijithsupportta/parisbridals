@@ -157,13 +157,14 @@ export function useUpdateSetting() {
 
   const mutation = useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) => 
-      settingsService.setGSTPercentage(parseFloat(value)), // Reusing setGSTPercentage for now
-    onSuccess: (result) => {
+      apiFetch<ApiSuccessResponse<{value: string}>>('/api/settings', { method: 'PATCH', body: JSON.stringify({ key, value }) }),
+    onSuccess: (result, variables) => {
       if (result.success) {
         queryUtils.invalidateSettings();
-        showSuccess('Setting updated successfully');
+        queryClient.invalidateQueries({ queryKey: ['settings'] });
+        // Removed showSuccess here to prevent duplicate toasts since page.tsx handles it
       } else {
-        showError('Failed to update setting', result.error?.message);
+        showError('Failed to update setting');
       }
     },
     onError: (error) => {
@@ -173,7 +174,7 @@ export function useUpdateSetting() {
 
   return {
     ...mutation,
-    updateSetting: mutation.mutate,
+    updateSetting: mutation.mutateAsync,
     isLoading: mutation.isPending,
   };
 }

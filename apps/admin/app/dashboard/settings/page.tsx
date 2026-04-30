@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,8 @@ import {
   useUpdateIsGSTEnabled,
   useInvoicePrefix,
   usePaymentTerms,
-  useAuthorizedSignature
+  useAuthorizedSignature,
+  useUpdateSetting
 } from "@/hooks";
 import { useAppStore } from "@/stores";
 
@@ -23,12 +24,13 @@ export default function SettingsPage() {
   const { data: isGstEnabledResult, isLoading: loadingGstEnabled } = useIsGSTEnabled();
   const { updateIsGSTEnabled, isLoading: updatingGstEnabled } = useUpdateIsGSTEnabled();
   
+  const { updateSetting, isLoading: updatingSettings } = useUpdateSetting();
   const { showSuccess, showError } = useAppStore();
   
   // Invoice settings hooks
-  const { data: invoicePrefixResult } = useInvoicePrefix();
-  const { data: paymentTermsResult } = usePaymentTerms();
-  const { data: signatureResult } = useAuthorizedSignature();
+  const { data: invoicePrefixResult, isLoading: loadingPrefix } = useInvoicePrefix();
+  const { data: paymentTermsResult, isLoading: loadingTerms } = usePaymentTerms();
+  const { data: signatureResult, isLoading: loadingSig } = useAuthorizedSignature();
   
   const gstData = (gstResult?.success && gstResult.data !== null) ? gstResult.data : 18;
   const [gstPercentage, setGstPercentage] = useState(gstData);
@@ -37,9 +39,18 @@ export default function SettingsPage() {
   const [isGstEnabled, setIsGstEnabled] = useState(isGstEnabledData);
   
   // Invoice settings state
-  const [invoicePrefix, setInvoicePrefix] = useState(invoicePrefixResult?.success && invoicePrefixResult.data ? invoicePrefixResult.data.value : 'INV-');
-  const [paymentTerms, setPaymentTerms] = useState(paymentTermsResult?.success && paymentTermsResult.data ? paymentTermsResult.data.value : '');
-  const [authorizedSignature, setAuthorizedSignature] = useState(signatureResult?.success && signatureResult.data ? signatureResult.data.value : '');
+  const [invoicePrefix, setInvoicePrefix] = useState('INV-');
+  const [paymentTerms, setPaymentTerms] = useState('');
+  const [authorizedSignature, setAuthorizedSignature] = useState('');
+
+  // Sync hooks with state when data loads
+  useEffect(() => {
+    if (gstResult?.success && gstResult.data !== null) setGstPercentage(gstResult.data);
+    if (isGstEnabledResult?.success && isGstEnabledResult.data !== null) setIsGstEnabled(isGstEnabledResult.data);
+    if (invoicePrefixResult?.success && invoicePrefixResult.data) setInvoicePrefix(invoicePrefixResult.data.value);
+    if (paymentTermsResult?.success && paymentTermsResult.data) setPaymentTerms(paymentTermsResult.data.value);
+    if (signatureResult?.success && signatureResult.data) setAuthorizedSignature(signatureResult.data.value);
+  }, [gstResult, isGstEnabledResult, invoicePrefixResult, paymentTermsResult, signatureResult]);
 
   const handleSaveGST = () => {
     if (gstPercentage !== null) {
@@ -48,9 +59,17 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveInvoiceSettings = () => {
-    showSuccess("Invoice settings saved successfully");
-    // TODO: Implement actual save via API
+  const handleSaveInvoiceSettings = async () => {
+    try {
+      await Promise.all([
+        updateSetting({ key: 'invoice_prefix', value: invoicePrefix }),
+        updateSetting({ key: 'payment_terms', value: paymentTerms }),
+        updateSetting({ key: 'authorized_signature', value: authorizedSignature }),
+      ]);
+      showSuccess("Invoice settings saved successfully");
+    } catch (err) {
+      // updateSetting hook will handle showing the error toast
+    }
   };
 
   return (
@@ -163,9 +182,10 @@ export default function SettingsPage() {
 
             <Button 
               onClick={handleSaveInvoiceSettings}
-              className="shadow-lg shadow-primary/25"
+              disabled={updatingSettings || loadingPrefix || loadingTerms || loadingSig}
+              className="shadow-lg shadow-primary/25 bg-slate-900 text-white hover:bg-slate-800"
             >
-              Save Invoice Settings
+              {updatingSettings ? "Saving..." : "Save Invoice Settings"}
             </Button>
           </div>
         </CardContent>
