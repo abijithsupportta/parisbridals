@@ -1,3 +1,9 @@
+// Product domain models for the Paris Bridals mobile app.
+//
+// Mirrors the Next.js Product domain types including jewellery-specific
+// fields (material, metal_purity, metal_color, weight_grams) and
+// rental-specific fields (condition, min/max rental days, inventory counts).
+
 class BranchInventory {
   final String id;
   final String productId;
@@ -77,12 +83,49 @@ class ProductImage {
   }
 }
 
+class ProductVariant {
+  final String id;
+  final String name;
+  final String value;
+  final double additionalPrice;
+  final bool inStock;
+
+  ProductVariant({
+    required this.id,
+    required this.name,
+    required this.value,
+    this.additionalPrice = 0,
+    this.inStock = true,
+  });
+
+  factory ProductVariant.fromJson(Map<String, dynamic> json) {
+    return ProductVariant(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      value: json['value'] as String? ?? '',
+      additionalPrice: (json['additional_price'] as num?)?.toDouble() ?? 0,
+      inStock: json['in_stock'] as bool? ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'value': value,
+      'additional_price': additionalPrice,
+      'in_stock': inStock,
+    };
+  }
+}
+
 class Product {
   final String id;
   final String storeId;
   final String? categoryId;
   final String? subcategoryId;
   final String? subvariantId;
+  final String? branchId;
   final String name;
   final String slug;
   final String? description;
@@ -90,14 +133,42 @@ class Product {
   final String? barcode;
   final double pricePerDay;
   final double securityDeposit;
+
+  // Inventory
   final int quantity;
   final int availableQuantity;
+  final int reservedQuantity;
+  final int maintenanceQuantity;
+  final int totalQuantity;
+
+  // Jewellery-specific
+  final String? material;
+  final String? metalPurity;
+  final String? metalColor;
+  final double? weightGrams;
+
+  // Rental-specific
+  final String? condition;
+  final String? sanitizationStatus;
+  final int? minRentalDays;
+  final int? maxRentalDays;
+
+  // Media & variants
   final List<ProductImage> images;
+  final List<ProductVariant> sizes;
+  final List<ProductVariant> colors;
+
+  // Flags
   final bool isActive;
   final bool isFeatured;
   final bool trackInventory;
   final int lowStockThreshold;
+
+  // Timestamps
   final String createdAt;
+  final String? updatedAt;
+
+  // Branch inventory
   final List<BranchInventory> branchInventory;
 
   Product({
@@ -106,6 +177,7 @@ class Product {
     this.categoryId,
     this.subcategoryId,
     this.subvariantId,
+    this.branchId,
     required this.name,
     required this.slug,
     this.description,
@@ -115,24 +187,53 @@ class Product {
     this.securityDeposit = 0,
     required this.quantity,
     required this.availableQuantity,
+    this.reservedQuantity = 0,
+    this.maintenanceQuantity = 0,
+    this.totalQuantity = 0,
+    this.material,
+    this.metalPurity,
+    this.metalColor,
+    this.weightGrams,
+    this.condition,
+    this.sanitizationStatus,
+    this.minRentalDays,
+    this.maxRentalDays,
     this.images = const [],
+    this.sizes = const [],
+    this.colors = const [],
     this.isActive = true,
     this.isFeatured = false,
     this.trackInventory = true,
     this.lowStockThreshold = 10,
     required this.createdAt,
+    this.updatedAt,
     this.branchInventory = const [],
   });
+
+  /// Quick helper — primary image URL or null.
+  String? get primaryImageUrl {
+    if (images.isEmpty) return null;
+    final primary = images.where((i) => i.isPrimary);
+    return primary.isNotEmpty ? primary.first.url : images.first.url;
+  }
+
+  /// Stock status label for UI badges.
+  String get stockStatusLabel {
+    if (availableQuantity <= 0) return 'Out of Stock';
+    if (availableQuantity <= lowStockThreshold) return 'Low Stock';
+    return 'In Stock';
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id'] as String,
-      storeId: json['store_id'] as String,
+      storeId: json['store_id'] as String? ?? '',
       categoryId: json['category_id'] as String?,
       subcategoryId: json['subcategory_id'] as String?,
       subvariantId: json['subvariant_id'] as String?,
+      branchId: json['branch_id'] as String?,
       name: json['name'] as String,
-      slug: json['slug'] as String,
+      slug: json['slug'] as String? ?? '',
       description: json['description'] as String?,
       sku: json['sku'] as String?,
       barcode: json['barcode'] as String?,
@@ -140,8 +241,27 @@ class Product {
       securityDeposit: (json['security_deposit'] as num?)?.toDouble() ?? 0.0,
       quantity: json['quantity'] as int? ?? 0,
       availableQuantity: json['available_quantity'] as int? ?? 0,
+      reservedQuantity: json['reserved_quantity'] as int? ?? 0,
+      maintenanceQuantity: json['maintenance_quantity'] as int? ?? 0,
+      totalQuantity: json['total_quantity'] as int? ?? json['quantity'] as int? ?? 0,
+      material: json['material'] as String?,
+      metalPurity: json['metal_purity'] as String?,
+      metalColor: json['metal_color'] as String?,
+      weightGrams: (json['weight_grams'] as num?)?.toDouble(),
+      condition: json['condition'] as String?,
+      sanitizationStatus: json['sanitization_status'] as String?,
+      minRentalDays: json['min_rental_days'] as int?,
+      maxRentalDays: json['max_rental_days'] as int?,
       images: (json['images'] as List<dynamic>?)
               ?.map((e) => ProductImage.fromJson(e))
+              .toList() ??
+          [],
+      sizes: (json['sizes'] as List<dynamic>?)
+              ?.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      colors: (json['colors'] as List<dynamic>?)
+              ?.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
       isActive: json['is_active'] as bool? ?? true,
@@ -149,6 +269,7 @@ class Product {
       trackInventory: json['track_inventory'] as bool? ?? true,
       lowStockThreshold: json['low_stock_threshold'] as int? ?? 10,
       createdAt: json['created_at'] as String? ?? '',
+      updatedAt: json['updated_at'] as String?,
       branchInventory: (json['branch_inventory'] as List<dynamic>?)
               ?.map((e) => BranchInventory.fromJson(e))
               .toList() ??
@@ -163,6 +284,7 @@ class Product {
       'category_id': categoryId,
       'subcategory_id': subcategoryId,
       'subvariant_id': subvariantId,
+      'branch_id': branchId,
       'name': name,
       'slug': slug,
       'description': description,
@@ -172,12 +294,26 @@ class Product {
       'security_deposit': securityDeposit,
       'quantity': quantity,
       'available_quantity': availableQuantity,
+      'reserved_quantity': reservedQuantity,
+      'maintenance_quantity': maintenanceQuantity,
+      'total_quantity': totalQuantity,
+      'material': material,
+      'metal_purity': metalPurity,
+      'metal_color': metalColor,
+      'weight_grams': weightGrams,
+      'condition': condition,
+      'sanitization_status': sanitizationStatus,
+      'min_rental_days': minRentalDays,
+      'max_rental_days': maxRentalDays,
       'images': images.map((e) => e.toJson()).toList(),
+      'sizes': sizes.map((e) => e.toJson()).toList(),
+      'colors': colors.map((e) => e.toJson()).toList(),
       'is_active': isActive,
       'is_featured': isFeatured,
       'track_inventory': trackInventory,
       'low_stock_threshold': lowStockThreshold,
       'created_at': createdAt,
+      'updated_at': updatedAt,
       'branch_inventory': branchInventory.map((e) => e.toJson()).toList(),
     };
   }
