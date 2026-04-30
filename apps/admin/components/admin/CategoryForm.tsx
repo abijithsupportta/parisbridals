@@ -15,10 +15,8 @@ import {
   ArrowLeft,
   Eye,
   FolderTree,
-  Globe2,
   Hash,
   ImageIcon,
-  ListOrdered,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -63,7 +61,7 @@ export default function CategoryForm({
     image_url: category?.image_url || "",
     sort_order: category?.sort_order || 0,
     is_active: category?.is_active ?? true,
-    is_global: category?.is_global ?? true,
+    is_global: true, // Always global — Paris Bridals is a single-shop business
     parent_id: (category?.parent_id ?? defaultParentId ?? null) as string | null,
     store_id: user?.store_id || null,
   });
@@ -309,7 +307,7 @@ export default function CategoryForm({
 
           <CategoryFormPanel
             title="Visibility"
-            description="Control admin and storefront availability"
+            description="Control storefront availability"
             action={<Eye className="h-4 w-4 text-slate-400" />}
           >
             <CategoryToggleRow
@@ -321,20 +319,11 @@ export default function CategoryForm({
               }
               icon={<Eye className="h-4 w-4 text-slate-500" />}
             />
-            <CategoryToggleRow
-              title="Global Category"
-              description="Available across all stores"
-              checked={formData.is_global}
-              onCheckedChange={(checked) =>
-                setFormData({ ...formData, is_global: checked })
-              }
-              icon={<Globe2 className="h-4 w-4 text-slate-500" />}
-            />
           </CategoryFormPanel>
 
           <CategoryFormPanel
             title="Identifiers"
-            description="Slug and ordering metadata"
+            description="URL-friendly slug for this category"
             action={<Hash className="h-4 w-4 text-slate-400" />}
           >
             <div className="space-y-1.5">
@@ -350,26 +339,6 @@ export default function CategoryForm({
                 placeholder="auto-generated"
                 className="h-9 border-slate-200 focus:border-slate-900 font-mono text-xs"
               />
-            </div>
-
-            <div className="space-y-1.5">
-              <CategoryFieldLabel>Sort Order</CategoryFieldLabel>
-              <div className="relative">
-                <ListOrdered className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  type="number"
-                  value={formData.sort_order}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      sort_order: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  onFocus={clearZeroOnFocus}
-                  placeholder="0"
-                  className="h-9 pl-9 border-slate-200 focus:border-slate-900"
-                />
-              </div>
             </div>
           </CategoryFormPanel>
         </div>
