@@ -426,10 +426,8 @@ export class InvoiceService {
       y += 5;
     }
 
-    // ── 8. Footer: Terms & Conditions + Signature ──────────────────────────────
-    // Reserve space from the bottom: signature (12mm) + small gap (4mm) = 16mm
-    const signatureReserve = 20;
-    const footerFloor = ph - MARGIN - signatureReserve;
+    // ── 8. Footer: Terms & Conditions ────────────────────────────────────────
+    const footerFloor = ph - MARGIN - 6; // 6mm for bottom accent bar + padding
     const termsAvailableHeight = footerFloor - y - 8; // -8mm for heading + padding
 
     if (data.settings.paymentTerms && termsAvailableHeight > 6) {
@@ -473,24 +471,6 @@ export class InvoiceService {
       }
 
       doc.text(termsLines, MARGIN, y);
-    }
-
-    // Authorized Signature — always bottom-right
-    const sigY = ph - MARGIN - 6;
-    doc.setDrawColor(...COLORS.muted);
-    doc.setLineWidth(0.3);
-    doc.line(pw - MARGIN - 55, sigY - 2, pw - MARGIN, sigY - 2);
-
-    doc.setFont(FONT.family, 'normal');
-    doc.setFontSize(FONT.sizeTiny);
-    doc.setTextColor(...COLORS.muted);
-    doc.text('Authorized Signature', pw - MARGIN, sigY + 2, { align: 'right' });
-
-    if (data.settings.authorizedSignature) {
-      doc.setFont(FONT.family, 'bold');
-      doc.setFontSize(FONT.sizeSmall);
-      doc.setTextColor(...COLORS.primary);
-      doc.text(data.settings.authorizedSignature, pw - MARGIN, sigY - 5, { align: 'right' });
     }
 
     // Bottom accent bar
