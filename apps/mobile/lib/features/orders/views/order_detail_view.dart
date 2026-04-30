@@ -49,7 +49,7 @@ class OrderDetailView extends ConsumerWidget {
               );
 
               if (confirmed == true && context.mounted) {
-                await ref.read(orderOperationsProvider).deleteOrder(order.id);
+                await ref.read(ordersProvider.notifier).deleteOrder(order.id);
                 if (context.mounted) {
                   ref.invalidate(ordersProvider);
                   Navigator.pop(context);

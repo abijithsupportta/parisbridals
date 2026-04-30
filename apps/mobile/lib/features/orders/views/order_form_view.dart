@@ -131,9 +131,9 @@ class _OrderFormViewState extends ConsumerState<OrderFormView> {
 
     try {
       if (widget.order != null) {
-        await ref.read(orderOperationsProvider).updateOrder(widget.order!.id, body);
+        await ref.read(ordersProvider.notifier).updateOrder(widget.order!.id, body);
       } else {
-        await ref.read(orderOperationsProvider).createOrder(body);
+        await ref.read(ordersProvider.notifier).createOrder(body);
       }
 
       if (mounted) {
