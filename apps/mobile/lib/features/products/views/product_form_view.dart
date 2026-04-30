@@ -11,6 +11,9 @@ import '../../../core/responsive.dart';
 import '../../../core/upload_repository.dart';
 import '../../categories/providers/category_provider.dart';
 import '../../categories/models/category.dart';
+import '../../branches/providers/branch_provider.dart';
+import '../../branches/models/branch.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/product_provider.dart';
 import '../models/product.dart';
 
@@ -44,7 +47,8 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
 
   // Pricing & Stock
   final _priceCtl = TextEditingController();
-  int _quantity = 1;
+  /// Branch stock map: branch_id → quantity
+  final Map<String, int> _branchStocks = {};
   String _sku = '';
   String _barcode = '';
 
@@ -89,7 +93,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         'name': _nameCtl.text,
         'description': _descCtl.text,
         'price': _priceCtl.text,
-        'quantity': _quantity,
+        'branch_stocks': _branchStocks,
         'sku': _sku,
         'barcode': _barcode,
         'category_id': _categoryId,
@@ -119,7 +123,12 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
           _nameCtl.text = draft['name'] ?? '';
           _descCtl.text = draft['description'] ?? '';
           _priceCtl.text = draft['price'] ?? '';
-          _quantity = draft['quantity'] ?? 1;
+          if (draft['branch_stocks'] != null) {
+            _branchStocks.clear();
+            (draft['branch_stocks'] as Map<String, dynamic>).forEach((k, v) {
+              _branchStocks[k] = (v as num).toInt();
+            });
+          }
           _sku = draft['sku'] ?? '';
           _barcode = draft['barcode'] ?? '';
           _categoryId = draft['category_id'];
@@ -280,12 +289,12 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             ),
             SizedBox(height: Responsive.h(12)),
 
-            // ── 5. Quantity (stepper) ──
+            // ── 5. Stock by Branch (matches admin ProductForm) ──
             _card(
               children: [
-                _sectionHeader('Quantity'),
+                _sectionHeader('Stock by Branch'),
                 SizedBox(height: Responsive.h(10)),
-                _buildQuantityStepper(primary),
+                _buildBranchInventory(primary),
               ],
             ),
             SizedBox(height: Responsive.h(12)),
@@ -454,7 +463,11 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     _nameCtl.text = p.name;
     _descCtl.text = p.description ?? '';
     _priceCtl.text = p.pricePerDay > 0 ? p.pricePerDay.toStringAsFixed(0) : '';
-    _quantity = p.quantity;
+    // Populate branch stocks from existing inventory
+    _branchStocks.clear();
+    for (final inv in p.branchInventory) {
+      _branchStocks[inv.branchId] = inv.stockCount;
+    }
     _sku = p.sku ?? _generateSKU();
     _barcode = p.barcode ?? _generateBarcode();
     _isActive = p.isActive;
@@ -724,56 +737,153 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     );
   }
 
-  // ── Quantity Stepper ──
-  Widget _buildQuantityStepper(Color primary) {
-    return Row(
-      children: [
-        // Minus button
-        _stepperBtn(Icons.remove_rounded, primary, () {
-          if (_quantity > 1) setState(() => _quantity--);
-        }),
-        SizedBox(width: Responsive.w(8)),
-        // Editable quantity
-        Expanded(
-          child: TextField(
-            controller: TextEditingController(text: '$_quantity'),
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: Responsive.sp(22),
-              fontWeight: FontWeight.w800,
-              color: primary,
+  // ── Branch Inventory (matches admin ProductForm) ──
+  int get _totalQuantity => _branchStocks.values.fold(0, (a, b) => a + b);
+
+  Widget _buildBranchInventory(Color primary) {
+    final branchesAsync = ref.watch(branchesProvider);
+    final authUser = ref.watch(authUserProvider);
+
+    return branchesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Failed to load branches',
+          style: TextStyle(fontSize: Responsive.sp(13), color: Colors.red)),
+      data: (allBranches) {
+        final activeBranches = allBranches.where((b) => b.isActive).toList();
+
+        // Filter based on role:
+        // Admin/SuperAdmin → all branches
+        // Staff/Manager → only their assigned branch
+        final visibleBranches = (authUser?.isAdmin == true)
+            ? activeBranches
+            : activeBranches
+                .where((b) => b.id == authUser?.branchId)
+                .toList();
+
+        if (visibleBranches.isEmpty) {
+          return Padding(
+            padding: Responsive.symmetric(vertical: 16),
+            child: Text('No branches available',
+                style: TextStyle(
+                    fontSize: Responsive.sp(13), color: Colors.grey[500]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          );
+        }
+
+        // Initialize stocks for visible branches
+        for (final b in visibleBranches) {
+          _branchStocks.putIfAbsent(b.id, () => 0);
+        }
+
+        return Column(
+          children: [
+            // Total badge
+            Container(
+              width: double.infinity,
+              padding: Responsive.symmetric(horizontal: 12, vertical: 8),
+              margin: EdgeInsets.only(bottom: Responsive.h(10)),
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(Responsive.r(8)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Total Stock',
+                      style: TextStyle(
+                          fontSize: Responsive.sp(13),
+                          fontWeight: FontWeight.w600,
+                          color: primary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Container(
+                    padding:
+                        Responsive.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: primary,
+                      borderRadius: BorderRadius.circular(Responsive.r(6)),
+                    ),
+                    child: Text('$_totalQuantity',
+                        style: TextStyle(
+                            fontSize: Responsive.sp(14),
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)),
+                  ),
+                ],
+              ),
             ),
-            decoration: InputDecoration(
-              contentPadding: Responsive.symmetric(vertical: 12),
-            ),
-            onChanged: (v) {
-              final n = int.tryParse(v);
-              if (n != null && n > 0) setState(() => _quantity = n);
-            },
-          ),
-        ),
-        SizedBox(width: Responsive.w(8)),
-        // Plus button
-        _stepperBtn(Icons.add_rounded, primary, () {
-          setState(() => _quantity++);
-        }),
-      ],
+            // Per-branch rows
+            ...visibleBranches.map((branch) => _branchRow(branch, primary)),
+          ],
+        );
+      },
     );
   }
 
-  Widget _stepperBtn(IconData icon, Color primary, VoidCallback onTap) {
+  Widget _branchRow(Branch branch, Color primary) {
+    final qty = _branchStocks[branch.id] ?? 0;
+    return Padding(
+      padding: EdgeInsets.only(bottom: Responsive.h(8)),
+      child: Container(
+        padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(Responsive.r(10)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.store_rounded,
+                size: Responsive.icon(18), color: Colors.grey[400]),
+            SizedBox(width: Responsive.w(10)),
+            Expanded(
+              child: Text(branch.name,
+                  style: TextStyle(
+                      fontSize: Responsive.sp(13),
+                      fontWeight: FontWeight.w600,
+                      color: primary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            // Minus
+            _stepperBtn(Icons.remove_rounded, primary, () {
+              if (qty > 0) {
+                setState(() => _branchStocks[branch.id] = qty - 1);
+              }
+            }, size: 34),
+            SizedBox(width: Responsive.w(8)),
+            // Quantity display
+            SizedBox(
+              width: Responsive.w(48),
+              child: Text('$qty',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: Responsive.sp(18),
+                      fontWeight: FontWeight.w800,
+                      color: primary)),
+            ),
+            SizedBox(width: Responsive.w(8)),
+            // Plus
+            _stepperBtn(Icons.add_rounded, primary, () {
+              setState(() => _branchStocks[branch.id] = qty + 1);
+            }, size: 34),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepperBtn(IconData icon, Color primary, VoidCallback onTap, {double size = 48}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: Responsive.w(48),
-        height: Responsive.w(48),
+        width: Responsive.w(size),
+        height: Responsive.w(size),
         decoration: BoxDecoration(
           color: primary,
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
+          borderRadius: BorderRadius.circular(Responsive.r(10)),
         ),
-        child: Icon(icon, color: Colors.white, size: Responsive.icon(24)),
+        child: Icon(icon, color: Colors.white, size: Responsive.icon(size == 34 ? 18 : 24)),
       ),
     );
   }
@@ -822,13 +932,14 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       // 3. Build payload — slug is REQUIRED by the server's Zod schema
       final name = _nameCtl.text.trim();
       final slug = _generateSlug(name);
+      final totalQty = _totalQuantity;
       final body = <String, dynamic>{
         'name': name,
         'slug': slug,
         'price_per_day': price,
         'security_deposit': 0,
-        'quantity': _quantity,
-        'available_quantity': _quantity,
+        'quantity': totalQty,
+        'available_quantity': totalQty,
         'images': images,
         'is_active': _isActive,
         'is_featured': false,
@@ -837,6 +948,15 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         'sku': _sku,
         'barcode': _barcode,
       };
+
+      // Add branch_inventory for per-branch stock
+      final branchInventory = _branchStocks.entries
+          .where((e) => e.value > 0)
+          .map((e) => {'branch_id': e.key, 'quantity': e.value})
+          .toList();
+      if (branchInventory.isNotEmpty) {
+        body['branch_inventory'] = branchInventory;
+      }
 
       final desc = _descCtl.text.trim();
       if (desc.isNotEmpty) body['description'] = desc;
