@@ -91,6 +91,16 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     return 'PB$ts$rand';
   }
 
+  /// Generate a URL-safe slug from the product name.
+  String _generateSlug(String name) {
+    return name
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-');
+  }
+
   @override
   Widget build(BuildContext context) {
     Responsive.init(context);
@@ -617,7 +627,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   Widget _dropdown(
       String hint, List<Category> items, String? value, ValueChanged<String?> onChanged) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      value: value,
       decoration: InputDecoration(
         contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
       ),
@@ -725,15 +735,21 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             'alt_text': _nameCtl.text.trim(),
           }).toList();
 
-      // 3. Build payload
+      // 3. Build payload — slug is REQUIRED by the server's Zod schema
+      final name = _nameCtl.text.trim();
+      final slug = _generateSlug(name);
       final body = <String, dynamic>{
-        'name': _nameCtl.text.trim(),
+        'name': name,
+        'slug': slug,
         'price_per_day': price,
         'security_deposit': 0,
         'quantity': _quantity,
         'available_quantity': _quantity,
         'images': images,
         'is_active': _isActive,
+        'is_featured': false,
+        'track_inventory': true,
+        'low_stock_threshold': 0,
         'sku': _sku,
         'barcode': _barcode,
       };
