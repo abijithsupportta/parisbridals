@@ -37,6 +37,11 @@ export interface DashboardMetrics {
     daysIdle: number;
     value: number;
   }[];
+  categoryRevenue: {
+    name: string;
+    revenue: number;
+    percentage: number;
+  }[];
   bottlenecks: {
     id: string;
     type: 'cleaning' | 'approval' | 'overdue';
@@ -108,11 +113,10 @@ export class DashboardService {
       };
     });
 
-    // 6. Top Performers
-    // For this demonstration, we fetch all order items in the period and aggregate in memory.
+    // 6. Top Performers — aggregate order items in the period
     const { data: orderItems } = await supabase
       .from('order_items')
-      .select('product_id, quantity, price_per_day, products(name)')
+      .select('product_id, quantity, price_per_day, rental_days, products(name, category_id, categories:category_id(name))')
       .returns<any[]>();
 
     const productStats = new Map<string, {name: string, rentals: number, revenue: number}>();
@@ -121,14 +125,70 @@ export class DashboardService {
       const pid = item.product_id;
       const stats = productStats.get(pid) || { name: item.products.name, rentals: 0, revenue: 0 };
       stats.rentals += item.quantity;
-      stats.revenue += (item.quantity * Number(item.price_per_day || 0));
+      stats.revenue += (item.quantity * Number(item.price_per_day || 0) * Number(item.rental_days || 1));
       productStats.set(pid, stats);
     });
 
     const topPerformers = Array.from(productStats.values())
-      .sort((a, b) => b.rentals - a.rentals)
+      .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 3)
       .map((p, i) => ({ id: String(i), ...p }));
+
+    // 7. Category Revenue — aggregate by category
+    const categoryRevenueMap = new Map<string, { name: string; revenue: number }>();
+    orderItems?.forEach(item => {
+      if (!item.products?.categories) return;
+      const catName = item.products.categories.name || 'Uncategorized';
+      const existing = categoryRevenueMap.get(catName) || { name: catName, revenue: 0 };
+      existing.revenue += (item.quantity * Number(item.price_per_day || 0) * Number(item.rental_days || 1));
+      categoryRevenueMap.set(catName, existing);
+    });
+
+    const categoryRevenueArr = Array.from(categoryRevenueMap.values())
+      .sort((a, b) => b.revenue - a.revenue);
+    const totalCategoryRevenue = categoryRevenueArr.reduce((sum, c) => sum + c.revenue, 0);
+    const categoryRevenue = categoryRevenueArr.slice(0, 5).map(c => ({
+      name: c.name,
+      revenue: c.revenue,
+      percentage: totalCategoryRevenue > 0 ? Math.round((c.revenue / totalCategoryRevenue) * 100) : 0,
+    }));
+
+    // 8. Utilization — actual ratio of rented-out vs total products
+    const { count: totalProducts } = await supabase
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true);
+
+    const rentedOutCount = activeOrders?.length || 0;
+    const utilizationPercentage = totalProducts && totalProducts > 0
+      ? Math.round((rentedOutCount / totalProducts) * 100)
+      : 0;
+
+    // 9. Dead Stock — products not in any recent order (90+ days)
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    const { data: recentOrderProductIds } = await supabase
+      .from('order_items')
+      .select('product_id, orders!inner(created_at)')
+      .gte('orders.created_at', ninetyDaysAgo.toISOString())
+      .returns<any[]>();
+
+    const recentProductIdSet = new Set(recentOrderProductIds?.map(i => i.product_id) || []);
+
+    const { data: allActiveProducts } = await supabase
+      .from('products')
+      .select('id, name, price_per_day, created_at')
+      .eq('is_active', true)
+      .limit(100);
+
+    const deadStock = (allActiveProducts || [])
+      .filter(p => !recentProductIdSet.has(p.id))
+      .map(p => {
+        const daysIdle = Math.max(0, differenceInDays(now, new Date(p.created_at)));
+        return { id: p.id, name: p.name, daysIdle, value: Number(p.price_per_day || 0) };
+      })
+      .filter(p => p.daysIdle >= 90)
+      .sort((a, b) => b.daysIdle - a.daysIdle)
+      .slice(0, 5);
 
     // Format output
     return {
@@ -139,11 +199,11 @@ export class DashboardService {
         isPositive: percentageChange >= 0
       },
       assetExposure: {
-        inventoryValueOut: 24500, // Placeholder
+        inventoryValueOut: 0,
         depositsHeld: depositsHeld
       },
       utilization: {
-        percentage: 68 // Placeholder
+        percentage: utilizationPercentage
       },
       actionRequired: {
         totalIssues: overdueOrders.length,
@@ -153,9 +213,8 @@ export class DashboardService {
       },
       bookingVelocity,
       topPerformers,
-      deadStock: [
-        { id: "1", name: "Ruby Teardrop Pendant", daysIdle: 94, value: 800 }
-      ],
+      deadStock,
+      categoryRevenue,
       bottlenecks: overdueOrders.slice(0, 3).map(o => ({
         id: o.id,
         type: 'overdue',

@@ -221,35 +221,26 @@ export default async function DashboardPage(props: {
             <CardDescription>Selected period distribution</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-             <div className="space-y-6">
-                <div className="space-y-2">
-                   <div className="flex justify-between text-sm">
-                      <span className="font-medium text-slate-700">Bridal Sets</span>
-                      <span className="text-slate-500 font-medium">55%</span>
-                   </div>
-                   <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-slate-800 w-[55%] rounded-full" />
-                   </div>
-                </div>
-                <div className="space-y-2">
-                   <div className="flex justify-between text-sm">
-                      <span className="font-medium text-slate-700">Necklaces</span>
-                      <span className="text-slate-500 font-medium">25%</span>
-                   </div>
-                   <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 w-[25%] rounded-full" />
-                   </div>
-                </div>
-                <div className="space-y-2">
-                   <div className="flex justify-between text-sm">
-                      <span className="font-medium text-slate-700">Earrings & Bangles</span>
-                      <span className="text-slate-500 font-medium">20%</span>
-                   </div>
-                   <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-slate-300 w-[20%] rounded-full" />
-                   </div>
-                </div>
-             </div>
+             {metrics.categoryRevenue.length > 0 ? (
+               <div className="space-y-6">
+                 {metrics.categoryRevenue.map((cat, i) => {
+                   const colors = ['bg-slate-800', 'bg-amber-400', 'bg-slate-300', 'bg-emerald-400', 'bg-violet-400'];
+                   return (
+                     <div key={cat.name} className="space-y-2">
+                       <div className="flex justify-between text-sm">
+                         <span className="font-medium text-slate-700">{cat.name}</span>
+                         <span className="text-slate-500 font-medium">{cat.percentage}%</span>
+                       </div>
+                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                         <div className={`h-full ${colors[i % colors.length]} rounded-full`} style={{ width: `${cat.percentage}%` }} />
+                       </div>
+                     </div>
+                   );
+                 })}
+               </div>
+             ) : (
+               <div className="py-8 text-center text-slate-500 text-sm">No category revenue data for this period.</div>
+             )}
           </CardContent>
         </Card>
       </div>

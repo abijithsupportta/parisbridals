@@ -25,7 +25,7 @@ export default function SettingsPage() {
   const { updateIsGSTEnabled, isLoading: updatingGstEnabled } = useUpdateIsGSTEnabled();
   
   const { updateSetting, isLoading: updatingSettings } = useUpdateSetting();
-  const { showSuccess, showError } = useAppStore();
+  const { showSuccess, showError, user } = useAppStore();
   
   // Invoice settings hooks
   const { data: invoicePrefixResult, isLoading: loadingPrefix } = useInvoicePrefix();
@@ -199,19 +199,28 @@ export default function SettingsPage() {
         <CardContent className="pt-6">
           <div className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Email</label>
+              <label className="text-sm font-semibold text-slate-700">Name</label>
               <Input
-                type="email"
-                value="admin@parisbridals.com"
+                type="text"
+                value={user?.name || 'Unknown'}
                 disabled
                 className="bg-slate-50 border-slate-200 focus:border-primary opacity-60"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Phone</label>
+              <label className="text-sm font-semibold text-slate-700">Email</label>
               <Input
-                type="tel"
-                value="+91 9876543210"
+                type="email"
+                value={user?.email || 'Not available'}
+                disabled
+                className="bg-slate-50 border-slate-200 focus:border-primary opacity-60"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-slate-700">Role</label>
+              <Input
+                type="text"
+                value={user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Unknown'}
                 disabled
                 className="bg-slate-50 border-slate-200 focus:border-primary opacity-60"
               />
