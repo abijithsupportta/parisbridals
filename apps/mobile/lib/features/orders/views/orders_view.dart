@@ -27,14 +27,12 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
 
   static const _statusFilters = <String, String?>{
     'All': null,
-    'Scheduled': 'scheduled',
     'Ongoing': 'ongoing',
+    'Scheduled': 'scheduled',
     'Late': 'late_return',
     'Partial': 'partial',
     'Returned': 'returned',
-    'Completed': 'completed',
     'Flagged': 'flagged',
-    'Cancelled': 'cancelled',
   };
 
   @override
@@ -66,9 +64,29 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
                       onRefresh: () async => ref.invalidate(ordersProvider),
                       child: ListView.separated(
                         padding: Responsive.only(left: 16, right: 16, top: 8, bottom: 80),
-                        itemCount: paginated.orders.length,
+                        itemCount: paginated.orders.length + (paginated.hasNext ? 1 : 0),
                         separatorBuilder: (_, __) => SizedBox(height: Responsive.h(10)),
-                        itemBuilder: (_, i) => _buildOrderCard(paginated.orders[i]),
+                        itemBuilder: (_, i) {
+                          if (i == paginated.orders.length) {
+                            // Load more button
+                            return Padding(
+                              padding: Responsive.symmetric(vertical: 12),
+                              child: Center(
+                                child: ElevatedButton.icon(
+                                  onPressed: () => ref.read(ordersProvider.notifier).loadMore(),
+                                  icon: Icon(Icons.refresh_rounded, size: Responsive.icon(18)),
+                                  label: Text('Load More', style: TextStyle(fontSize: Responsive.sp(13))),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _primary,
+                                    foregroundColor: Colors.white,
+                                    padding: Responsive.symmetric(horizontal: 24, vertical: 12),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return _buildOrderCard(paginated.orders[i]);
+                        },
                       ),
                     );
                   },
