@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, ShoppingBag, Heart, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ShoppingBag, Heart } from "lucide-react";
 import { Store, Category } from "@/lib/supabase/queries";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -17,6 +16,7 @@ interface HeaderProps {
 
 export default function Header({ store, categories }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const [cartCount, setCartCount] = useState(0);
   const [wishlistCount, setWishlistCount] = useState(0);
   const router = useRouter();
@@ -37,6 +37,12 @@ export default function Header({ store, categories }: HeaderProps) {
     window.addEventListener("scroll", handleScroll, { passive: true });
     loadCounts();
 
+    // Track viewport size for category bar behavior
+    const mediaQuery = window.matchMedia("(min-width: 768px)");
+    setIsDesktop(mediaQuery.matches);
+    const handleMedia = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mediaQuery.addEventListener("change", handleMedia);
+
     const handleCartUpdate = (e: any) => setCartCount(e.detail);
     const handleWishUpdate = (e: any) => setWishlistCount(e.detail);
 
@@ -45,10 +51,14 @@ export default function Header({ store, categories }: HeaderProps) {
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
+      mediaQuery.removeEventListener("change", handleMedia);
       window.removeEventListener("paris_cart_updated", handleCartUpdate);
       window.removeEventListener("paris_wishlist_updated", handleWishUpdate);
     };
   }, [isScrolled]);
+
+  // Only collapse categories to badges on desktop when scrolled
+  const compactCategories = isScrolled && isDesktop;
 
   const storeName = store?.name || "Paris Bridals";
   const logoUrl = store?.logo_url || "/logo_paris.svg";
@@ -104,30 +114,9 @@ export default function Header({ store, categories }: HeaderProps) {
 
             {/* Actions & Search */}
             <div className="flex items-center flex-1 justify-end gap-2 sm:gap-4 shrink-0">
-              {/* Desktop Search Bar */}
-              <div className="hidden md:block flex-1 max-w-[400px]">
+              {/* Search Bar — uses ActionSearchBar on all sizes */}
+              <div className="flex-1 max-w-[400px]">
                 <ActionSearchBar storeId={store?.id} />
-              </div>
-
-              {/* Mobile Search Bar */}
-              <div className="md:hidden flex-1">
-                <form 
-                  onSubmit={(e) => { 
-                    e.preventDefault(); 
-                    const formData = new FormData(e.currentTarget);
-                    const q = formData.get('q');
-                    if (q) router.push(`/collections?q=${encodeURIComponent(q.toString())}`);
-                  }} 
-                  className="relative"
-                >
-                  <input
-                    type="text"
-                    name="q"
-                    placeholder="Search..."
-                    className="w-full h-9 pl-9 pr-4 rounded-full border border-[var(--border-silk)] bg-white/50 backdrop-blur-md text-xs focus:outline-none focus:ring-2 focus:ring-rosegold/5 focus:border-rosegold transition-all"
-                  />
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 h-4 w-4" strokeWidth={1.5} />
-                </form>
               </div>
 
               <div className="flex items-center gap-1 hidden sm:flex">
@@ -170,10 +159,10 @@ export default function Header({ store, categories }: HeaderProps) {
                   href="/collections"
                   className={cn(
                     "flex items-center gap-2 shrink-0 transition-all duration-300 ml-4 luxury-link",
-                    isScrolled ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col h-20 justify-center"
+                    compactCategories ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col h-20 justify-center"
                   )}
                 >
-                  {!isScrolled ? (
+                  {!compactCategories ? (
                     <>
                       <div className="relative size-12 sm:size-14 rounded-full flex items-center justify-center bg-rosegold text-white shadow-lg shadow-rosegold/30 border-2 border-white transition-transform group-active:scale-95 group-hover:shadow-rosegold/50">
                         <span className="text-[8px] uppercase font-bold tracking-widest text-center leading-tight">For<br/>You</span>
@@ -191,10 +180,10 @@ export default function Header({ store, categories }: HeaderProps) {
                     href={`/collections?category_id=${category.id}`}
                     className={cn(
                       "flex items-center snap-start group shrink-0 transition-all duration-300 luxury-link",
-                      isScrolled ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col gap-2 h-20 justify-center"
+                      compactCategories ? "px-4 py-1.5 rounded-full bg-silk hover:bg-rosegold/10" : "flex-col gap-2 h-20 justify-center"
                     )}
                   >
-                    {!isScrolled ? (
+                    {!compactCategories ? (
                       <>
                         <div className="relative size-12 sm:size-14 rounded-full overflow-hidden bg-white border border-[var(--border-silk)] shadow-sm group-hover:border-rosegold transition-all group-active:scale-95">
                           {category.image_url && category.image_url.trim() !== "" ? (

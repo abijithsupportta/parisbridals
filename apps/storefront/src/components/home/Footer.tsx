@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Instagram, Facebook, Twitter, Mail, Phone } from "lucide-react";
 import { Store } from "@/lib/supabase/queries";
 import { Separator } from "@/components/ui/separator";
+import { DISPLAY_PHONE, WHATSAPP_NUMBER } from "@/lib/whatsapp";
 
 interface FooterProps {
   store: Store | null;
@@ -10,7 +11,7 @@ interface FooterProps {
 export default function Footer({ store }: FooterProps) {
   const storeName = store?.name || "Paris Bridals";
   const storeEmail = store?.email || "hello@parisbridals.com";
-  const storePhone = store?.phone;
+  const storePhone = DISPLAY_PHONE;
 
   return (
     <footer className="bg-white border-t border-border-silk pt-8 sm:pt-12 md:pt-16 pb-6 sm:pb-8">

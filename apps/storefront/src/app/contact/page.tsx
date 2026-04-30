@@ -6,7 +6,7 @@ import Footer from "@/components/home/Footer";
 import { getParisBridalsStore } from "@/lib/actions/store";
 import { Button } from "@/components/ui/button";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
-import { buildContactMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
+import { buildContactMessage, buildWhatsAppUrl, DISPLAY_PHONE } from "@/lib/whatsapp";
 
 export default function ContactPage() {
   const [store, setStore] = useState<any>(null);
@@ -156,13 +156,9 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <p className="text-[10px] uppercase tracking-widest text-caption mb-1">Phone</p>
-                      {store?.phone ? (
-                        <a href={`tel:${store.phone}`} className="text-heading font-medium hover:text-rosegold transition-colors">
-                          {store.phone}
-                        </a>
-                      ) : (
-                        <p className="text-body text-sm">Contact via WhatsApp</p>
-                      )}
+                      <a href={`tel:${DISPLAY_PHONE}`} className="text-heading font-medium hover:text-rosegold transition-colors">
+                        {DISPLAY_PHONE}
+                      </a>
                     </div>
                   </div>
 
