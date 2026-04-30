@@ -15,12 +15,10 @@ export default async function EditCategoryPage({ params }: { params: Promise<{ i
   const allCategories = allCategoriesResult.success ? allCategoriesResult.data || [] : [];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Edit Category</h1>
-        <p className="text-slate-500 mt-1">Update category details and image</p>
+    <div className="min-h-[calc(100vh-4rem)] p-6 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        <CategoryForm category={category} allCategories={allCategories} />
       </div>
-      <CategoryForm category={category} allCategories={allCategories} />
     </div>
   );
 }

@@ -26,7 +26,6 @@ export default async function CreateCategoryPage({ searchParams }: PageProps) {
   // Validate and resolve the parent hint. If the parent id is a Variant we
   // silently drop it because variants cannot have children.
   let defaultParentId: string | null = null;
-  let parentContextLabel: string | null = null;
   if (parent) {
     const parentCat = allCategories.find((c) => c.id === parent);
     if (parentCat) {
@@ -36,27 +35,19 @@ export default async function CreateCategoryPage({ searchParams }: PageProps) {
         const parentLevel = parentResult.data.level;
         if (parentLevel !== "variant") {
           defaultParentId = parentCat.id;
-          parentContextLabel =
-            parentLevel === "main"
-              ? `Adding Subcategory under "${parentCat.name}"`
-              : `Adding Variant under "${parentCat.name}"`;
         }
       }
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Create Category</h1>
-        <p className="text-slate-500 mt-1">
-          {parentContextLabel ?? "Add a new Main, Sub, or Variant category"}
-        </p>
+    <div className="min-h-[calc(100vh-4rem)] p-6 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        <CategoryForm
+          allCategories={allCategories}
+          defaultParentId={defaultParentId}
+        />
       </div>
-      <CategoryForm
-        allCategories={allCategories}
-        defaultParentId={defaultParentId}
-      />
     </div>
   );
 }
