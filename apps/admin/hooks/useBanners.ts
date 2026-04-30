@@ -155,28 +155,47 @@ export function useReorderBanners() {
     mutationFn: (banners: { id: string; priority?: number; position?: string }[]) =>
       apiFetch<ApiSuccessResponse<null>>('/api/banners/reorder', { method: 'POST', body: JSON.stringify({ banners }) }),
     onMutate: async (newOrder) => {
+      // Cancel any in-flight banner queries
       await queryClient.cancelQueries({ queryKey: bannerKeys.all });
-      const previousBanners = queryClient.getQueryData<Banner[]>(bannerKeys.all);
 
-      // Optimistically update
-      if (previousBanners) {
-        const reordered = [...previousBanners].sort((a, b) => {
-          const aPriority = newOrder.find(o => o.id === a.id)?.priority ?? a.priority;
-          const bPriority = newOrder.find(o => o.id === b.id)?.priority ?? b.priority;
-          return bPriority - aPriority;
+      // Snapshot all banner query caches for rollback
+      const previousQueries = queryClient.getQueriesData<Banner[]>({ queryKey: bannerKeys.all });
+
+      // Optimistically update ALL banner query caches that contain these items
+      queryClient.setQueriesData<Banner[]>({ queryKey: bannerKeys.all }, (old) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((banner) => {
+          const update = newOrder.find((o) => o.id === banner.id);
+          if (update) {
+            return {
+              ...banner,
+              position: update.position ?? banner.position,
+              priority: update.priority ?? banner.priority,
+            };
+          }
+          return banner;
+        }).sort((a, b) => {
+          // Sort by position (numeric) for hero banners
+          const posA = a.position ? parseInt(a.position) : 999;
+          const posB = b.position ? parseInt(b.position) : 999;
+          if (posA !== posB) return posA - posB;
+          return (b.priority || 0) - (a.priority || 0);
         });
-        queryClient.setQueryData(bannerKeys.all, reordered);
-      }
+      });
 
-      return { previousBanners };
+      return { previousQueries };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: bannerKeys.all, exact: true });
+      // Invalidate all banner queries (prefix match, not exact)
+      queryClient.invalidateQueries({ queryKey: bannerKeys.all });
       showSuccess('Banner order updated');
     },
     onError: (error, _variables, context) => {
-      if (context?.previousBanners) {
-        queryClient.setQueryData(bannerKeys.all, context.previousBanners);
+      // Rollback all cached queries
+      if (context?.previousQueries) {
+        for (const [queryKey, data] of context.previousQueries) {
+          queryClient.setQueryData(queryKey, data);
+        }
       }
       showError('Failed to reorder banners', error.message);
     },

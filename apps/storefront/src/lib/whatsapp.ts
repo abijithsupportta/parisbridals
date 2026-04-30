@@ -1,5 +1,6 @@
 // Shared WhatsApp ordering config for Paris Bridals
 export const WHATSAPP_NUMBER = "918129668157";
+export const DISPLAY_PHONE = "+91 81296 68157";
 
 interface OrderDetails {
   productName: string;
@@ -8,6 +9,7 @@ interface OrderDetails {
   quantity: number;
   customerName: string;
   customerPhone: string;
+  customerAddress: string;
   startDate: string;
   endDate: string;
 }
@@ -38,6 +40,7 @@ export function buildOrderMessage(o: OrderDetails): string {
   lines.push("👤 *Customer Details:*");
   lines.push(`Name: ${o.customerName}`);
   lines.push(`Phone: ${o.customerPhone}`);
+  lines.push(`📍 Address: ${o.customerAddress}`);
   lines.push("");
   lines.push("Please confirm availability. Thank you! 🙏");
 

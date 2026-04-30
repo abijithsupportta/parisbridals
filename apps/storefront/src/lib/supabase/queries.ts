@@ -82,6 +82,8 @@ export interface Product {
 export interface Banner {
   id: string;
   store_id: string | null;
+  banner_type: 'hero' | 'editorial' | 'split';
+  position: string | null;
   title: string | null;
   subtitle: string | null;
   description: string | null;
@@ -250,16 +252,15 @@ export async function getNewArrivals(storeId: string, limit = 10): Promise<Produ
 }
 
 /**
- * Get active banners for a store
+ * Get active banners (all types)
  */
-export async function getBanners(storeId: string): Promise<Banner[]> {
+export async function getBanners(): Promise<Banner[]> {
   const supabase = createClient();
   const now = new Date().toISOString();
 
   const { data, error } = await supabase
     .from('banners')
     .select('*')
-    .eq('store_id', storeId)
     .eq('is_active', true)
     .or('start_date.is.null,start_date.lte.' + now)
     .or('end_date.is.null,end_date.gte.' + now)
@@ -272,6 +273,79 @@ export async function getBanners(storeId: string): Promise<Banner[]> {
   }
 
   return data || [];
+}
+
+/**
+ * Get active hero banners sorted by position (1-10)
+ */
+export async function getHeroBanners(): Promise<Banner[]> {
+  const supabase = createClient();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('banners')
+    .select('*')
+    .eq('is_active', true)
+    .eq('banner_type', 'hero')
+    .or('start_date.is.null,start_date.lte.' + now)
+    .or('end_date.is.null,end_date.gte.' + now)
+    .order('position', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching hero banners:', error);
+    return [];
+  }
+
+  return (data || []).filter(b => b.web_image_url?.trim());
+}
+
+/**
+ * Get active editorial banner (max 1)
+ */
+export async function getEditorialBanners(): Promise<Banner[]> {
+  const supabase = createClient();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('banners')
+    .select('*')
+    .eq('is_active', true)
+    .eq('banner_type', 'editorial')
+    .or('start_date.is.null,start_date.lte.' + now)
+    .or('end_date.is.null,end_date.gte.' + now)
+    .order('priority', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    console.error('Error fetching editorial banners:', error);
+    return [];
+  }
+
+  return (data || []).filter(b => b.web_image_url?.trim());
+}
+
+/**
+ * Get active split banners sorted by position (left first, then right)
+ */
+export async function getSplitBanners(): Promise<Banner[]> {
+  const supabase = createClient();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('banners')
+    .select('*')
+    .eq('is_active', true)
+    .eq('banner_type', 'split')
+    .or('start_date.is.null,start_date.lte.' + now)
+    .or('end_date.is.null,end_date.gte.' + now)
+    .order('position', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching split banners:', error);
+    return [];
+  }
+
+  return (data || []).filter(b => b.web_image_url?.trim());
 }
 
 /**
