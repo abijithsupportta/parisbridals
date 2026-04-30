@@ -26,14 +26,6 @@ export interface InvoiceItem {
   amount: number;
 }
 
-export interface PaymentRecord {
-  type: string;
-  mode: string;
-  date: string;
-  amount: number;
-  transactionId?: string;
-}
-
 export interface TallyInvoiceProps {
   companyName: string;
   companyAddress?: string | null;
@@ -56,7 +48,6 @@ export interface TallyInvoiceProps {
   eventDate?: string | null;
 
   items: InvoiceItem[];
-  payments: PaymentRecord[];
 
   subtotal: number;
   gstAmount: number;
@@ -304,28 +295,6 @@ const s = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ── Payment History ──
-  paymentSection: {
-    borderBottom: BORDER,
-    padding: 8,
-  },
-  paymentTableHeader: {
-    flexDirection: 'row' as const,
-    borderBottom: THIN,
-    paddingBottom: 3,
-    marginBottom: 3,
-  },
-  paymentTableRow: {
-    flexDirection: 'row' as const,
-    paddingVertical: 2,
-    borderBottom: '0.25pt solid #ccc',
-  },
-  payColMode:   { width: '25%', fontSize: 7.5 },
-  payColDate:   { width: '25%', fontSize: 7.5 },
-  payColAmount: { width: '25%', fontSize: 7.5, textAlign: 'right' as const },
-  payColTxn:    { width: '25%', fontSize: 7.5, textAlign: 'right' as const, color: '#555' },
-  payHeaderText: { fontFamily: 'Helvetica-Bold', fontSize: 7.5, color: '#444' },
-
   // ── Footer ──
   footerRow: {
     flexGrow: 1,
@@ -358,7 +327,7 @@ export function TallyInvoicePDF(props: TallyInvoiceProps) {
     invoiceNumber, invoiceDate, invoiceType, orderId, paymentMode,
     buyerName, buyerPhone, buyerEmail,
     rentalStart, rentalEnd, eventDate,
-    items, payments,
+    items,
     subtotal, gstAmount, discount, lateFee, damageCharges, securityDeposit,
     totalAmount, totalPaid, balanceDue,
     termsAndConditions,
@@ -502,26 +471,6 @@ export function TallyInvoicePDF(props: TallyInvoiceProps) {
             ) : null}
           </View>
 
-          {/* ── Payment History ── */}
-          {payments.length > 0 ? (
-            <View style={s.paymentSection}>
-              <Text style={s.sectionLabel}>Payment History</Text>
-              <View style={s.paymentTableHeader}>
-                <Text style={{ ...s.payColMode, ...s.payHeaderText }}>Mode</Text>
-                <Text style={{ ...s.payColDate, ...s.payHeaderText }}>Date</Text>
-                <Text style={{ ...s.payColAmount, ...s.payHeaderText, textAlign: 'right' as const }}>Amount</Text>
-                <Text style={{ ...s.payColTxn, ...s.payHeaderText, textAlign: 'right' as const }}>Txn ID</Text>
-              </View>
-              {payments.map((p, i) => (
-                <View key={i} style={s.paymentTableRow}>
-                  <Text style={s.payColMode}>{p.mode}</Text>
-                  <Text style={s.payColDate}>{p.date}</Text>
-                  <Text style={s.payColAmount}>{rs(p.amount)}</Text>
-                  <Text style={s.payColTxn}>{p.transactionId || '-'}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
 
           {/* ── Amount in Words ── */}
           <View style={s.wordsRow}>

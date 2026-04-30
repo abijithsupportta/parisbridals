@@ -17,7 +17,6 @@ import {
   TallyInvoicePDF,
   type TallyInvoiceProps,
   type InvoiceItem,
-  type PaymentRecord,
 } from '@/components/admin/orders/TallyInvoicePDF';
 
 export interface InvoiceData {
@@ -137,16 +136,6 @@ export class InvoiceService {
     const depositPayment = payments.find((p) => p.payment_type === 'deposit');
     const paymentMode = depositPayment?.payment_mode?.toUpperCase() || undefined;
 
-    // Map payments to PaymentRecord format
-    const paymentRecords: PaymentRecord[] = payments
-      .filter((p) => p.payment_type !== 'refund')
-      .map((p) => ({
-        type: (p.payment_type || '').replace('_', ' ').toUpperCase(),
-        mode: (p.payment_mode || '').replace('_', ' ').toUpperCase(),
-        date: this.fmtDate(p.payment_date),
-        amount: Number(p.amount) || 0,
-        transactionId: p.transaction_id || undefined,
-      }));
 
     return {
       companyName: order.store?.name || 'Paris Bridals',
@@ -170,7 +159,6 @@ export class InvoiceService {
       eventDate: order.event_date ? this.fmtDate(order.event_date) : null,
 
       items,
-      payments: paymentRecords,
 
       subtotal: Number(order.subtotal) || 0,
       gstAmount: Number(order.gst_amount) || 0,
