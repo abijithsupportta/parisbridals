@@ -63,7 +63,8 @@ export class ProductRepository extends BaseRepository {
       select: `
         *,
         category:category_id(id, name, slug),
-        branch:branch_id(id, name)
+        branch:branch_id(id, name),
+        product_inventory(id, product_id, branch_id, quantity, available_quantity, low_stock_threshold, created_at, updated_at, branches:branch_id(id, name))
       `,
       filters,
       orderBy: { column: sort_by, ascending: sort_order === 'asc' },
@@ -151,7 +152,8 @@ export class ProductRepository extends BaseRepository {
       .select(`
         *,
         category:category_id(id, name, slug),
-        branch:branch_id(id, name)
+        branch:branch_id(id, name),
+        product_inventory(id, product_id, branch_id, quantity, available_quantity, low_stock_threshold, created_at, updated_at, branches:branch_id(id, name))
       `)
       .eq('id', id)
       .single();

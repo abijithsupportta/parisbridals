@@ -1,738 +1,995 @@
 import 'dart:io';
+import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shimmer/shimmer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/responsive.dart';
+import '../../../core/upload_repository.dart';
 import '../../categories/providers/category_provider.dart';
 import '../../categories/models/category.dart';
-import '../models/product.dart';
+import '../../branches/providers/branch_provider.dart';
+import '../../branches/models/branch.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../providers/product_provider.dart';
-import '../../../core/upload_repository.dart';
+import '../models/product.dart';
 
+/// Single-page scrollable product form — mirrors the admin ProductForm layout.
+///
+/// Sections: Name/Description → Images → Category → Rent Price → Quantity
+///           → Identifiers (SKU/Barcode) → Submit
 class ProductFormView extends ConsumerStatefulWidget {
-  final Product? product;
-  const ProductFormView({super.key, this.product});
+  final String? productId;
+  const ProductFormView({super.key, this.productId});
 
   @override
   ConsumerState<ProductFormView> createState() => _ProductFormViewState();
 }
 
 class _ProductFormViewState extends ConsumerState<ProductFormView> {
-  final _formKey = GlobalKey<FormState>();
-  
-  // Controllers
-  late TextEditingController _nameController;
-  late TextEditingController _descriptionController;
-  late TextEditingController _skuController;
-  late TextEditingController _barcodeController;
-  late TextEditingController _priceController;
-  late TextEditingController _quantityController;
-  late TextEditingController _lowStockController;
+  bool get isEdit => widget.productId != null;
 
-  // State
-  String? _selectedCategoryId;
-  String? _selectedSubcategoryId;
-  String? _selectedVariantId;
+  final ImagePicker _picker = ImagePicker();
+
+  // Media
+  final List<String> _imageUrls = [];
+  final List<File> _newImages = [];
+
+  // Details
+  final _nameCtl = TextEditingController();
+  final _descCtl = TextEditingController();
+  String? _categoryId;
+  String? _subcategoryId;
+  String? _subvariantId;
+
+  // Pricing & Stock
+  final _priceCtl = TextEditingController();
+  /// Branch stock map: branch_id → quantity
+  final Map<String, int> _branchStocks = {};
+  String _sku = '';
+  String _barcode = '';
+
   bool _isActive = true;
-  bool _isFeatured = false;
-  bool _trackInventory = true;
-  bool _isSaving = false;
-  
-  // Images
-  final List<dynamic> _images = []; // Can be String (URL) or XFile (local)
-
-  static const _primary = Color(0xFF434343);
+  bool _isLoading = false;
+  bool _dataLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    final p = widget.product;
-    _nameController = TextEditingController(text: p?.name ?? '');
-    _descriptionController = TextEditingController(text: p?.description ?? '');
-    _skuController = TextEditingController(text: p?.sku ?? '');
-    _barcodeController = TextEditingController(text: p?.barcode ?? '');
-    _priceController = TextEditingController(text: p?.pricePerDay.toString() ?? '');
-    _quantityController = TextEditingController(text: p?.quantity.toString() ?? '');
-    _lowStockController = TextEditingController(text: p?.lowStockThreshold.toString() ?? '10');
-    
-    _selectedCategoryId = p?.categoryId;
-    _selectedSubcategoryId = p?.subcategoryId;
-    _selectedVariantId = p?.subvariantId;
-    _isActive = p?.isActive ?? true;
-    _isFeatured = p?.isFeatured ?? false;
-    _trackInventory = p?.trackInventory ?? true;
-
-    if (p != null) {
-      _images.addAll(p.images.map((e) => e.url));
+    // Try to restore a saved draft (survives camera-kill restarts)
+    _restoreDraft();
+    // Android crash fix: recover lost camera data
+    _retrieveLostData();
+    // Auto-generate identifiers for create mode
+    if (!isEdit) {
+      if (_sku.isEmpty) _sku = _generateSKU();
+      if (_barcode.isEmpty) _barcode = _generateBarcode();
     }
-
-    // Recover images if Android killed the activity during image picker
-    _retrieveLostImages();
   }
 
-  /// Recovers picked images if the Android OS killed our Activity
-  /// while the camera/gallery was open.
-  Future<void> _retrieveLostImages() async {
-    final picker = ImagePicker();
-    final LostDataResponse response = await picker.retrieveLostData();
+  Future<void> _retrieveLostData() async {
+    final LostDataResponse response = await _picker.retrieveLostData();
     if (response.isEmpty || response.file == null) return;
-    if (!mounted) return;
-    setState(() {
-      _images.add(response.file!);
-    });
+    if (mounted) {
+      setState(() => _newImages.add(File(response.file!.path)));
+    }
+  }
+
+  // ── Draft persistence (survives Android Activity destruction) ──
+  static const _draftFileName = 'product_form_draft.json';
+
+  Future<File> get _draftFile async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/$_draftFileName');
+  }
+
+  /// Save current form state to disk before opening camera.
+  Future<void> _saveDraft() async {
+    try {
+      final draft = {
+        'name': _nameCtl.text,
+        'description': _descCtl.text,
+        'price': _priceCtl.text,
+        'branch_stocks': _branchStocks,
+        'sku': _sku,
+        'barcode': _barcode,
+        'category_id': _categoryId,
+        'subcategory_id': _subcategoryId,
+        'subvariant_id': _subvariantId,
+        'is_active': _isActive,
+        'image_urls': _imageUrls,
+      };
+      final file = await _draftFile;
+      await file.writeAsString(jsonEncode(draft));
+      debugPrint('[ProductForm] Draft saved');
+    } catch (e) {
+      debugPrint('[ProductForm] Draft save failed: $e');
+    }
+  }
+
+  /// Restore form state from a saved draft.
+  Future<void> _restoreDraft() async {
+    try {
+      final file = await _draftFile;
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+      final draft = jsonDecode(content) as Map<String, dynamic>;
+
+      if (mounted) {
+        setState(() {
+          _nameCtl.text = draft['name'] ?? '';
+          _descCtl.text = draft['description'] ?? '';
+          _priceCtl.text = draft['price'] ?? '';
+          if (draft['branch_stocks'] != null) {
+            _branchStocks.clear();
+            (draft['branch_stocks'] as Map<String, dynamic>).forEach((k, v) {
+              _branchStocks[k] = (v as num).toInt();
+            });
+          }
+          _sku = draft['sku'] ?? '';
+          _barcode = draft['barcode'] ?? '';
+          _categoryId = draft['category_id'];
+          _subcategoryId = draft['subcategory_id'];
+          _subvariantId = draft['subvariant_id'];
+          _isActive = draft['is_active'] ?? true;
+          if (draft['image_urls'] != null) {
+            _imageUrls
+              ..clear()
+              ..addAll(List<String>.from(draft['image_urls']));
+          }
+        });
+        debugPrint('[ProductForm] Draft restored');
+      }
+      // Delete draft after restoring
+      await file.delete();
+    } catch (e) {
+      debugPrint('[ProductForm] Draft restore failed: $e');
+    }
+  }
+
+  /// Clear draft after successful submit.
+  Future<void> _clearDraft() async {
+    try {
+      final file = await _draftFile;
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _skuController.dispose();
-    _barcodeController.dispose();
-    _priceController.dispose();
-    _quantityController.dispose();
-    _lowStockController.dispose();
+    _nameCtl.dispose();
+    _descCtl.dispose();
+    _priceCtl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final picker = ImagePicker();
-      final List<XFile> pickedFiles = [];
-      
-      if (source == ImageSource.gallery) {
-        final files = await picker.pickMultiImage(imageQuality: 70);
-        pickedFiles.addAll(files);
-      } else {
-        final file = await picker.pickImage(source: source, imageQuality: 70);
-        if (file != null) pickedFiles.add(file);
-      }
-
-      // Guard: widget may be disposed if Android killed activity during camera
-      if (!mounted) return;
-
-      if (pickedFiles.isNotEmpty) {
-        setState(() => _images.addAll(pickedFiles));
-      }
-    } catch (e) {
-      debugPrint('Image pick failed: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick image: $e', style: TextStyle(fontSize: Responsive.sp(12)))),
-      );
-    }
+  // ── Identifier generators ──
+  String _generateSKU() {
+    final r = Random();
+    return 'PB-${r.nextInt(9000) + 1000}';
   }
 
   String _generateBarcode() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-    return timestamp.substring(timestamp.length - 8); // Simple 8-digit numeric barcode
+    final ts = DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
+    final r = Random();
+    final rand = (r.nextInt(9000) + 1000).toString();
+    return 'PB$ts$rand';
   }
 
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Delete Product', style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold)),
-        content: Text(
-          'Are you sure you want to delete "${widget.product?.name}"? This action cannot be undone.',
-          style: TextStyle(fontSize: Responsive.sp(13)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[600])),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx); // Close dialog
-              _handleDelete();
-            },
-            child: Text('Delete', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: const Color(0xFFFF6B8A))),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleDelete() async {
-    final product = widget.product;
-    if (product == null) return;
-
-    Navigator.pop(context); // Close form
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Deleting product...', style: TextStyle(fontSize: Responsive.sp(13))),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    try {
-      await ref.read(productsProvider.notifier).deleteProduct(product.id);
-    } catch (e) {
-      debugPrint('Delete failed: $e');
-    }
-  }
-
-  void _handleSave() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    // Show loading indicator on the form itself (DON'T pop yet)
-    setState(() => _isSaving = true);
-
-    try {
-      // 1. Upload new local images first
-      final List<Map<String, dynamic>> finalImages = [];
-      int sortOrder = 0;
-
-      for (var img in _images) {
-        if (img is XFile) {
-          final repo = UploadRepository();
-          final url = await repo.uploadFile(File(img.path), folder: 'products');
-          finalImages.add({
-            'url': url,
-            'is_primary': sortOrder == 0,
-            'sort_order': sortOrder,
-          });
-        } else if (img is String) {
-          finalImages.add({
-            'url': img,
-            'is_primary': sortOrder == 0,
-            'sort_order': sortOrder,
-          });
-        }
-        sortOrder++;
-      }
-
-      // 2. Prepare payload
-      final name = _nameController.text.trim();
-      final String slug = name.toLowerCase().replaceAll(' ', '-').replaceAll(RegExp(r'[^a-z0-9\-]'), '');
-      final int qty = int.tryParse(_quantityController.text) ?? 0;
-
-      final payload = {
-        'name': name,
-        'slug': widget.product?.slug ?? slug,
-        'description': _descriptionController.text.trim(),
-        'sku': _skuController.text.trim(),
-        'barcode': _barcodeController.text.trim(),
-        'price_per_day': double.tryParse(_priceController.text) ?? 0,
-        'security_deposit': 0,
-        'quantity': qty,
-        // On CREATE: available = total quantity
-        // On EDIT: adjust available by the delta (new_qty - old_qty)
-        // e.g., had 5 total / 3 available (2 rented), change total to 15
-        //        delta = +10, new available = 3 + 10 = 13
-        'available_quantity': widget.product == null
-            ? qty
-            : (widget.product!.availableQuantity + (qty - widget.product!.quantity)).clamp(0, qty),
-        'low_stock_threshold': int.tryParse(_lowStockController.text) ?? 10,
-        'track_inventory': _trackInventory,
-        'is_active': _isActive,
-        'is_featured': _isFeatured,
-        'category_id': _selectedCategoryId,
-        'subcategory_id': _selectedSubcategoryId,
-        'subvariant_id': _selectedVariantId,
-        'store_id': '00000000-0000-0000-0000-000000000001',
-        'images': finalImages,
-      };
-
-      // 3. Save via provider (ref is still valid because we haven't popped)
-      if (widget.product != null) {
-        await ref.read(productsProvider.notifier).updateProduct(widget.product!.id, payload);
-      } else {
-        await ref.read(productsProvider.notifier).addProduct(payload);
-      }
-
-      // 4. NOW pop after save is complete and provider is updated
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.product != null ? 'Product updated!' : 'Product added!',
-            style: TextStyle(fontSize: Responsive.sp(13)),
-          ),
-          backgroundColor: const Color(0xFF2ECC71),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    } catch (e) {
-      debugPrint('Save failed: $e');
-      if (!mounted) return;
-      setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Save failed: $e', style: TextStyle(fontSize: Responsive.sp(12))),
-          backgroundColor: const Color(0xFFFF6B8A),
-        ),
-      );
-    }
+  /// Generate a URL-safe slug from the product name.
+  String _generateSlug(String name) {
+    return name
+        .toLowerCase()
+        .trim()
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-')
+        .replaceAll(RegExp(r'-+'), '-');
   }
 
   @override
   Widget build(BuildContext context) {
     Responsive.init(context);
-    final categoriesAsync = ref.watch(categoriesProvider);
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    // Load data for edit mode
+    if (isEdit && !_dataLoaded) {
+      ref.watch(productByIdProvider(widget.productId!)).whenData((p) {
+        if (!_dataLoaded) {
+          _populateFields(p);
+          _dataLoaded = true;
+        }
+      });
+    }
+
+    // Categories
+    final allCategories = ref.watch(categoriesProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
       appBar: AppBar(
-        title: Text(widget.product == null ? 'New Product' : 'Edit Product', style: TextStyle(fontSize: Responsive.sp(18))),
-        actions: [
-          if (widget.product != null && !_isSaving)
-            IconButton(
-              onPressed: () => _confirmDelete(context),
-              icon: Icon(Icons.delete_outline, size: Responsive.icon(20), color: const Color(0xFFFF6B8A)),
-              tooltip: 'Delete Product',
-            ),
-          TextButton.icon(
-            onPressed: _isSaving ? null : _handleSave,
-            icon: _isSaving
-                ? SizedBox(width: Responsive.icon(16), height: Responsive.icon(16), child: const CircularProgressIndicator(strokeWidth: 2, color: _primary))
-                : Icon(Icons.check_rounded, size: Responsive.icon(18), color: _primary),
-            label: Text(_isSaving ? 'Saving...' : 'Save', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: _primary)),
-          ),
-          SizedBox(width: Responsive.w(4)),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: Responsive.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildSectionTitle('1', 'Basic Information', Colors.purple),
-              _buildBasicInfoCard(),
-              SizedBox(height: Responsive.h(24)),
-
-              _buildSectionTitle('2', 'Identifiers', Colors.blue),
-              _buildIdentifiersCard(),
-              SizedBox(height: Responsive.h(24)),
-
-              _buildSectionTitle('3', 'Categories', Colors.green),
-              categoriesAsync.when(
-                data: (cats) => _buildCategoriesCard(cats),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (err, _) => Text('Error loading categories', style: TextStyle(color: Colors.red, fontSize: Responsive.sp(14))),
-              ),
-              SizedBox(height: Responsive.h(24)),
-
-              _buildSectionTitle('4', 'Images', Colors.pink),
-              _buildImagesCard(),
-              SizedBox(height: Responsive.h(24)),
-
-              _buildSectionTitle('5', 'Pricing & Inventory', Colors.amber),
-              _buildPricingInventoryCard(),
-              SizedBox(height: Responsive.h(24)),
-
-              _buildSectionTitle('6', 'Status', Colors.grey),
-              _buildStatusCard(),
-              SizedBox(height: Responsive.h(40)),
-            ],
-          ),
+        title: Text(
+          isEdit ? 'Edit Product' : 'Add Product',
+          style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700),
         ),
       ),
-          // Loading overlay
-          if (_isSaving)
-            Container(
-              color: Colors.black.withValues(alpha: 0.3),
-              child: Center(
-                child: Container(
-                  padding: Responsive.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(Responsive.r(16)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(color: Color(0xFF434343)),
-                      SizedBox(height: Responsive.h(16)),
-                      Text('Saving product...', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w600)),
-                    ],
-                  ),
-                ),
-              ),
+      body: SingleChildScrollView(
+        padding: Responsive.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── 1. Images (first — add photos before details) ──
+            _card(
+              children: [
+                _sectionHeader('Images'),
+                SizedBox(height: Responsive.h(10)),
+                _buildImageGrid(),
+              ],
             ),
-        ],
-      ),
-    );
-  }
+            SizedBox(height: Responsive.h(12)),
 
-  Widget _buildSectionTitle(String number, String title, MaterialColor color) {
-    return Padding(
-      padding: Responsive.only(bottom: 10, left: 2),
-      child: Row(
-        children: [
-          Container(
-            width: Responsive.w(24),
-            height: Responsive.w(24),
-            decoration: BoxDecoration(
-              color: _primary,
-              shape: BoxShape.circle,
+            // ── 2. Product Name & Description ──
+            _card(
+              children: [
+                _label('Product Name', required: true),
+                SizedBox(height: Responsive.h(6)),
+                _input(_nameCtl, 'e.g., Diamond Necklace Set'),
+                SizedBox(height: Responsive.h(14)),
+                _label('Description'),
+                SizedBox(height: Responsive.h(6)),
+                _input(_descCtl, 'Materials, occasion, style... (optional)',
+                    maxLines: 3, type: TextInputType.multiline),
+              ],
             ),
-            child: Center(
-              child: Text(number, style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.bold, color: Colors.white)),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 3. Category → Subcategory → Variant ──
+            _card(
+              children: [
+                _sectionHeader('Category'),
+                SizedBox(height: Responsive.h(10)),
+                allCategories.when(
+                  data: (cats) => _buildCategoryDropdowns(cats, primary),
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Text('Failed to load categories',
+                      style: TextStyle(fontSize: Responsive.sp(13), color: Colors.red)),
+                ),
+              ],
             ),
-          ),
-          SizedBox(width: Responsive.w(8)),
-          Text(title, style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w700, color: _primary)),
-        ],
-      ),
-    );
-  }
+            SizedBox(height: Responsive.h(12)),
 
-  Widget _buildBasicInfoCard() {
-    return _buildCard(
-      child: Column(
-        children: [
-          _buildTextField(label: 'Product Name *', controller: _nameController, hint: 'e.g. Diamond Necklace Set', required: true),
-          SizedBox(height: Responsive.h(16)),
-          _buildTextField(label: 'Description', controller: _descriptionController, hint: 'Materials, occasion, style...', maxLines: 3),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIdentifiersCard() {
-    return _buildCard(
-      child: Column(
-        children: [
-          _buildTextField(label: 'SKU', controller: _skuController, hint: 'PB-NK-001'),
-          SizedBox(height: Responsive.h(16)),
-          Row(
-            children: [
-              Expanded(child: _buildTextField(label: 'Barcode', controller: _barcodeController, hint: '123456789')),
-              SizedBox(width: Responsive.w(12)),
-              Padding(
-                padding: Responsive.only(top: 24),
-                child: IconButton(
-                  onPressed: () {
-                    final newBarcode = _generateBarcode();
-                    _barcodeController.text = newBarcode;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Barcode Auto-generated!'), duration: Duration(seconds: 1)),
-                    );
-                  },
-                  style: IconButton.styleFrom(backgroundColor: _primary.withValues(alpha: 0.1), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12)))),
-                  icon: Icon(Icons.qr_code_scanner_rounded, color: _primary, size: Responsive.icon(22)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoriesCard(List<Category> allCategories) {
-    final List<Category> mainCats = allCategories.where((c) => c.parentId == null).toList();
-    final List<Category> subCats = _selectedCategoryId != null ? allCategories.where((c) => c.parentId == _selectedCategoryId).toList() : [];
-    final List<Category> variants = _selectedSubcategoryId != null ? allCategories.where((c) => c.parentId == _selectedSubcategoryId).toList() : [];
-
-    return _buildCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildDropdown(
-            label: 'Main Category',
-            value: _selectedCategoryId,
-            items: mainCats,
-            onChanged: (val) {
-              setState(() {
-                _selectedCategoryId = val;
-                _selectedSubcategoryId = null;
-                _selectedVariantId = null;
-              });
-            },
-          ),
-          SizedBox(height: Responsive.h(16)),
-          _buildDropdown(
-            label: 'Subcategory',
-            value: _selectedSubcategoryId,
-            items: subCats,
-            disabled: subCats.isEmpty,
-            onChanged: (val) {
-              setState(() {
-                _selectedSubcategoryId = val;
-                _selectedVariantId = null;
-              });
-            },
-          ),
-          SizedBox(height: Responsive.h(16)),
-          _buildDropdown(
-            label: 'Variant',
-            value: _selectedVariantId,
-            items: variants,
-            disabled: variants.isEmpty,
-            onChanged: (val) => setState(() => _selectedVariantId = val),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImagesCard() {
-    return _buildCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.camera),
-                  icon: Icon(Icons.camera_alt_rounded, size: Responsive.icon(18)),
-                  label: const Text('Camera'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF3F0FF), foregroundColor: _primary, elevation: 0),
-                ),
-              ),
-              SizedBox(width: Responsive.w(12)),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.gallery),
-                  icon: Icon(Icons.photo_library_rounded, size: Responsive.icon(18)),
-                  label: const Text('Gallery'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF3F0FF), foregroundColor: _primary, elevation: 0),
-                ),
-              ),
-            ],
-          ),
-          if (_images.isNotEmpty) ...[
-            SizedBox(height: Responsive.h(16)),
-            SizedBox(
-              height: Responsive.w(100),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _images.length,
-                separatorBuilder: (context, index) => SizedBox(width: Responsive.w(12)),
-                itemBuilder: (context, index) {
-                  final img = _images[index];
-                  return Stack(
-                    children: [
-                      Container(
-                        width: Responsive.w(100),
-                        height: Responsive.w(100),
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(Responsive.r(12)), border: Border.all(color: Colors.grey[200]!)),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(Responsive.r(12)),
-                          child: img is XFile 
-                              ? Image.file(File(img.path), fit: BoxFit.cover) 
-                              : (img as String).startsWith('http') 
-                                  ? Image.network(
-                                      img,
-                                      fit: BoxFit.cover,
-                                      loadingBuilder: (context, child, loadingProgress) {
-                                        if (loadingProgress == null) return child;
-                                        return Shimmer.fromColors(
-                                          baseColor: Colors.grey[200]!,
-                                          highlightColor: Colors.grey[100]!,
-                                          child: Container(color: Colors.white),
-                                        );
-                                      },
-                                      errorBuilder: (context, error, stackTrace) => Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
-                                    )
-                                  : Icon(Icons.error_outline_rounded, color: Colors.grey[400]),
-                        ),
-                      ),
-                      if (index == 0)
-                        Positioned(
-                          top: 6, left: 6,
-                          child: Container(
-                            padding: Responsive.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: _primary, borderRadius: BorderRadius.circular(Responsive.r(6))),
-                            child: Text('Primary', style: TextStyle(color: Colors.white, fontSize: Responsive.sp(9), fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      Positioned(
-                        top: -4, right: -4,
-                        child: IconButton(
-                          onPressed: () => setState(() => _images.removeAt(index)),
-                          icon: Container(
-                            padding: Responsive.all(4),
-                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                            child: Icon(Icons.close_rounded, size: Responsive.icon(12), color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ]
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPricingInventoryCard() {
-    return _buildCard(
-      child: Column(
-        children: [
-          _buildTextField(label: 'Rent Amount (₹/day) *', controller: _priceController, hint: '0.0', required: true, keyboardType: TextInputType.number),
-          SizedBox(height: Responsive.h(16)),
-          Row(
-            children: [
-              Expanded(child: _buildQuantityStepper(_quantityController)),
-              SizedBox(width: Responsive.w(16)),
-              Expanded(child: _buildTextField(label: 'Low Stock Alert', controller: _lowStockController, hint: '10', keyboardType: TextInputType.number)),
-            ],
-          ),
-          SizedBox(height: Responsive.h(16)),
-          _buildSwitch(label: 'Track Inventory', value: _trackInventory, onChanged: (v) => setState(() => _trackInventory = v)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusCard() {
-    return _buildCard(
-      child: Column(
-        children: [
-          _buildSwitch(label: 'Active (Visible to customers)', value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
-          SizedBox(height: Responsive.h(12)),
-          _buildSwitch(label: 'Featured (Show on homepage)', value: _isFeatured, onChanged: (v) => setState(() => _isFeatured = v)),
-        ],
-      ),
-    );
-  }
-
-  // ── Helpers ──
-
-  Widget _buildCard({required Widget child}) {
-    return Container(
-      padding: Responsive.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(Responsive.r(12)), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: Responsive.r(6), offset: Offset(0, Responsive.h(2)))]),
-      child: child,
-    );
-  }
-
-  Widget _buildQuantityStepper(TextEditingController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Total Quantity *', style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold, color: Colors.grey[700])),
-        SizedBox(height: Responsive.h(6)),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(Responsive.r(12)),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                icon: Icon(Icons.remove, size: Responsive.icon(16), color: _primary),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () {
-                  final current = int.tryParse(controller.text) ?? 1;
-                  if (current > 0) controller.text = (current - 1).toString();
-                },
-              ),
-              Expanded(
-                child: TextFormField(
-                  controller: controller,
+            // ── 4. Rent Price ──
+            _card(
+              children: [
+                _label('Rent Price', required: true),
+                SizedBox(height: Responsive.h(6)),
+                TextField(
+                  controller: _priceCtl,
                   keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: TextStyle(
+                    fontSize: Responsive.sp(22),
+                    fontWeight: FontWeight.w800,
+                    color: primary,
+                  ),
                   decoration: InputDecoration(
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: Responsive.h(12)),
+                    prefixText: '₹ ',
+                    prefixStyle: TextStyle(
+                      fontSize: Responsive.sp(22),
+                      fontWeight: FontWeight.w800,
+                      color: primary,
+                    ),
+                    hintText: '0',
+                    contentPadding: Responsive.symmetric(horizontal: 14, vertical: 14),
                   ),
                 ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 5. Stock by Branch (matches admin ProductForm) ──
+            _card(
+              children: [
+                _sectionHeader('Stock by Branch'),
+                SizedBox(height: Responsive.h(10)),
+                _buildBranchInventory(primary),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 6. Identifiers (SKU + Barcode) ──
+            _card(
+              children: [
+                _sectionHeader('Identifiers'),
+                SizedBox(height: Responsive.h(10)),
+
+                // SKU
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('SKU',
+                              style: TextStyle(
+                                  fontSize: Responsive.sp(11),
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500])),
+                          SizedBox(height: Responsive.h(4)),
+                          Container(
+                            width: double.infinity,
+                            padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(Responsive.r(10)),
+                            ),
+                            child: Text(_sku,
+                                style: TextStyle(
+                                    fontSize: Responsive.sp(13),
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'monospace',
+                                    color: primary)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: Responsive.w(8)),
+                    IconButton(
+                      onPressed: () => setState(() => _sku = _generateSKU()),
+                      icon: Icon(Icons.refresh_rounded, size: Responsive.icon(22)),
+                      tooltip: 'Regenerate SKU',
+                    ),
+                  ],
+                ),
+                SizedBox(height: Responsive.h(14)),
+
+                // Barcode
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Barcode',
+                              style: TextStyle(
+                                  fontSize: Responsive.sp(11),
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500])),
+                          SizedBox(height: Responsive.h(4)),
+                          Container(
+                            width: double.infinity,
+                            padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(Responsive.r(10)),
+                            ),
+                            child: Text(_barcode,
+                                style: TextStyle(
+                                    fontSize: Responsive.sp(12),
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'monospace',
+                                    color: primary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: Responsive.w(4)),
+                    IconButton(
+                      onPressed: () => setState(() => _barcode = _generateBarcode()),
+                      icon: Icon(Icons.refresh_rounded, size: Responsive.icon(22)),
+                      tooltip: 'Regenerate Barcode',
+                    ),
+                    IconButton(
+                      onPressed: _scanBarcode,
+                      icon: Icon(Icons.qr_code_scanner_rounded, size: Responsive.icon(22)),
+                      tooltip: 'Scan Barcode',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 7. Active toggle ──
+            _card(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Active Listing',
+                            style: TextStyle(
+                                fontSize: Responsive.sp(14),
+                                fontWeight: FontWeight.w600,
+                                color: primary)),
+                        SizedBox(height: Responsive.h(2)),
+                        Text('Visible in storefront',
+                            style: TextStyle(
+                                fontSize: Responsive.sp(11), color: Colors.grey[500])),
+                      ],
+                    ),
+                    Switch.adaptive(
+                      value: _isActive,
+                      onChanged: (v) => setState(() => _isActive = v),
+                      activeTrackColor: primary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(24)),
+
+            // ── 8. Submit ──
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _submitForm,
+                style: ElevatedButton.styleFrom(
+                  padding: Responsive.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(Responsive.r(12))),
+                ),
+                child: _isLoading
+                    ? SizedBox(
+                        height: Responsive.h(22),
+                        width: Responsive.w(22),
+                        child: const CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        isEdit ? 'Save Changes' : 'Create Product',
+                        style: TextStyle(
+                            fontSize: Responsive.sp(16), fontWeight: FontWeight.w700),
+                      ),
               ),
-              IconButton(
-                icon: Icon(Icons.add, size: Responsive.icon(16), color: _primary),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-                onPressed: () {
-                  final current = int.tryParse(controller.text) ?? 0;
-                  controller.text = (current + 1).toString();
-                },
+            ),
+            SizedBox(height: Responsive.h(32)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────────────
+
+  void _populateFields(Product p) {
+    _nameCtl.text = p.name;
+    _descCtl.text = p.description ?? '';
+    _priceCtl.text = p.pricePerDay > 0 ? p.pricePerDay.toStringAsFixed(0) : '';
+    // Populate branch stocks from existing inventory
+    _branchStocks.clear();
+    for (final inv in p.branchInventory) {
+      _branchStocks[inv.branchId] = inv.stockCount;
+    }
+    _sku = p.sku ?? _generateSKU();
+    _barcode = p.barcode ?? _generateBarcode();
+    _isActive = p.isActive;
+    _imageUrls
+      ..clear()
+      ..addAll(p.images.map((i) => i.url));
+    setState(() {});
+  }
+
+  Widget _card({required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      padding: Responsive.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(Responsive.r(12)),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+    );
+  }
+
+  Widget _sectionHeader(String t) {
+    return Text(t,
+        style: TextStyle(
+            fontSize: Responsive.sp(14),
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).colorScheme.primary));
+  }
+
+  Widget _label(String t, {bool required = false}) {
+    return RichText(
+      text: TextSpan(
+        text: t,
+        style: TextStyle(
+            fontSize: Responsive.sp(13),
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.primary),
+        children: required
+            ? [TextSpan(text: ' *', style: TextStyle(color: Colors.red[400]))]
+            : [],
+      ),
+    );
+  }
+
+  Widget _input(TextEditingController ctl, String hint,
+      {int maxLines = 1, TextInputType type = TextInputType.text}) {
+    return TextField(
+      controller: ctl,
+      keyboardType: type,
+      maxLines: maxLines,
+      style: TextStyle(fontSize: Responsive.sp(14)),
+      decoration: InputDecoration(
+        hintText: hint,
+        contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
+      ),
+    );
+  }
+
+  // ── Image Grid ──
+  Widget _buildImageGrid() {
+    final total = _imageUrls.length + _newImages.length;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: Responsive.w(10),
+        mainAxisSpacing: Responsive.h(10),
+      ),
+      itemCount: total + 1,
+      itemBuilder: (_, i) {
+        if (i == total) return _addImageBtn();
+        if (i < _imageUrls.length) {
+          return _imageTile(
+            child: CachedNetworkImage(
+              imageUrl: _imageUrls[i],
+              fit: BoxFit.cover,
+              placeholder: (_, __) => Container(color: Colors.grey[200]),
+              errorWidget: (_, __, ___) =>
+                  Icon(Icons.broken_image, size: Responsive.icon(24), color: Colors.grey),
+            ),
+            onRemove: () => setState(() => _imageUrls.removeAt(i)),
+            isPrimary: i == 0 && _newImages.isEmpty,
+          );
+        }
+        final fi = i - _imageUrls.length;
+        return _imageTile(
+          child: Image.file(_newImages[fi], fit: BoxFit.cover),
+          onRemove: () => setState(() => _newImages.removeAt(fi)),
+          isPrimary: i == 0,
+        );
+      },
+    );
+  }
+
+  Widget _addImageBtn() {
+    final primary = Theme.of(context).colorScheme.primary;
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        decoration: BoxDecoration(
+          color: primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
+          border: Border.all(color: primary.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_a_photo_outlined,
+                size: Responsive.icon(26), color: primary.withValues(alpha: 0.5)),
+            SizedBox(height: Responsive.h(4)),
+            Text('Add',
+                style: TextStyle(
+                    fontSize: Responsive.sp(11), color: primary.withValues(alpha: 0.6))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _imageTile({required Widget child, required VoidCallback onRemove, bool isPrimary = false}) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
+          child: SizedBox.expand(child: child),
+        ),
+        Positioned(
+          top: Responsive.h(4),
+          right: Responsive.w(4),
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              padding: Responsive.all(3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.close_rounded, size: Responsive.icon(14), color: Colors.white),
+            ),
+          ),
+        ),
+        if (isPrimary)
+          Positioned(
+            bottom: Responsive.h(4),
+            left: Responsive.w(4),
+            child: Container(
+              padding: Responsive.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondary,
+                borderRadius: BorderRadius.circular(Responsive.r(4)),
+              ),
+              child: Text('Primary',
+                  style: TextStyle(
+                      fontSize: Responsive.sp(9),
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(Responsive.r(16)))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: Responsive.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.camera_alt_rounded, size: Responsive.icon(24)),
+                title: Text('Camera', style: TextStyle(fontSize: Responsive.sp(15))),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: Icon(Icons.photo_library_rounded, size: Responsive.icon(24)),
+                title: Text('Gallery', style: TextStyle(fontSize: Responsive.sp(15))),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
+    if (source == null) return;
+
+    // Save form state BEFORE opening camera — if Android kills us,
+    // the draft will be restored when the user returns to this screen.
+    await _saveDraft();
+
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 600,
+      imageQuality: 40,
+      requestFullMetadata: false, // reduces memory usage significantly
+    );
+    if (picked != null && mounted) {
+      setState(() => _newImages.add(File(picked.path)));
+    }
   }
 
-  Widget _buildTextField({required String label, required TextEditingController controller, String? hint, bool required = false, int maxLines = 1, TextInputType keyboardType = TextInputType.text}) {
+  // ── Category Dropdowns ──
+  Widget _buildCategoryDropdowns(List<Category> allCats, Color primary) {
+    final mains = allCats.where((c) => c.parentId == null).toList();
+    final subs = _categoryId != null
+        ? allCats.where((c) => c.parentId == _categoryId).toList()
+        : <Category>[];
+    final variants = _subcategoryId != null
+        ? allCats.where((c) => c.parentId == _subcategoryId).toList()
+        : <Category>[];
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.grey[600])),
-        SizedBox(height: Responsive.h(6)),
-        TextFormField(
-          controller: controller,
-          maxLines: maxLines,
-          keyboardType: keyboardType,
-          style: TextStyle(fontSize: Responsive.sp(13), color: _primary),
-          validator: required ? (v) => v == null || v.isEmpty ? 'Required' : null : null,
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(12)),
-            filled: true,
-            fillColor: const Color(0xFFF5F5F7),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide.none),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10)), borderSide: BorderSide(color: _primary, width: 1.5)),
-            contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDropdown({required String label, required String? value, required List<Category> items, required Function(String?) onChanged, bool disabled = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: Colors.grey[600])),
-        SizedBox(height: Responsive.h(6)),
-        Container(
-          padding: Responsive.symmetric(horizontal: 14, vertical: 2),
-          decoration: BoxDecoration(
-            color: disabled ? Colors.grey[100] : const Color(0xFFF5F5F7),
-            borderRadius: BorderRadius.circular(Responsive.r(10)),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              isExpanded: true,
-              value: value,
-              hint: Text(disabled ? 'None available' : 'Select $label', style: TextStyle(color: Colors.grey[400], fontSize: Responsive.sp(12))),
-              items: items.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: TextStyle(fontSize: Responsive.sp(13), color: _primary)))).toList(),
-              onChanged: disabled ? null : onChanged,
-              icon: Icon(Icons.keyboard_arrow_down_rounded, size: Responsive.icon(20), color: Colors.grey[500]),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSwitch({required String label, required bool value, required Function(bool) onChanged}) {
-    return Container(
-      padding: Responsive.symmetric(horizontal: 4, vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(label, style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w500, color: _primary), maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: _primary,
-            activeThumbColor: Colors.white,
-            inactiveTrackColor: Colors.grey[300],
-          ),
+        _dropdown('Select category', mains, _categoryId, (v) {
+          setState(() {
+            _categoryId = v;
+            _subcategoryId = null;
+            _subvariantId = null;
+            // Update SKU prefix with category name
+            if (v != null) {
+              final cat = mains.firstWhere((c) => c.id == v);
+              final prefix = cat.name.length >= 3
+                  ? cat.name.substring(0, 3).toUpperCase()
+                  : cat.name.toUpperCase();
+              _sku = '$prefix-${Random().nextInt(9000) + 1000}';
+            }
+          });
+        }),
+        if (subs.isNotEmpty) ...[
+          SizedBox(height: Responsive.h(10)),
+          _dropdown('Select subcategory (optional)', subs, _subcategoryId, (v) {
+            setState(() {
+              _subcategoryId = v;
+              _subvariantId = null;
+            });
+          }),
         ],
+        if (variants.isNotEmpty) ...[
+          SizedBox(height: Responsive.h(10)),
+          _dropdown('Select variant (optional)', variants, _subvariantId, (v) {
+            setState(() => _subvariantId = v);
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _dropdown(
+      String hint, List<Category> items, String? value, ValueChanged<String?> onChanged) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
+      ),
+      hint: Text(hint, style: TextStyle(fontSize: Responsive.sp(13))),
+      isExpanded: true,
+      items: items
+          .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  // ── Branch Inventory (matches admin ProductForm) ──
+  int get _totalQuantity => _branchStocks.values.fold(0, (a, b) => a + b);
+
+  Widget _buildBranchInventory(Color primary) {
+    final branchesAsync = ref.watch(branchesProvider);
+    final authUser = ref.watch(authUserProvider);
+
+    return branchesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Text('Failed to load branches',
+          style: TextStyle(fontSize: Responsive.sp(13), color: Colors.red)),
+      data: (allBranches) {
+        final activeBranches = allBranches.where((b) => b.isActive).toList();
+
+        // Filter based on role:
+        // Admin/SuperAdmin → all branches
+        // Staff/Manager → only their assigned branch
+        final visibleBranches = (authUser?.isAdmin == true)
+            ? activeBranches
+            : activeBranches
+                .where((b) => b.id == authUser?.branchId)
+                .toList();
+
+        if (visibleBranches.isEmpty) {
+          return Padding(
+            padding: Responsive.symmetric(vertical: 16),
+            child: Text('No branches available',
+                style: TextStyle(
+                    fontSize: Responsive.sp(13), color: Colors.grey[500]),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          );
+        }
+
+        // Initialize stocks for visible branches
+        for (final b in visibleBranches) {
+          _branchStocks.putIfAbsent(b.id, () => 0);
+        }
+
+        return Column(
+          children: [
+            // Total badge
+            Container(
+              width: double.infinity,
+              padding: Responsive.symmetric(horizontal: 12, vertical: 8),
+              margin: EdgeInsets.only(bottom: Responsive.h(10)),
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(Responsive.r(8)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Total Stock',
+                      style: TextStyle(
+                          fontSize: Responsive.sp(13),
+                          fontWeight: FontWeight.w600,
+                          color: primary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Container(
+                    padding:
+                        Responsive.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: primary,
+                      borderRadius: BorderRadius.circular(Responsive.r(6)),
+                    ),
+                    child: Text('$_totalQuantity',
+                        style: TextStyle(
+                            fontSize: Responsive.sp(14),
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+            // Per-branch rows
+            ...visibleBranches.map((branch) => _branchRow(branch, primary)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _branchRow(Branch branch, Color primary) {
+    final qty = _branchStocks[branch.id] ?? 0;
+    return Padding(
+      padding: EdgeInsets.only(bottom: Responsive.h(8)),
+      child: Container(
+        padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade200),
+          borderRadius: BorderRadius.circular(Responsive.r(10)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.store_rounded,
+                size: Responsive.icon(18), color: Colors.grey[400]),
+            SizedBox(width: Responsive.w(10)),
+            Expanded(
+              child: Text(branch.name,
+                  style: TextStyle(
+                      fontSize: Responsive.sp(13),
+                      fontWeight: FontWeight.w600,
+                      color: primary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            // Minus
+            _stepperBtn(Icons.remove_rounded, primary, () {
+              if (qty > 0) {
+                setState(() => _branchStocks[branch.id] = qty - 1);
+              }
+            }, size: 34),
+            SizedBox(width: Responsive.w(8)),
+            // Quantity display
+            SizedBox(
+              width: Responsive.w(48),
+              child: Text('$qty',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: Responsive.sp(18),
+                      fontWeight: FontWeight.w800,
+                      color: primary)),
+            ),
+            SizedBox(width: Responsive.w(8)),
+            // Plus
+            _stepperBtn(Icons.add_rounded, primary, () {
+              setState(() => _branchStocks[branch.id] = qty + 1);
+            }, size: 34),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _stepperBtn(IconData icon, Color primary, VoidCallback onTap, {double size = 48}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: Responsive.w(size),
+        height: Responsive.w(size),
+        decoration: BoxDecoration(
+          color: primary,
+          borderRadius: BorderRadius.circular(Responsive.r(10)),
+        ),
+        child: Icon(icon, color: Colors.white, size: Responsive.icon(size == 34 ? 18 : 24)),
+      ),
+    );
+  }
+
+  // ── Barcode Scanner (placeholder — needs mobile_scanner package) ──
+  void _scanBarcode() {
+    // TODO: Integrate mobile_scanner or barcode_scan package
+    _snack('Barcode scanner coming soon. Use auto-generate for now.');
+  }
+
+  // ── Submit ──
+  Future<void> _submitForm() async {
+    if (_nameCtl.text.trim().isEmpty) {
+      _snack('Product name is required', isError: true);
+      return;
+    }
+    final price = double.tryParse(_priceCtl.text) ?? 0;
+    if (price <= 0) {
+      _snack('Rent price is required', isError: true);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Upload new images to R2
+      final uploadedUrls = <String>[];
+      if (_newImages.isNotEmpty) {
+        final uploadRepo = UploadRepository();
+        for (int i = 0; i < _newImages.length; i++) {
+          _snack('Uploading image ${i + 1} of ${_newImages.length}…');
+          final url = await uploadRepo.uploadFile(_newImages[i], folder: 'products');
+          uploadedUrls.add(url);
+        }
+      }
+
+      // 2. Build images JSONB
+      final allUrls = [..._imageUrls, ...uploadedUrls];
+      final images = allUrls.asMap().entries.map((e) => {
+            'url': e.value,
+            'is_primary': e.key == 0,
+            'sort_order': e.key,
+            'alt_text': _nameCtl.text.trim(),
+          }).toList();
+
+      // 3. Build payload — slug is REQUIRED by the server's Zod schema
+      final name = _nameCtl.text.trim();
+      final slug = _generateSlug(name);
+      final totalQty = _totalQuantity;
+      final body = <String, dynamic>{
+        'name': name,
+        'slug': slug,
+        'price_per_day': price,
+        'security_deposit': 0,
+        'quantity': totalQty,
+        'available_quantity': totalQty,
+        'images': images,
+        'is_active': _isActive,
+        'is_featured': false,
+        'track_inventory': true,
+        'low_stock_threshold': 0,
+        'sku': _sku,
+        'barcode': _barcode,
+      };
+
+      // Add branch_inventory for per-branch stock
+      final branchInventory = _branchStocks.entries
+          .where((e) => e.value > 0)
+          .map((e) => {'branch_id': e.key, 'quantity': e.value})
+          .toList();
+      if (branchInventory.isNotEmpty) {
+        body['branch_inventory'] = branchInventory;
+      }
+
+      final desc = _descCtl.text.trim();
+      if (desc.isNotEmpty) body['description'] = desc;
+      if (_categoryId != null) body['category_id'] = _categoryId;
+      if (_subcategoryId != null) body['subcategory_id'] = _subcategoryId;
+      if (_subvariantId != null) body['subvariant_id'] = _subvariantId;
+
+      // 4. Create or update
+      if (isEdit) {
+        await ref.read(productsProvider.notifier).updateProduct(widget.productId!, body);
+      } else {
+        await ref.read(productsProvider.notifier).addProduct(body);
+      }
+
+      if (mounted) {
+        await _clearDraft();
+        _snack(isEdit ? 'Product updated!' : 'Product created!');
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      _snack(e.toString().replaceFirst('Exception: ', ''), isError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _snack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, maxLines: 2, overflow: TextOverflow.ellipsis),
+        backgroundColor: isError ? Colors.red[400] : const Color(0xFF2ECC71),
+        duration: Duration(seconds: isError ? 3 : 2),
       ),
     );
   }
