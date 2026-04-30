@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
         branch_id: branchId,
         staff_id: staffId,
         access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
       },
     });
   } catch (error) {

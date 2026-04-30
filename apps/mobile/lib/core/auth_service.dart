@@ -12,6 +12,7 @@ class AuthUser {
   final String? branchId;
   final String? staffId;
   final String accessToken;
+  final String? refreshToken;
 
   AuthUser({
     required this.id,
@@ -21,6 +22,7 @@ class AuthUser {
     this.branchId,
     this.staffId,
     required this.accessToken,
+    this.refreshToken,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class AuthUser {
       branchId: json['branch_id'] as String?,
       staffId: json['staff_id'] as String?,
       accessToken: json['access_token'] as String,
+      refreshToken: json['refresh_token'] as String?,
     );
   }
 
@@ -44,6 +47,7 @@ class AuthUser {
       'branch_id': branchId,
       'staff_id': staffId,
       'access_token': accessToken,
+      'refresh_token': refreshToken,
     };
   }
 }
@@ -52,6 +56,7 @@ class AuthService {
   final Dio _client = apiClient;
   final _storage = const FlutterSecureStorage();
   static const _tokenKey = 'auth_token';
+  static const _refreshKey = 'refresh_token';
   static const _userKey = 'auth_user';
 
   /// Login with email and password
@@ -68,6 +73,9 @@ class AuthService {
         
         // Store token and user data securely as JSON
         await _storage.write(key: _tokenKey, value: authUser.accessToken);
+        if (authUser.refreshToken != null) {
+          await _storage.write(key: _refreshKey, value: authUser.refreshToken!);
+        }
         await _storage.write(key: _userKey, value: jsonEncode(authUser.toJson()));
         
         return authUser;
@@ -82,6 +90,7 @@ class AuthService {
   /// Logout the user
   Future<void> logout() async {
     await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _refreshKey);
     await _storage.delete(key: _userKey);
   }
 
