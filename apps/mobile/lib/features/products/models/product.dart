@@ -24,12 +24,18 @@ class BranchInventory {
   });
 
   factory BranchInventory.fromJson(Map<String, dynamic> json) {
+    // Extract branch name from nested 'branches' object if present
+    String? branchName = json['branch_name'] as String?;
+    if (branchName == null && json['branches'] is Map) {
+      branchName = (json['branches'] as Map<String, dynamic>)['name'] as String?;
+    }
+
     return BranchInventory(
-      id: json['id'] as String,
-      productId: json['product_id'] as String,
-      branchId: json['branch_id'] as String,
-      stockCount: json['stock_count'] as int? ?? 0,
-      branchName: json['branch_name'] as String?,
+      id: json['id'] as String? ?? '',
+      productId: json['product_id'] as String? ?? '',
+      branchId: json['branch_id'] as String? ?? '',
+      stockCount: json['stock_count'] as int? ?? json['quantity'] as int? ?? 0,
+      branchName: branchName,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String? ?? '',
     );
@@ -270,11 +276,18 @@ class Product {
       lowStockThreshold: json['low_stock_threshold'] as int? ?? 10,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
-      branchInventory: (json['branch_inventory'] as List<dynamic>?)
-              ?.map((e) => BranchInventory.fromJson(e))
-              .toList() ??
-          [],
+      branchInventory: _parseBranchInventory(json),
     );
+  }
+
+  /// Parse branch inventory from either 'branch_inventory' or 'product_inventory' key.
+  static List<BranchInventory> _parseBranchInventory(Map<String, dynamic> json) {
+    // Try 'branch_inventory' first (mobile API), then 'product_inventory' (Supabase join)
+    final raw = json['branch_inventory'] ?? json['product_inventory'];
+    if (raw is List) {
+      return raw.map((e) => BranchInventory.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    return [];
   }
 
   Map<String, dynamic> toJson() {
