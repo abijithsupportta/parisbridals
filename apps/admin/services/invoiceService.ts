@@ -2,17 +2,22 @@
  * Invoice Service
  *
  * Service for generating PDF invoices for orders.
+ * Uses @react-pdf/renderer with a declarative Tally-style component.
  *
  * @module services/invoiceService
  */
 
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import React from 'react';
+import { renderToBuffer } from '@react-pdf/renderer';
 import { OrderWithRelations } from '@/domain/types/order';
-import { PaymentType } from '@/domain/types/payment';
 import { settingsService } from './settingsService';
 import { paymentService } from './paymentService';
 import { orderService } from './orderService';
+import {
+  TallyInvoicePDF,
+  type TallyInvoiceProps,
+  type InvoiceItem,
+} from '@/components/admin/orders/TallyInvoicePDF';
 
 export interface InvoiceData {
   order: OrderWithRelations;
@@ -29,9 +34,9 @@ export interface InvoiceData {
 
 export class InvoiceService {
   /**
-   * Generate invoice PDF
+   * Generate invoice PDF and return as a Buffer.
    */
-  async generateInvoice(orderId: string, invoiceType: 'deposit' | 'final'): Promise<Blob> {
+  async generateInvoice(orderId: string, invoiceType: 'deposit' | 'final'): Promise<Buffer> {
     // Fetch order with relations
     const orderResult = await orderService.getOrderById(orderId);
     if (!orderResult.success || !orderResult.data) {
@@ -51,16 +56,16 @@ export class InvoiceService {
     const invoiceNumber = `${settings.invoicePrefix}${order.id.slice(0, 8).toUpperCase()}-${invoiceType.toUpperCase()}`;
     const invoiceDate = new Date().toLocaleDateString('en-IN');
 
-    const invoiceData: InvoiceData = {
-      order,
-      invoiceType,
-      invoiceNumber,
-      invoiceDate,
-      payments,
-      settings,
-    };
+    // Build props for the React PDF component
+    const props = this.buildInvoiceProps(order, invoiceType, invoiceNumber, invoiceDate, payments, settings);
 
-    return this.generatePDF(invoiceData);
+    // Render the React component to a PDF buffer
+    // Cast needed because renderToBuffer expects ReactElement<DocumentProps>
+    // but our component wraps <Document> internally — this is safe.
+    const element = React.createElement(TallyInvoicePDF, props) as any;
+    const buffer = await renderToBuffer(element);
+
+    return buffer;
   }
 
   /**
@@ -78,205 +83,95 @@ export class InvoiceService {
     };
   }
 
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+  /** Format date to DD-MMM-YYYY */
+  private fmtDate(dateStr: string): string {
+    try {
+      return new Date(dateStr).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  }
+
+  /** Get product name from the order item's joined product relation */
+  private getItemProductName(item: any): string {
+    if (item.product && typeof item.product === 'object') {
+      return item.product.name || `Item #${item.product_id.slice(0, 8)}`;
+    }
+    return `Item #${item.product_id.slice(0, 8)}`;
+  }
+
   /**
-   * Generate PDF from invoice data
+   * Map raw order data into the flat props shape that TallyInvoicePDF expects.
    */
-  private generatePDF(data: InvoiceData): Blob {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    let yPosition = 20;
+  private buildInvoiceProps(
+    order: OrderWithRelations,
+    invoiceType: 'deposit' | 'final',
+    invoiceNumber: string,
+    invoiceDate: string,
+    payments: any[],
+    settings: { invoicePrefix: string; paymentTerms: string; authorizedSignature: string },
+  ): TallyInvoiceProps {
+    // Build line items
+    const items: InvoiceItem[] = order.items.map((item, idx) => ({
+      sno: idx + 1,
+      name: this.getItemProductName(item),
+      quantity: item.quantity || 0,
+      rate: item.price_per_day || 0,
+      amount: item.total_price || (item.price_per_day || 0) * (item.quantity || 0),
+    }));
 
-    // Add title
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text(data.invoiceType === 'deposit' ? 'DEPOSIT INVOICE' : 'FINAL INVOICE', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += 15;
+    // Payment calculations
+    const totalPaid = payments
+      .filter((p) => p.payment_type !== 'refund')
+      .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+    const balanceDue = Math.max(0, Number(order.total_amount || 0) - totalPaid);
 
-    // Invoice number and date
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Invoice No: ${data.invoiceNumber}`, 20, yPosition);
-    doc.text(`Date: ${data.invoiceDate}`, pageWidth - 20, yPosition, { align: 'right' });
-    yPosition += 10;
+    // Find payment mode
+    const depositPayment = payments.find((p) => p.payment_type === 'deposit');
+    const paymentMode = depositPayment?.payment_mode?.toUpperCase() || undefined;
 
-    // Store information
-    if (data.order.store) {
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text(data.order.store.name, 20, yPosition);
-      yPosition += 7;
 
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      if (data.order.store.address) {
-        doc.text(data.order.store.address, 20, yPosition);
-        yPosition += 5;
-      }
-      if (data.order.store.phone) {
-        doc.text(`Phone: ${data.order.store.phone}`, 20, yPosition);
-        yPosition += 5;
-      }
-      if (data.order.store.email) {
-        doc.text(`Email: ${data.order.store.email}`, 20, yPosition);
-        yPosition += 5;
-      }
-      if (data.order.store.gstin) {
-        doc.text(`GSTIN: ${data.order.store.gstin}`, 20, yPosition);
-        yPosition += 5;
-      }
-    }
-    yPosition += 10;
+    return {
+      companyName: order.store?.name || 'Paris Bridals',
+      companyAddress: order.store?.address,
+      companyPhone: order.store?.phone,
+      companyEmail: order.store?.email,
+      companyGstin: order.store?.gstin,
 
-    // Customer information
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Bill To:', 20, yPosition);
-    yPosition += 7;
+      invoiceNumber,
+      invoiceDate,
+      invoiceType,
+      orderId: order.id.slice(0, 8).toUpperCase(),
+      paymentMode,
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(data.order.customer.name, 20, yPosition);
-    yPosition += 5;
-    doc.text(`Phone: ${data.order.customer.phone}`, 20, yPosition);
-    yPosition += 5;
-    if (data.order.customer.email) {
-      doc.text(`Email: ${data.order.customer.email}`, 20, yPosition);
-      yPosition += 5;
-    }
-    yPosition += 10;
+      buyerName: order.customer.name,
+      buyerPhone: order.customer.phone,
+      buyerEmail: order.customer.email,
 
-    // Order details
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Order ID: #${data.order.id.slice(0, 8)}`, 20, yPosition);
-    yPosition += 5;
-    doc.text(`Rental Period: ${new Date(data.order.start_date).toLocaleDateString()} - ${new Date(data.order.end_date).toLocaleDateString()}`, 20, yPosition);
-    yPosition += 5;
-    if (data.order.event_date) {
-      doc.text(`Event Date: ${new Date(data.order.event_date).toLocaleDateString()}`, 20, yPosition);
-      yPosition += 5;
-    }
-    yPosition += 10;
+      rentalStart: this.fmtDate(order.start_date),
+      rentalEnd: this.fmtDate(order.end_date),
+      eventDate: order.event_date ? this.fmtDate(order.event_date) : null,
 
-    const formatMoney = (val: any) => {
-      const num = Number(val);
-      return isNaN(num) ? '0' : num.toLocaleString();
+      items,
+
+      subtotal: Number(order.subtotal) || 0,
+      gstAmount: Number(order.gst_amount) || 0,
+      discount: Number(order.discount) || 0,
+      lateFee: Number(order.late_fee) || 0,
+      damageCharges: Number(order.damage_charges_total) || 0,
+      securityDeposit: Number(order.security_deposit) || 0,
+      totalAmount: Number(order.total_amount) || 0,
+      totalPaid,
+      balanceDue,
+
+      termsAndConditions: settings.paymentTerms || undefined,
     };
-
-    // Items table
-    const tableData = data.order.items.map((item) => [
-      item.product_id.slice(0, 8),
-      (item.quantity || 0).toString(),
-      `₹${formatMoney(item.price_per_day)}`,
-      `₹${formatMoney(item.total_price || (item.price_per_day || 0) * (item.quantity || 0))}`,
-    ]);
-
-    autoTable(doc, {
-      startY: yPosition,
-      head: [['Item ID', 'Qty', 'Rent Price', 'Total']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [66, 66, 66] },
-    });
-
-    yPosition = (doc as any).lastAutoTable.finalY + 10;
-
-    // Payment breakdown
-    if (data.invoiceType === 'final') {
-      // Final invoice with full breakdown
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Payment Breakdown:', 20, yPosition);
-      yPosition += 8;
-
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Subtotal: ₹${formatMoney(data.order.subtotal)}`, 20, yPosition);
-      yPosition += 5;
-      doc.text(`GST: ₹${formatMoney(data.order.gst_amount)}`, 20, yPosition);
-      yPosition += 5;
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Total: ₹${formatMoney(data.order.total_amount)}`, 20, yPosition);
-      yPosition += 8;
-
-      // Show deposit already paid
-      const depositPayment = data.payments?.find((p) => p.payment_type === 'deposit');
-      if (depositPayment) {
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Security Deposit Paid: ₹${formatMoney(depositPayment.amount)}`, 20, yPosition);
-        yPosition += 5;
-      }
-
-      // Show advance payment if any
-      const advancePayment = data.payments?.find((p) => p.payment_type === 'advance');
-      const advanceAmount = advancePayment ? advancePayment.amount : (data.order as any).advance_amount || 0;
-      if (advanceAmount > 0) {
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Advance Paid: -₹${formatMoney(advanceAmount)}`, 20, yPosition);
-        yPosition += 5;
-      }
-
-      // Calculate balance due accounting for advance and other payments
-      const totalPaid = (data.payments || [])
-        .filter((p) => p.payment_type !== 'refund')
-        .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
-      const balanceDue = Math.max(0, Number(data.order.total_amount || 0) - totalPaid);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`Balance Due: ₹${formatMoney(balanceDue)}`, 20, yPosition);
-      yPosition += 8;
-    } else {
-      // Deposit invoice
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Security Deposit:', 20, yPosition);
-      yPosition += 8;
-
-      doc.setFont('helvetica', 'normal');
-      const totalDeposit = data.order.items.reduce((sum, item) => sum + ((item.price_per_day || 0) * (item.quantity || 0)), 0);
-      doc.text(`Amount: ₹${formatMoney(totalDeposit)}`, 20, yPosition);
-      yPosition += 8;
-    }
-
-    // Payment details
-    if (data.payments && data.payments.length > 0) {
-      const relevantPayment = data.payments.find(
-        (p) => p.payment_type === (data.invoiceType === 'deposit' ? 'deposit' : 'final')
-      );
-
-      if (relevantPayment) {
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Payment Details:', 20, yPosition);
-        yPosition += 8;
-
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Payment Mode: ${relevantPayment.payment_mode.toUpperCase()}`, 20, yPosition);
-        yPosition += 5;
-        if (relevantPayment.transaction_id) {
-          doc.text(`Transaction ID: ${relevantPayment.transaction_id}`, 20, yPosition);
-          yPosition += 5;
-        }
-        doc.text(`Payment Date: ${new Date(relevantPayment.payment_date).toLocaleDateString()}`, 20, yPosition);
-        yPosition += 8;
-      }
-    }
-
-    // Terms and conditions
-    if (data.settings.paymentTerms) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'italic');
-      const terms = doc.splitTextToSize(data.settings.paymentTerms, pageWidth - 40);
-      doc.text(terms, 20, yPosition);
-      yPosition += terms.length * 4 + 10;
-    }
-
-    // Signature
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Authorized Signature:', pageWidth - 80, pageHeight - 30);
-    doc.text(data.settings.authorizedSignature, pageWidth - 80, pageHeight - 20);
-
-    return doc.output('blob');
   }
 }
 
