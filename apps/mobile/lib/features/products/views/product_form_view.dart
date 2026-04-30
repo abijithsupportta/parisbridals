@@ -571,7 +571,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     final picked = await _picker.pickImage(
       source: source,
       maxWidth: 800,
-      imageQuality: 60,
+      imageQuality: 50,
     );
     if (picked != null && mounted) {
       setState(() => _newImages.add(File(picked.path)));
