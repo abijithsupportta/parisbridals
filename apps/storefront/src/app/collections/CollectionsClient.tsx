@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
 import { Product, Category, getProductImageUrls } from "@/lib/supabase/queries";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 
 interface CollectionsClientProps {
@@ -21,25 +19,6 @@ export default function CollectionsClient({
   initialCategoryId,
   initialSearchQuery,
 }: CollectionsClientProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-  const [activeCategoryId, setActiveCategoryId] = useState(initialCategoryId || "");
-
-  const handleCategoryChange = (id: string) => {
-    setActiveCategoryId(id);
-    const params = new URLSearchParams(searchParams.toString());
-    if (id) {
-      params.set("category_id", id);
-    } else {
-      params.delete("category_id");
-    }
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`);
-    });
-  };
-
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       {/* Page Heading */}
@@ -57,42 +36,8 @@ export default function CollectionsClient({
         </p>
       </div>
 
-      {/* Filter Bar */}
-      <div className="sticky top-[72px] lg:top-[88px] z-30 mb-8 -mx-4 px-4 py-3 bg-silk/80 backdrop-blur-md border-y border-[var(--border-silk)]">
-        <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar pb-1">
-          <button
-            onClick={() => handleCategoryChange("")}
-            className={cn(
-              "px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-              !activeCategoryId
-                ? "bg-rosegold text-white shadow-lg shadow-rosegold/20"
-                : "bg-white text-muted-foreground hover:text-rosegold border border-[var(--border-silk)]"
-            )}
-          >
-            All Collections
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => handleCategoryChange(cat.id)}
-              className={cn(
-                "px-5 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap",
-                activeCategoryId === cat.id
-                  ? "bg-rosegold text-white shadow-lg shadow-rosegold/20"
-                  : "bg-white text-muted-foreground hover:text-rosegold border border-[var(--border-silk)]"
-              )}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Product Grid */}
-      <div className={cn(
-        "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-6 transition-opacity duration-300",
-        isPending && "opacity-50 pointer-events-none"
-      )}>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5 lg:gap-6">
         {initialProducts.length > 0 ? (
           initialProducts.map((product) => (
             <CollectionProductCard key={product.id} product={product} />
@@ -104,14 +49,14 @@ export default function CollectionsClient({
             </div>
             <h3 className="text-2xl font-serif text-heading mb-2">No Treasures Found</h3>
             <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-              We couldn&apos;t find any pieces matching your request. Try adjusting your filters or search keywords.
+              We couldn&apos;t find any pieces matching your request. Try adjusting your search keywords.
             </p>
-            <button
-              onClick={() => handleCategoryChange("")}
-              className="mt-8 px-8 py-3 bg-rosegold text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-lg shadow-rosegold/20"
+            <Link
+              href="/collections"
+              className="inline-block mt-8 px-8 py-3 bg-rosegold text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-lg shadow-rosegold/20"
             >
-              Clear All Filters
-            </button>
+              View All Collections
+            </Link>
           </div>
         )}
       </div>

@@ -90,8 +90,88 @@ export class PaymentService {
       };
     }
 
+    // Block non-refund payments for cancelled/completed orders
+    if (data.payment_type !== PaymentType.REFUND) {
+      const { orderRepository } = await import('@/repository');
+      const orderCheck = await orderRepository.findById(data.order_id);
+      if (orderCheck.success && orderCheck.data) {
+        const orderStatus = orderCheck.data.status;
+        if (orderStatus === 'completed' || orderStatus === 'cancelled') {
+          return {
+            data: null,
+            error: { message: `Cannot collect payment for a ${orderStatus} order`, code: 'ORDER_FINALIZED' } as any,
+            success: false,
+          };
+        }
+      }
+    }
+
+    // For refund payments, validate amount does not exceed what's refundable
+    if (data.payment_type === PaymentType.REFUND) {
+      const { orderRepository } = await import('@/repository');
+      const orderResult = await orderRepository.findById(data.order_id);
+      if (!orderResult.success || !orderResult.data) {
+        return {
+          data: null,
+          error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
+          success: false,
+        };
+      }
+      const order = orderResult.data;
+      // Total refundable = rental payments + unreturned deposit
+      const refundableDeposit = (order.deposit_collected && !order.deposit_returned && (order.security_deposit || 0) > 0)
+        ? order.security_deposit
+        : 0;
+      const totalRefundable = (order.amount_paid || 0) + refundableDeposit;
+      if (data.amount > totalRefundable) {
+        return {
+          data: null,
+          error: { message: `Refund amount (${data.amount}) exceeds total refundable (${totalRefundable})`, code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+    }
+
     paymentRepository.setUserContext(this.currentUserId, this.currentBranchId);
-    return await paymentRepository.create(data);
+    const result = await paymentRepository.create(data);
+
+    // After successfully creating a refund, atomically update the order's state
+    if (result.success && result.data && data.payment_type === PaymentType.REFUND) {
+      const { orderRepository } = await import('@/repository');
+      const orderResult = await orderRepository.findById(data.order_id);
+      if (orderResult.success && orderResult.data) {
+        const order = orderResult.data;
+        const isDepositRefund = data.notes?.toLowerCase().includes('deposit');
+
+        if (isDepositRefund) {
+          // If it's a deposit refund, update the deposit status but don't touch amount_paid
+          await orderRepository.update(data.order_id, {
+            deposit_returned: true,
+            deposit_returned_at: new Date().toISOString(),
+          } as any);
+        } else {
+          // If it's a rental refund, update amount_paid
+          const newAmountPaid = Math.max(0, (order.amount_paid || 0) - data.amount);
+          const newPaymentStatus = newAmountPaid >= order.total_amount ? 'paid' : newAmountPaid > 0 ? 'partial' : 'pending';
+          await orderRepository.update(data.order_id, {
+            amount_paid: newAmountPaid,
+            payment_status: newPaymentStatus,
+          } as any);
+        }
+      }
+    }
+
+    // After any non-refund, non-adjustment payment, check auto-complete
+    if (result.success && data.payment_type !== PaymentType.REFUND && data.payment_type !== PaymentType.ADJUSTMENT) {
+      try {
+        const { orderService } = await import('./orderService');
+        await orderService.checkAndAutoComplete(data.order_id);
+      } catch {
+        // Auto-complete is best-effort, don't fail the payment
+      }
+    }
+
+    return result;
   }
 
   /**

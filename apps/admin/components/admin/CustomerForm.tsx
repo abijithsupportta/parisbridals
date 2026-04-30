@@ -38,6 +38,7 @@ function emptyFormData() {
   return {
     name: "",
     phone: "",
+    alt_phone: "",
     email: "",
     address: "",
     gstin: "",
@@ -69,6 +70,7 @@ export default function CustomerForm({ customer }: CustomerFormProps) {
       ? {
           name: customer.name ?? "",
           phone: customer.phone ?? "",
+          alt_phone: customer.alt_phone ?? "",
           email: customer.email ?? "",
           address: typeof customer.address === "string" ? customer.address : "",
           gstin: customer.gstin ?? "",
@@ -105,6 +107,7 @@ export default function CustomerForm({ customer }: CustomerFormProps) {
       const payload = {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
+        alt_phone: formData.alt_phone.trim() || null,
         email: formData.email.trim() || undefined,
         address: formData.address.trim() || undefined,
         gstin: formData.gstin.trim() || undefined,
@@ -199,7 +202,7 @@ export default function CustomerForm({ customer }: CustomerFormProps) {
                 />
               </div>
 
-              {/* Phone + Email */}
+              {/* Phone + Alt Phone */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -212,6 +215,21 @@ export default function CustomerForm({ customer }: CustomerFormProps) {
                     className="border-slate-200 focus:border-slate-900"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Alternate Phone <span className="text-slate-400 text-xs">(Optional)</span>
+                  </label>
+                  <Input
+                    value={formData.alt_phone}
+                    onChange={(e) => handleFieldChange("alt_phone", e.target.value)}
+                    placeholder="e.g. +91 9876543210"
+                    className="border-slate-200 focus:border-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5">
                     Email <span className="text-slate-400 text-xs">(Optional)</span>

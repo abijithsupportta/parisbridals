@@ -152,6 +152,7 @@ export class InvoiceService {
 
       buyerName: order.customer.name,
       buyerPhone: order.customer.phone,
+      buyerAltPhone: (order.customer as any).alt_phone,
       buyerEmail: order.customer.email,
 
       rentalStart: this.fmtDate(order.start_date),
