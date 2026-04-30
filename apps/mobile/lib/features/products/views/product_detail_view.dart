@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../branches/providers/branch_provider.dart';
 import '../providers/product_provider.dart';
 import '../models/product.dart';
 import 'product_form_view.dart';
@@ -253,21 +254,7 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
                   children: [
                     _buildSectionTitle('Inventory'),
                     SizedBox(height: Responsive.h(10)),
-                    Row(
-                      children: [
-                        Expanded(
-                            child: _buildStockItem(
-                                'Total', '${product.totalQuantity}')),
-                        Expanded(
-                            child: _buildStockItem(
-                                'Available',
-                                '${product.availableQuantity}')),
-                        Expanded(
-                            child: _buildStockItem(
-                                'Reserved',
-                                '${product.reservedQuantity}')),
-                      ],
-                    ),
+                    _buildBranchStockSection(product),
                   ],
                 ),
                 SizedBox(height: Responsive.h(12)),
@@ -344,15 +331,18 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
   }
 
   Widget _buildStatusBadge(Product product) {
+    final branchId = ref.watch(effectiveBranchIdProvider);
+    final stock = _getBranchStock(product, branchId);
+
     Color bgColor;
     String label;
     if (!product.isActive) {
       bgColor = Colors.grey;
       label = 'Inactive';
-    } else if (product.availableQuantity <= 0) {
+    } else if (stock <= 0) {
       bgColor = const Color(0xFFFF6B8A);
       label = 'Out of Stock';
-    } else if (product.availableQuantity <= product.lowStockThreshold) {
+    } else if (stock <= product.lowStockThreshold) {
       bgColor = const Color(0xFFF5A623);
       label = 'Low Stock';
     } else {
@@ -437,6 +427,85 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
                   fontWeight: FontWeight.w800,
                   color: color == _accent ? const Color(0xFFD4A540) : _primary),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Get stock count for a specific branch, or total if no branch selected.
+  int _getBranchStock(Product product, String? branchId) {
+    if (branchId == null || product.branchInventory.isEmpty) {
+      return product.availableQuantity;
+    }
+    final branchInv = product.branchInventory
+        .where((b) => b.branchId == branchId);
+    if (branchInv.isEmpty) return 0;
+    return branchInv.first.stockCount;
+  }
+
+  /// Builds the branch stock section for the detail view.
+  Widget _buildBranchStockSection(Product product) {
+    final branchId = ref.watch(effectiveBranchIdProvider);
+
+    if (product.branchInventory.isEmpty || branchId == null) {
+      // No branch data — show total aggregated stock
+      return Row(
+        children: [
+          Expanded(
+              child: _buildStockItem('Total', '${product.totalQuantity}')),
+          Expanded(
+              child: _buildStockItem(
+                  'Available', '${product.availableQuantity}')),
+          Expanded(
+              child: _buildStockItem(
+                  'Reserved', '${product.reservedQuantity}')),
+        ],
+      );
+    }
+
+    // Show only the selected branch's stock
+    final stock = _getBranchStock(product, branchId);
+    final branchInv = product.branchInventory
+        .where((b) => b.branchId == branchId);
+    final branchName = branchInv.isNotEmpty
+        ? (branchInv.first.branchName ?? 'Selected Branch')
+        : 'Selected Branch';
+
+    return Container(
+      width: double.infinity,
+      padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _primary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(Responsive.r(10)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.store_rounded,
+              size: Responsive.icon(18), color: _primary),
+          SizedBox(width: Responsive.w(8)),
+          Expanded(
+            child: Text(branchName,
+                style: TextStyle(
+                    fontSize: Responsive.sp(13),
+                    fontWeight: FontWeight.w600,
+                    color: _primary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+          ),
+          Container(
+            padding: Responsive.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: stock > 0
+                  ? const Color(0xFF2ECC71)
+                  : const Color(0xFFFF6B8A),
+              borderRadius: BorderRadius.circular(Responsive.r(6)),
+            ),
+            child: Text('$stock',
+                style: TextStyle(
+                    fontSize: Responsive.sp(14),
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white)),
           ),
         ],
       ),

@@ -220,7 +220,17 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── 1. Product Name & Description ──
+            // ── 1. Images (first — add photos before details) ──
+            _card(
+              children: [
+                _sectionHeader('Images'),
+                SizedBox(height: Responsive.h(10)),
+                _buildImageGrid(),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 2. Product Name & Description ──
             _card(
               children: [
                 _label('Product Name', required: true),
@@ -231,16 +241,6 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
                 SizedBox(height: Responsive.h(6)),
                 _input(_descCtl, 'Materials, occasion, style... (optional)',
                     maxLines: 3, type: TextInputType.multiline),
-              ],
-            ),
-            SizedBox(height: Responsive.h(12)),
-
-            // ── 2. Images ──
-            _card(
-              children: [
-                _sectionHeader('Images'),
-                SizedBox(height: Responsive.h(10)),
-                _buildImageGrid(),
               ],
             ),
             SizedBox(height: Responsive.h(12)),

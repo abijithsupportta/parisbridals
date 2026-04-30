@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../branches/providers/branch_provider.dart';
 import '../providers/product_provider.dart';
 import '../models/product.dart';
 import 'product_form_view.dart';
@@ -57,6 +58,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     final productsAsync = ref.watch(productsProvider);
     final filteredAsync = ref.watch(filteredProductsProvider);
     final currentFilter = ref.watch(productStatusFilterProvider);
+    final selectedBranchId = ref.watch(effectiveBranchIdProvider);
 
     return Container(
       color: _bg,
@@ -72,6 +74,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                 paginatedData.products,
                 currentFilter,
                 canManage,
+                selectedBranchId,
               );
             },
             loading: () => _buildShimmerList(),
@@ -112,21 +115,22 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     List<Product> allProducts,
     ProductStatusFilter currentFilter,
     bool canManage,
+    String? branchId,
   ) {
     if (allProducts.isEmpty && _searchQuery.isEmpty) {
       return _buildEmptyState();
     }
 
-    // Compute counts for filter badges
+    // Compute counts for filter badges using branch-specific stock
     final availableCount =
-        allProducts.where((p) => p.availableQuantity > 0).length;
+        allProducts.where((p) => _getStock(p, branchId) > 0).length;
     final lowStockCount = allProducts
         .where((p) =>
-            p.availableQuantity > 0 &&
-            p.availableQuantity <= p.lowStockThreshold)
+            _getStock(p, branchId) > 0 &&
+            _getStock(p, branchId) <= p.lowStockThreshold)
         .length;
     final outOfStockCount =
-        allProducts.where((p) => p.availableQuantity <= 0).length;
+        allProducts.where((p) => _getStock(p, branchId) <= 0).length;
 
     return Column(
       children: [
@@ -322,18 +326,32 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
     );
   }
 
+  /// Get stock count for the selected branch, or total if no branch selected.
+  int _getStock(Product product, String? branchId) {
+    if (branchId == null || product.branchInventory.isEmpty) {
+      return product.availableQuantity;
+    }
+    final branchInv = product.branchInventory
+        .where((b) => b.branchId == branchId);
+    if (branchInv.isEmpty) return 0;
+    return branchInv.first.stockCount;
+  }
+
   Widget _buildProductCard(Product product, bool canManage) {
+    final branchId = ref.watch(effectiveBranchIdProvider);
+    final stock = _getStock(product, branchId);
+
     Color stockColor;
     String stockText;
-    if (product.availableQuantity <= 0) {
+    if (stock <= 0) {
       stockColor = const Color(0xFFFF6B8A);
       stockText = 'Out';
-    } else if (product.availableQuantity <= product.lowStockThreshold) {
+    } else if (stock <= product.lowStockThreshold) {
       stockColor = const Color(0xFFF5A623);
-      stockText = 'Low (${product.availableQuantity})';
+      stockText = 'Low ($stock)';
     } else {
       stockColor = const Color(0xFF2ECC71);
-      stockText = 'In Stock (${product.availableQuantity})';
+      stockText = 'In Stock ($stock)';
     }
 
     final imageUrl = product.primaryImageUrl;
