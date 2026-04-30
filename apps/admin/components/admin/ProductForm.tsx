@@ -171,18 +171,19 @@ export default function ProductForm({
       .replace(/[^a-z0-9-]/g, "")
       .replace(/--+/g, "-");
 
+  const getTimestampStr = () => Date.now().toString(36).toUpperCase();
+  const getRandomStr = () => Math.random().toString(36).substring(2, 6).toUpperCase();
+  const getRandom4Digit = () => Math.floor(1000 + Math.random() * 9000);
+
   const generateBarcode = () => {
-    const barcode = `PB${Date.now().toString(36).toUpperCase()}${Math.random()
-      .toString(36)
-      .substring(2, 6)
-      .toUpperCase()}`;
+    const barcode = `PB${getTimestampStr()}${getRandomStr()}`;
     setFormData((prev) => ({ ...prev, barcode }));
     setBarcodeError(null);
     checkBarcodeUniqueness(barcode);
   };
 
   // Debounced barcode uniqueness check
-  const checkBarcodeUniqueness = useCallback((barcode: string) => {
+  const checkBarcodeUniqueness = (barcode: string) => {
     if (barcodeCheckTimer.current) clearTimeout(barcodeCheckTimer.current);
     if (!barcode || barcode.trim().length === 0) {
       setBarcodeError(null);
@@ -208,12 +209,12 @@ export default function ProductForm({
         setIsCheckingBarcode(false);
       }
     }, 500);
-  }, [product?.id]);
+  };
 
   const generateSKU = () => {
     const catName = categories.find((c) => c.id === formData.category_id)?.name;
     const prefix = catName ? catName.substring(0, 3).toUpperCase() : "PB";
-    const random = Math.floor(1000 + Math.random() * 9000);
+    const random = getRandom4Digit();
     setFormData((prev) => ({ ...prev, sku: `${prefix}-${random}` }));
   };
 

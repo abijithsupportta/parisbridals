@@ -237,7 +237,7 @@ export default function StaffPage() {
                 <div
                   key={i}
                   className="h-4 bg-slate-200 rounded animate-pulse"
-                  style={{ width: `${50 + Math.random() * 50}%` }}
+                  style={{ width: `${50 + ((i * 15) % 50)}%` }}
                 />
               ))}
             </div>

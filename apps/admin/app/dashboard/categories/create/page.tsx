@@ -1,43 +1,37 @@
-/**
- * Create Category Page
- *
- * Supports pre-selecting a parent via the `?parent=<uuid>` query string. When
- * the user clicks "Add Subcategory" on a Main category's detail page or
- * "Add Variant" on a Sub category's detail page, we navigate here with the
- * parent id pre-filled so the new record lands in the correct hierarchy slot.
- *
- * Route: /dashboard/categories/create[?parent=<uuid>]
- *
- * @module app/dashboard/categories/create/page
- */
+"use client";
 
-import { categoryService } from "@/services";
+import { useSearchParams } from "next/navigation";
 import CategoryForm from "@/components/admin/CategoryForm";
+import { useCategories } from "@/hooks";
+import { Loader2 } from "lucide-react";
+import { useMemo, Suspense } from "react";
 
-interface PageProps {
-  searchParams: Promise<{ parent?: string }>;
-}
-
-export default async function CreateCategoryPage({ searchParams }: PageProps) {
-  const { parent } = await searchParams;
-  const allCategoriesResult = await categoryService.getAllCategories();
-  const allCategories = allCategoriesResult.success ? allCategoriesResult.data || [] : [];
+function CreateCategoryContent() {
+  const searchParams = useSearchParams();
+  const parent = searchParams.get("parent");
+  const { categories: allCategories, isLoading } = useCategories();
 
   // Validate and resolve the parent hint. If the parent id is a Variant we
   // silently drop it because variants cannot have children.
-  let defaultParentId: string | null = null;
-  if (parent) {
+  const defaultParentId = useMemo(() => {
+    if (!parent) return null;
     const parentCat = allCategories.find((c) => c.id === parent);
-    if (parentCat) {
-      // Get parent with relations to check level
-      const parentResult = await categoryService.getCategoryById(parent);
-      if (parentResult.success && parentResult.data) {
-        const parentLevel = parentResult.data.level;
-        if (parentLevel !== "variant") {
-          defaultParentId = parentCat.id;
-        }
-      }
-    }
+    if (!parentCat) return null;
+    
+    // Check level (main or sub is fine, variant is not)
+    // If it has no parent, it's a main. If its parent has no parent, it's a sub.
+    const isVariant = parentCat.parent_id && allCategories.find((c) => c.id === parentCat.parent_id)?.parent_id;
+    if (isVariant) return null;
+
+    return parentCat.id;
+  }, [parent, allCategories]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center p-12 min-h-[calc(100vh-4rem)]">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-900" />
+      </div>
+    );
   }
 
   return (
@@ -49,5 +43,17 @@ export default async function CreateCategoryPage({ searchParams }: PageProps) {
         />
       </div>
     </div>
+  );
+}
+
+export default function CreateCategoryPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-full items-center justify-center p-12 min-h-[calc(100vh-4rem)]">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-900" />
+      </div>
+    }>
+      <CreateCategoryContent />
+    </Suspense>
   );
 }

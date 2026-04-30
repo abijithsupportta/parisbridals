@@ -32,7 +32,10 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   // Refs to avoid stale closures inside decode callback
   const lastScanTimeRef = useRef<number>(0);
   const onScanRef = useRef(onScan);
-  onScanRef.current = onScan;
+  
+  useEffect(() => {
+    onScanRef.current = onScan;
+  }, [onScan]);
 
   const isCoolingDown = cooldownRemaining > 0;
 
@@ -43,7 +46,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       setCooldownRemaining(prev => Math.max(0, prev - 100));
     }, 100);
     return () => clearInterval(timer);
-  }, [cooldownRemaining > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cooldownRemaining]);
 
   // Stop scanner and release camera
   const stopScanner = useCallback(() => {
