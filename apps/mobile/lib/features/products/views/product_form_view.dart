@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../core/responsive.dart';
 import '../../../core/upload_repository.dart';
 import '../../categories/providers/category_provider.dart';
@@ -53,12 +55,14 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   @override
   void initState() {
     super.initState();
+    // Try to restore a saved draft (survives camera-kill restarts)
+    _restoreDraft();
     // Android crash fix: recover lost camera data
     _retrieveLostData();
     // Auto-generate identifiers for create mode
     if (!isEdit) {
-      _sku = _generateSKU();
-      _barcode = _generateBarcode();
+      if (_sku.isEmpty) _sku = _generateSKU();
+      if (_barcode.isEmpty) _barcode = _generateBarcode();
     }
   }
 
@@ -68,6 +72,81 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     if (mounted) {
       setState(() => _newImages.add(File(response.file!.path)));
     }
+  }
+
+  // ── Draft persistence (survives Android Activity destruction) ──
+  static const _draftFileName = 'product_form_draft.json';
+
+  Future<File> get _draftFile async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/$_draftFileName');
+  }
+
+  /// Save current form state to disk before opening camera.
+  Future<void> _saveDraft() async {
+    try {
+      final draft = {
+        'name': _nameCtl.text,
+        'description': _descCtl.text,
+        'price': _priceCtl.text,
+        'quantity': _quantity,
+        'sku': _sku,
+        'barcode': _barcode,
+        'category_id': _categoryId,
+        'subcategory_id': _subcategoryId,
+        'subvariant_id': _subvariantId,
+        'is_active': _isActive,
+        'image_urls': _imageUrls,
+      };
+      final file = await _draftFile;
+      await file.writeAsString(jsonEncode(draft));
+      debugPrint('[ProductForm] Draft saved');
+    } catch (e) {
+      debugPrint('[ProductForm] Draft save failed: $e');
+    }
+  }
+
+  /// Restore form state from a saved draft.
+  Future<void> _restoreDraft() async {
+    try {
+      final file = await _draftFile;
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+      final draft = jsonDecode(content) as Map<String, dynamic>;
+
+      if (mounted) {
+        setState(() {
+          _nameCtl.text = draft['name'] ?? '';
+          _descCtl.text = draft['description'] ?? '';
+          _priceCtl.text = draft['price'] ?? '';
+          _quantity = draft['quantity'] ?? 1;
+          _sku = draft['sku'] ?? '';
+          _barcode = draft['barcode'] ?? '';
+          _categoryId = draft['category_id'];
+          _subcategoryId = draft['subcategory_id'];
+          _subvariantId = draft['subvariant_id'];
+          _isActive = draft['is_active'] ?? true;
+          if (draft['image_urls'] != null) {
+            _imageUrls
+              ..clear()
+              ..addAll(List<String>.from(draft['image_urls']));
+          }
+        });
+        debugPrint('[ProductForm] Draft restored');
+      }
+      // Delete draft after restoring
+      await file.delete();
+    } catch (e) {
+      debugPrint('[ProductForm] Draft restore failed: $e');
+    }
+  }
+
+  /// Clear draft after successful submit.
+  Future<void> _clearDraft() async {
+    try {
+      final file = await _draftFile;
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
   }
 
   @override
@@ -568,10 +647,15 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
     );
     if (source == null) return;
 
+    // Save form state BEFORE opening camera — if Android kills us,
+    // the draft will be restored when the user returns to this screen.
+    await _saveDraft();
+
     final picked = await _picker.pickImage(
       source: source,
-      maxWidth: 800,
-      imageQuality: 50,
+      maxWidth: 600,
+      imageQuality: 40,
+      requestFullMetadata: false, // reduces memory usage significantly
     );
     if (picked != null && mounted) {
       setState(() => _newImages.add(File(picked.path)));
@@ -768,6 +852,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       }
 
       if (mounted) {
+        await _clearDraft();
         _snack(isEdit ? 'Product updated!' : 'Product created!');
         Navigator.of(context).pop();
       }
