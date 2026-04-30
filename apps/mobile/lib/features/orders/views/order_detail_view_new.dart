@@ -5,6 +5,7 @@ import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
+import 'payment_recording_modal.dart';
 
 String formatCurrency(double amount) {
   return '₹${amount.toStringAsFixed(0)}';
@@ -837,8 +838,18 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
               child: ElevatedButton(
                 onPressed: () {
                   // TODO: Implement payment recording
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Payment recording not yet implemented')),
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => PaymentRecordingModal(
+                      orderId: widget.order.id,
+                      amountDue: _amountDue,
+                      onSuccess: () {
+                        ref.invalidate(orderByIdProvider(widget.order.id));
+                        ref.invalidate(ordersProvider);
+                      },
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
