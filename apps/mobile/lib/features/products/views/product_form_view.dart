@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,14 +7,17 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/responsive.dart';
 import '../../../core/upload_repository.dart';
+import '../../categories/providers/category_provider.dart';
+import '../../categories/models/category.dart';
 import '../providers/product_provider.dart';
 import '../models/product.dart';
 
-/// 3-step wizard for creating or editing a product.
-/// Step 1 — Media   |  Step 2 — Details   |  Step 3 — Pricing & Stock
+/// Single-page scrollable product form — mirrors the admin ProductForm layout.
+///
+/// Sections: Name/Description → Images → Category → Rent Price → Quantity
+///           → Identifiers (SKU/Barcode) → Submit
 class ProductFormView extends ConsumerStatefulWidget {
   final String? productId;
-
   const ProductFormView({super.key, this.productId});
 
   @override
@@ -21,65 +25,81 @@ class ProductFormView extends ConsumerStatefulWidget {
 }
 
 class _ProductFormViewState extends ConsumerState<ProductFormView> {
-  static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
-
   bool get isEdit => widget.productId != null;
 
-  final PageController _pageController = PageController();
-  int _currentStep = 0;
+  final ImagePicker _picker = ImagePicker();
 
-  // Step 1 — Media
+  // Media
   final List<String> _imageUrls = [];
   final List<File> _newImages = [];
-  final bool _isUploading = false;
 
-  // Step 2 — Details
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _skuController = TextEditingController();
-  final _barcodeController = TextEditingController();
-  String? _selectedMaterial;
-  String? _selectedMetalColor;
-  String? _selectedCondition;
+  // Details
+  final _nameCtl = TextEditingController();
+  final _descCtl = TextEditingController();
+  String? _categoryId;
+  String? _subcategoryId;
+  String? _subvariantId;
 
-  // Step 3 — Pricing
-  final _priceController = TextEditingController();
-  final _depositController = TextEditingController();
-  final _quantityController = TextEditingController(text: '1');
-  final _minDaysController = TextEditingController();
-  final _maxDaysController = TextEditingController();
+  // Pricing & Stock
+  final _priceCtl = TextEditingController();
+  int _quantity = 1;
+  String _sku = '';
+  String _barcode = '';
 
+  bool _isActive = true;
   bool _isLoading = false;
   bool _dataLoaded = false;
 
-  static const _materials = ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl', 'Kundan', 'Polki', 'Other'];
-  static const _metalColors = ['Yellow', 'White', 'Rose', 'Two-Tone', 'Oxidized'];
-  static const _conditions = ['Brand New', 'Good', 'Fair', 'Needs Repair'];
+  @override
+  void initState() {
+    super.initState();
+    // Android crash fix: recover lost camera data
+    _retrieveLostData();
+    // Auto-generate identifiers for create mode
+    if (!isEdit) {
+      _sku = _generateSKU();
+      _barcode = _generateBarcode();
+    }
+  }
+
+  Future<void> _retrieveLostData() async {
+    final LostDataResponse response = await _picker.retrieveLostData();
+    if (response.isEmpty || response.file == null) return;
+    if (mounted) {
+      setState(() => _newImages.add(File(response.file!.path)));
+    }
+  }
 
   @override
   void dispose() {
-    _pageController.dispose();
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _skuController.dispose();
-    _barcodeController.dispose();
-    _priceController.dispose();
-    _depositController.dispose();
-    _quantityController.dispose();
-    _minDaysController.dispose();
-    _maxDaysController.dispose();
+    _nameCtl.dispose();
+    _descCtl.dispose();
+    _priceCtl.dispose();
     super.dispose();
+  }
+
+  // ── Identifier generators ──
+  String _generateSKU() {
+    final r = Random();
+    return 'PB-${r.nextInt(9000) + 1000}';
+  }
+
+  String _generateBarcode() {
+    final ts = DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase();
+    final r = Random();
+    final rand = (r.nextInt(9000) + 1000).toString();
+    return 'PB$ts$rand';
   }
 
   @override
   Widget build(BuildContext context) {
     Responsive.init(context);
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
 
-    // Load existing data for edit mode
+    // Load data for edit mode
     if (isEdit && !_dataLoaded) {
-      final productAsync = ref.watch(productByIdProvider(widget.productId!));
-      productAsync.whenData((p) {
+      ref.watch(productByIdProvider(widget.productId!)).whenData((p) {
         if (!_dataLoaded) {
           _populateFields(p);
           _dataLoaded = true;
@@ -87,217 +107,393 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       });
     }
 
+    // Categories
+    final allCategories = ref.watch(categoriesProvider);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
       appBar: AppBar(
         title: Text(
           isEdit ? 'Edit Product' : 'Add Product',
           style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700),
         ),
-        centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // Step indicators
-          _buildStepIndicator(),
-
-          // Pages
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (i) => setState(() => _currentStep = i),
+      body: SingleChildScrollView(
+        padding: Responsive.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── 1. Product Name & Description ──
+            _card(
               children: [
-                _buildStep1Media(),
-                _buildStep2Details(),
-                _buildStep3Pricing(),
+                _label('Product Name', required: true),
+                SizedBox(height: Responsive.h(6)),
+                _input(_nameCtl, 'e.g., Diamond Necklace Set'),
+                SizedBox(height: Responsive.h(14)),
+                _label('Description'),
+                SizedBox(height: Responsive.h(6)),
+                _input(_descCtl, 'Materials, occasion, style... (optional)',
+                    maxLines: 3, type: TextInputType.multiline),
               ],
             ),
-          ),
+            SizedBox(height: Responsive.h(12)),
 
-          // Bottom navigation
-          _buildBottomNav(),
-        ],
+            // ── 2. Images ──
+            _card(
+              children: [
+                _sectionHeader('Images'),
+                SizedBox(height: Responsive.h(10)),
+                _buildImageGrid(),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 3. Category → Subcategory → Variant ──
+            _card(
+              children: [
+                _sectionHeader('Category'),
+                SizedBox(height: Responsive.h(10)),
+                allCategories.when(
+                  data: (cats) => _buildCategoryDropdowns(cats, primary),
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Text('Failed to load categories',
+                      style: TextStyle(fontSize: Responsive.sp(13), color: Colors.red)),
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 4. Rent Price ──
+            _card(
+              children: [
+                _label('Rent Price', required: true),
+                SizedBox(height: Responsive.h(6)),
+                TextField(
+                  controller: _priceCtl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: TextStyle(
+                    fontSize: Responsive.sp(22),
+                    fontWeight: FontWeight.w800,
+                    color: primary,
+                  ),
+                  decoration: InputDecoration(
+                    prefixText: '₹ ',
+                    prefixStyle: TextStyle(
+                      fontSize: Responsive.sp(22),
+                      fontWeight: FontWeight.w800,
+                      color: primary,
+                    ),
+                    hintText: '0',
+                    contentPadding: Responsive.symmetric(horizontal: 14, vertical: 14),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 5. Quantity (stepper) ──
+            _card(
+              children: [
+                _sectionHeader('Quantity'),
+                SizedBox(height: Responsive.h(10)),
+                _buildQuantityStepper(primary),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 6. Identifiers (SKU + Barcode) ──
+            _card(
+              children: [
+                _sectionHeader('Identifiers'),
+                SizedBox(height: Responsive.h(10)),
+
+                // SKU
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('SKU',
+                              style: TextStyle(
+                                  fontSize: Responsive.sp(11),
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500])),
+                          SizedBox(height: Responsive.h(4)),
+                          Container(
+                            width: double.infinity,
+                            padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(Responsive.r(10)),
+                            ),
+                            child: Text(_sku,
+                                style: TextStyle(
+                                    fontSize: Responsive.sp(13),
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'monospace',
+                                    color: primary)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: Responsive.w(8)),
+                    IconButton(
+                      onPressed: () => setState(() => _sku = _generateSKU()),
+                      icon: Icon(Icons.refresh_rounded, size: Responsive.icon(22)),
+                      tooltip: 'Regenerate SKU',
+                    ),
+                  ],
+                ),
+                SizedBox(height: Responsive.h(14)),
+
+                // Barcode
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Barcode',
+                              style: TextStyle(
+                                  fontSize: Responsive.sp(11),
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey[500])),
+                          SizedBox(height: Responsive.h(4)),
+                          Container(
+                            width: double.infinity,
+                            padding: Responsive.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(Responsive.r(10)),
+                            ),
+                            child: Text(_barcode,
+                                style: TextStyle(
+                                    fontSize: Responsive.sp(12),
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'monospace',
+                                    color: primary),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(width: Responsive.w(4)),
+                    IconButton(
+                      onPressed: () => setState(() => _barcode = _generateBarcode()),
+                      icon: Icon(Icons.refresh_rounded, size: Responsive.icon(22)),
+                      tooltip: 'Regenerate Barcode',
+                    ),
+                    IconButton(
+                      onPressed: _scanBarcode,
+                      icon: Icon(Icons.qr_code_scanner_rounded, size: Responsive.icon(22)),
+                      tooltip: 'Scan Barcode',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(12)),
+
+            // ── 7. Active toggle ──
+            _card(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Active Listing',
+                            style: TextStyle(
+                                fontSize: Responsive.sp(14),
+                                fontWeight: FontWeight.w600,
+                                color: primary)),
+                        SizedBox(height: Responsive.h(2)),
+                        Text('Visible in storefront',
+                            style: TextStyle(
+                                fontSize: Responsive.sp(11), color: Colors.grey[500])),
+                      ],
+                    ),
+                    Switch.adaptive(
+                      value: _isActive,
+                      onChanged: (v) => setState(() => _isActive = v),
+                      activeTrackColor: primary,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: Responsive.h(24)),
+
+            // ── 8. Submit ──
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _submitForm,
+                style: ElevatedButton.styleFrom(
+                  padding: Responsive.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(Responsive.r(12))),
+                ),
+                child: _isLoading
+                    ? SizedBox(
+                        height: Responsive.h(22),
+                        width: Responsive.w(22),
+                        child: const CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : Text(
+                        isEdit ? 'Save Changes' : 'Create Product',
+                        style: TextStyle(
+                            fontSize: Responsive.sp(16), fontWeight: FontWeight.w700),
+                      ),
+              ),
+            ),
+            SizedBox(height: Responsive.h(32)),
+          ],
+        ),
       ),
     );
   }
 
+  // ────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────────────
+
   void _populateFields(Product p) {
-    _nameController.text = p.name;
-    _descriptionController.text = p.description ?? '';
-    _skuController.text = p.sku ?? '';
-    _barcodeController.text = p.barcode ?? '';
-    _priceController.text = p.pricePerDay > 0 ? p.pricePerDay.toStringAsFixed(0) : '';
-    _depositController.text = p.securityDeposit > 0 ? p.securityDeposit.toStringAsFixed(0) : '';
-    _quantityController.text = '${p.quantity}';
-    if (p.minRentalDays != null) _minDaysController.text = '${p.minRentalDays}';
-    if (p.maxRentalDays != null) _maxDaysController.text = '${p.maxRentalDays}';
-    _selectedMaterial = p.material;
-    _selectedMetalColor = p.metalColor;
-    _selectedCondition = p.condition;
-    _imageUrls.clear();
-    _imageUrls.addAll(p.images.map((i) => i.url));
+    _nameCtl.text = p.name;
+    _descCtl.text = p.description ?? '';
+    _priceCtl.text = p.pricePerDay > 0 ? p.pricePerDay.toStringAsFixed(0) : '';
+    _quantity = p.quantity;
+    _sku = p.sku ?? _generateSKU();
+    _barcode = p.barcode ?? _generateBarcode();
+    _isActive = p.isActive;
+    _imageUrls
+      ..clear()
+      ..addAll(p.images.map((i) => i.url));
     setState(() {});
   }
 
-  // ── Step Indicator ──
-  Widget _buildStepIndicator() {
-    // Step labels not shown on indicator but could be added below circles
+  Widget _card({required List<Widget> children}) {
     return Container(
-      padding: Responsive.symmetric(horizontal: 24, vertical: 14),
-      color: Colors.white,
-      child: Row(
-        children: List.generate(3, (i) {
-          final isActive = i == _currentStep;
-          final isDone = i < _currentStep;
-          return Expanded(
-            child: Row(
-              children: [
-                if (i > 0)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      color: isDone || isActive ? _primary : Colors.grey[300],
-                    ),
-                  ),
-                Container(
-                  width: Responsive.w(28),
-                  height: Responsive.w(28),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isDone
-                        ? _primary
-                        : isActive
-                            ? _accent
-                            : Colors.grey[200],
-                  ),
-                  child: Center(
-                    child: isDone
-                        ? Icon(Icons.check_rounded, size: Responsive.icon(16), color: Colors.white)
-                        : Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              fontSize: Responsive.sp(12),
-                              fontWeight: FontWeight.w700,
-                              color: isActive ? _primary : Colors.grey[500],
-                            ),
-                          ),
-                  ),
-                ),
-                if (i < 2)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      color: isDone ? _primary : Colors.grey[300],
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  // ── Step 1: Media ──
-  Widget _buildStep1Media() {
-    return SingleChildScrollView(
+      width: double.infinity,
       padding: Responsive.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Product Images',
-              style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700, color: _primary)),
-          SizedBox(height: Responsive.h(6)),
-          Text('Add images of your product. The first image will be the primary.',
-              style: TextStyle(fontSize: Responsive.sp(13), color: Colors.grey[600])),
-          SizedBox(height: Responsive.h(16)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(Responsive.r(12)),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+    );
+  }
 
-          // Image grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: Responsive.w(10),
-              mainAxisSpacing: Responsive.h(10),
-            ),
-            itemCount: _imageUrls.length + _newImages.length + 1,
-            itemBuilder: (_, i) {
-              // Add button
-              if (i == _imageUrls.length + _newImages.length) {
-                return _buildAddImageButton();
-              }
-              // Existing URL images
-              if (i < _imageUrls.length) {
-                return _buildImageTile(
-                  child: CachedNetworkImage(
-                    imageUrl: _imageUrls[i],
-                    fit: BoxFit.cover,
-                    placeholder: (_, __) => Container(color: Colors.grey[200]),
-                    errorWidget: (_, __, ___) =>
-                        Icon(Icons.broken_image, size: Responsive.icon(24), color: Colors.grey),
-                  ),
-                  onRemove: () => setState(() => _imageUrls.removeAt(i)),
-                  isPrimary: i == 0 && _newImages.isEmpty,
-                );
-              }
-              // New local images
-              final fileIdx = i - _imageUrls.length;
-              return _buildImageTile(
-                child: Image.file(_newImages[fileIdx], fit: BoxFit.cover),
-                onRemove: () => setState(() => _newImages.removeAt(fileIdx)),
-                isPrimary: i == 0,
-              );
-            },
-          ),
+  Widget _sectionHeader(String t) {
+    return Text(t,
+        style: TextStyle(
+            fontSize: Responsive.sp(14),
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).colorScheme.primary));
+  }
 
-          if (_isUploading) ...[
-            SizedBox(height: Responsive.h(12)),
-            const Center(child: CircularProgressIndicator()),
-            SizedBox(height: Responsive.h(4)),
-            Center(
-              child: Text('Uploading images...',
-                  style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey)),
-            ),
-          ],
-        ],
+  Widget _label(String t, {bool required = false}) {
+    return RichText(
+      text: TextSpan(
+        text: t,
+        style: TextStyle(
+            fontSize: Responsive.sp(13),
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.primary),
+        children: required
+            ? [TextSpan(text: ' *', style: TextStyle(color: Colors.red[400]))]
+            : [],
       ),
     );
   }
 
-  Widget _buildAddImageButton() {
+  Widget _input(TextEditingController ctl, String hint,
+      {int maxLines = 1, TextInputType type = TextInputType.text}) {
+    return TextField(
+      controller: ctl,
+      keyboardType: type,
+      maxLines: maxLines,
+      style: TextStyle(fontSize: Responsive.sp(14)),
+      decoration: InputDecoration(
+        hintText: hint,
+        contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
+      ),
+    );
+  }
+
+  // ── Image Grid ──
+  Widget _buildImageGrid() {
+    final total = _imageUrls.length + _newImages.length;
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: Responsive.w(10),
+        mainAxisSpacing: Responsive.h(10),
+      ),
+      itemCount: total + 1,
+      itemBuilder: (_, i) {
+        if (i == total) return _addImageBtn();
+        if (i < _imageUrls.length) {
+          return _imageTile(
+            child: CachedNetworkImage(
+              imageUrl: _imageUrls[i],
+              fit: BoxFit.cover,
+              placeholder: (_, __) => Container(color: Colors.grey[200]),
+              errorWidget: (_, __, ___) =>
+                  Icon(Icons.broken_image, size: Responsive.icon(24), color: Colors.grey),
+            ),
+            onRemove: () => setState(() => _imageUrls.removeAt(i)),
+            isPrimary: i == 0 && _newImages.isEmpty,
+          );
+        }
+        final fi = i - _imageUrls.length;
+        return _imageTile(
+          child: Image.file(_newImages[fi], fit: BoxFit.cover),
+          onRemove: () => setState(() => _newImages.removeAt(fi)),
+          isPrimary: i == 0,
+        );
+      },
+    );
+  }
+
+  Widget _addImageBtn() {
+    final primary = Theme.of(context).colorScheme.primary;
     return GestureDetector(
       onTap: _pickImage,
       child: Container(
         decoration: BoxDecoration(
-          color: _primary.withValues(alpha: 0.06),
+          color: primary.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(Responsive.r(12)),
-          border: Border.all(color: _primary.withValues(alpha: 0.2), style: BorderStyle.solid),
+          border: Border.all(color: primary.withValues(alpha: 0.2)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_a_photo_outlined, size: Responsive.icon(28), color: _primary.withValues(alpha: 0.5)),
+            Icon(Icons.add_a_photo_outlined,
+                size: Responsive.icon(26), color: primary.withValues(alpha: 0.5)),
             SizedBox(height: Responsive.h(4)),
             Text('Add',
-                style: TextStyle(fontSize: Responsive.sp(11), color: _primary.withValues(alpha: 0.6)),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+                style: TextStyle(
+                    fontSize: Responsive.sp(11), color: primary.withValues(alpha: 0.6))),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildImageTile({required Widget child, required VoidCallback onRemove, bool isPrimary = false}) {
+  Widget _imageTile({required Widget child, required VoidCallback onRemove, bool isPrimary = false}) {
     return Stack(
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(Responsive.r(12)),
           child: SizedBox.expand(child: child),
         ),
-        // Remove button
         Positioned(
           top: Responsive.h(4),
           right: Responsive.w(4),
@@ -313,7 +509,6 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             ),
           ),
         ),
-        // Primary badge
         if (isPrimary)
           Positioned(
             bottom: Responsive.h(4),
@@ -321,11 +516,14 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             child: Container(
               padding: Responsive.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _accent,
+                color: Theme.of(context).colorScheme.secondary,
                 borderRadius: BorderRadius.circular(Responsive.r(4)),
               ),
               child: Text('Primary',
-                  style: TextStyle(fontSize: Responsive.sp(9), fontWeight: FontWeight.w700, color: _primary)),
+                  style: TextStyle(
+                      fontSize: Responsive.sp(9),
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.primary)),
             ),
           ),
       ],
@@ -344,12 +542,12 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: Icon(Icons.camera_alt_rounded, color: _primary, size: Responsive.icon(24)),
+                leading: Icon(Icons.camera_alt_rounded, size: Responsive.icon(24)),
                 title: Text('Camera', style: TextStyle(fontSize: Responsive.sp(15))),
                 onTap: () => Navigator.pop(ctx, ImageSource.camera),
               ),
               ListTile(
-                leading: Icon(Icons.photo_library_rounded, color: _primary, size: Responsive.icon(24)),
+                leading: Icon(Icons.photo_library_rounded, size: Responsive.icon(24)),
                 title: Text('Gallery', style: TextStyle(fontSize: Responsive.sp(15))),
                 onTap: () => Navigator.pop(ctx, ImageSource.gallery),
               ),
@@ -358,356 +556,195 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
         ),
       ),
     );
-
     if (source == null) return;
 
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, maxWidth: 1200, imageQuality: 80);
-    if (picked != null) {
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 800,
+      imageQuality: 60,
+    );
+    if (picked != null && mounted) {
       setState(() => _newImages.add(File(picked.path)));
     }
   }
 
-  // ── Step 2: Details ──
-  Widget _buildStep2Details() {
-    return SingleChildScrollView(
-      padding: Responsive.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Product Details',
-              style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700, color: _primary)),
-          SizedBox(height: Responsive.h(16)),
+  // ── Category Dropdowns ──
+  Widget _buildCategoryDropdowns(List<Category> allCats, Color primary) {
+    final mains = allCats.where((c) => c.parentId == null).toList();
+    final subs = _categoryId != null
+        ? allCats.where((c) => c.parentId == _categoryId).toList()
+        : <Category>[];
+    final variants = _subcategoryId != null
+        ? allCats.where((c) => c.parentId == _subcategoryId).toList()
+        : <Category>[];
 
-          _buildTextField('Product Name *', _nameController, TextInputType.text),
-          SizedBox(height: Responsive.h(14)),
-          _buildTextField('Description', _descriptionController, TextInputType.multiline, maxLines: 3),
-          SizedBox(height: Responsive.h(14)),
-
-          Row(
-            children: [
-              Expanded(child: _buildTextField('SKU', _skuController, TextInputType.text)),
-              SizedBox(width: Responsive.w(12)),
-              Expanded(child: _buildTextField('Barcode', _barcodeController, TextInputType.text)),
-            ],
-          ),
-          SizedBox(height: Responsive.h(20)),
-
-          // Material choice chips
-          Text('Material',
-              style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: _primary)),
-          SizedBox(height: Responsive.h(8)),
-          Wrap(
-            spacing: Responsive.w(8),
-            runSpacing: Responsive.h(8),
-            children: _materials.map((m) => _buildChoiceChip(m, _selectedMaterial == m, () {
-              setState(() => _selectedMaterial = _selectedMaterial == m ? null : m);
-            })).toList(),
-          ),
-          SizedBox(height: Responsive.h(18)),
-
-          // Metal Color choice chips
-          Text('Metal Color',
-              style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: _primary)),
-          SizedBox(height: Responsive.h(8)),
-          Wrap(
-            spacing: Responsive.w(8),
-            runSpacing: Responsive.h(8),
-            children: _metalColors.map((c) => _buildChoiceChip(c, _selectedMetalColor == c, () {
-              setState(() => _selectedMetalColor = _selectedMetalColor == c ? null : c);
-            })).toList(),
-          ),
-          SizedBox(height: Responsive.h(18)),
-
-          // Condition choice chips
-          Text('Condition',
-              style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: _primary)),
-          SizedBox(height: Responsive.h(8)),
-          Wrap(
-            spacing: Responsive.w(8),
-            runSpacing: Responsive.h(8),
-            children: _conditions.map((c) => _buildChoiceChip(c, _selectedCondition == c, () {
-              setState(() => _selectedCondition = _selectedCondition == c ? null : c);
-            })).toList(),
-          ),
-
-          SizedBox(height: Responsive.h(40)),
+    return Column(
+      children: [
+        _dropdown('Select category', mains, _categoryId, (v) {
+          setState(() {
+            _categoryId = v;
+            _subcategoryId = null;
+            _subvariantId = null;
+            // Update SKU prefix with category name
+            if (v != null) {
+              final cat = mains.firstWhere((c) => c.id == v);
+              final prefix = cat.name.length >= 3
+                  ? cat.name.substring(0, 3).toUpperCase()
+                  : cat.name.toUpperCase();
+              _sku = '$prefix-${Random().nextInt(9000) + 1000}';
+            }
+          });
+        }),
+        if (subs.isNotEmpty) ...[
+          SizedBox(height: Responsive.h(10)),
+          _dropdown('Select subcategory (optional)', subs, _subcategoryId, (v) {
+            setState(() {
+              _subcategoryId = v;
+              _subvariantId = null;
+            });
+          }),
         ],
-      ),
+        if (variants.isNotEmpty) ...[
+          SizedBox(height: Responsive.h(10)),
+          _dropdown('Select variant (optional)', variants, _subvariantId, (v) {
+            setState(() => _subvariantId = v);
+          }),
+        ],
+      ],
     );
   }
 
-  Widget _buildChoiceChip(String label, bool isSelected, VoidCallback onTap) {
+  Widget _dropdown(
+      String hint, List<Category> items, String? value, ValueChanged<String?> onChanged) {
+    return DropdownButtonFormField<String>(
+      initialValue: value,
+      decoration: InputDecoration(
+        contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
+      ),
+      hint: Text(hint, style: TextStyle(fontSize: Responsive.sp(13))),
+      isExpanded: true,
+      items: items
+          .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  // ── Quantity Stepper ──
+  Widget _buildQuantityStepper(Color primary) {
+    return Row(
+      children: [
+        // Minus button
+        _stepperBtn(Icons.remove_rounded, primary, () {
+          if (_quantity > 1) setState(() => _quantity--);
+        }),
+        SizedBox(width: Responsive.w(8)),
+        // Editable quantity
+        Expanded(
+          child: TextField(
+            controller: TextEditingController(text: '$_quantity'),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: Responsive.sp(22),
+              fontWeight: FontWeight.w800,
+              color: primary,
+            ),
+            decoration: InputDecoration(
+              contentPadding: Responsive.symmetric(vertical: 12),
+            ),
+            onChanged: (v) {
+              final n = int.tryParse(v);
+              if (n != null && n > 0) setState(() => _quantity = n);
+            },
+          ),
+        ),
+        SizedBox(width: Responsive.w(8)),
+        // Plus button
+        _stepperBtn(Icons.add_rounded, primary, () {
+          setState(() => _quantity++);
+        }),
+      ],
+    );
+  }
+
+  Widget _stepperBtn(IconData icon, Color primary, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: Responsive.symmetric(horizontal: 14, vertical: 8),
+      child: Container(
+        width: Responsive.w(48),
+        height: Responsive.w(48),
         decoration: BoxDecoration(
-          color: isSelected ? _primary : Colors.white,
-          borderRadius: BorderRadius.circular(Responsive.r(20)),
-          border: Border.all(color: isSelected ? _primary : Colors.grey.shade300),
+          color: primary,
+          borderRadius: BorderRadius.circular(Responsive.r(12)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: Responsive.sp(12),
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : _primary,
-          ),
-        ),
+        child: Icon(icon, color: Colors.white, size: Responsive.icon(24)),
       ),
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, TextInputType type, {int maxLines = 1}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: _primary)),
-        SizedBox(height: Responsive.h(6)),
-        TextField(
-          controller: controller,
-          keyboardType: type,
-          maxLines: maxLines,
-          style: TextStyle(fontSize: Responsive.sp(14)),
-          decoration: InputDecoration(
-            contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(Responsive.r(10)),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(Responsive.r(10)),
-              borderSide: const BorderSide(color: _primary, width: 1.5),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-      ],
-    );
+  // ── Barcode Scanner (placeholder — needs mobile_scanner package) ──
+  void _scanBarcode() {
+    // TODO: Integrate mobile_scanner or barcode_scan package
+    _snack('Barcode scanner coming soon. Use auto-generate for now.');
   }
 
-  // ── Step 3: Pricing & Stock ──
-  Widget _buildStep3Pricing() {
-    return SingleChildScrollView(
-      padding: Responsive.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Pricing & Inventory',
-              style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700, color: _primary)),
-          SizedBox(height: Responsive.h(16)),
-
-          Row(
-            children: [
-              Expanded(child: _buildNumberField('Price/Day (₹) *', _priceController)),
-              SizedBox(width: Responsive.w(12)),
-              Expanded(child: _buildNumberField('Security Deposit (₹)', _depositController)),
-            ],
-          ),
-          SizedBox(height: Responsive.h(14)),
-
-          _buildNumberField('Quantity *', _quantityController),
-          SizedBox(height: Responsive.h(14)),
-
-          Row(
-            children: [
-              Expanded(child: _buildNumberField('Min Rental Days', _minDaysController)),
-              SizedBox(width: Responsive.w(12)),
-              Expanded(child: _buildNumberField('Max Rental Days', _maxDaysController)),
-            ],
-          ),
-
-          SizedBox(height: Responsive.h(40)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNumberField(String label, TextEditingController controller) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: _primary)),
-        SizedBox(height: Responsive.h(6)),
-        TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w600),
-          decoration: InputDecoration(
-            contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(Responsive.r(10)),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(Responsive.r(10)),
-              borderSide: const BorderSide(color: _primary, width: 1.5),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Bottom Navigation ──
-  Widget _buildBottomNav() {
-    return Container(
-      padding: Responsive.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: Responsive.r(10),
-              offset: Offset(0, -Responsive.h(2)))
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            if (_currentStep > 0)
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _goBack,
-                  style: OutlinedButton.styleFrom(
-                    padding: Responsive.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(Responsive.r(12))),
-                    side: BorderSide(color: Colors.grey.shade400),
-                  ),
-                  child: Text('Back',
-                      style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.w600)),
-                ),
-              ),
-            if (_currentStep > 0) SizedBox(width: Responsive.w(12)),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _onNextOrSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _currentStep == 2 ? const Color(0xFF2ECC71) : _primary,
-                  foregroundColor: Colors.white,
-                  padding: Responsive.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(Responsive.r(12))),
-                ),
-                child: _isLoading
-                    ? SizedBox(
-                        height: Responsive.h(20),
-                        width: Responsive.w(20),
-                        child: const CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : Text(
-                        _currentStep == 2 ? (isEdit ? 'Update Product' : 'Create Product') : 'Next',
-                        style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w700),
-                      ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _goBack() {
-    _pageController.previousPage(
-        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-  }
-
-  void _onNextOrSubmit() {
-    if (_currentStep < 2) {
-      // Validate current step
-      if (_currentStep == 1 && _nameController.text.trim().isEmpty) {
-        _showError('Product name is required');
-        return;
-      }
-      _pageController.nextPage(
-          duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-    } else {
-      _submitForm();
-    }
-  }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red[400]),
-    );
-  }
-
+  // ── Submit ──
   Future<void> _submitForm() async {
-    // Validate
-    if (_nameController.text.trim().isEmpty) {
-      _showError('Product name is required');
+    if (_nameCtl.text.trim().isEmpty) {
+      _snack('Product name is required', isError: true);
       return;
     }
-    final price = double.tryParse(_priceController.text) ?? 0;
+    final price = double.tryParse(_priceCtl.text) ?? 0;
     if (price <= 0) {
-      _showError('Price per day is required');
+      _snack('Rent price is required', isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Upload new images first
+      // 1. Upload new images to R2
       final uploadedUrls = <String>[];
       if (_newImages.isNotEmpty) {
         final uploadRepo = UploadRepository();
-        for (final file in _newImages) {
-          final url = await uploadRepo.uploadFile(file);
+        for (int i = 0; i < _newImages.length; i++) {
+          _snack('Uploading image ${i + 1} of ${_newImages.length}…');
+          final url = await uploadRepo.uploadFile(_newImages[i], folder: 'products');
           uploadedUrls.add(url);
         }
       }
 
-      // Build images list
-      final allImageUrls = [..._imageUrls, ...uploadedUrls];
-      final images = allImageUrls.asMap().entries.map((e) => {
-        'url': e.value,
-        'is_primary': e.key == 0,
-        'sort_order': e.key,
-        'alt_text': _nameController.text.trim(),
-      }).toList();
+      // 2. Build images JSONB
+      final allUrls = [..._imageUrls, ...uploadedUrls];
+      final images = allUrls.asMap().entries.map((e) => {
+            'url': e.value,
+            'is_primary': e.key == 0,
+            'sort_order': e.key,
+            'alt_text': _nameCtl.text.trim(),
+          }).toList();
 
+      // 3. Build payload
       final body = <String, dynamic>{
-        'name': _nameController.text.trim(),
+        'name': _nameCtl.text.trim(),
         'price_per_day': price,
-        'security_deposit': double.tryParse(_depositController.text) ?? 0,
-        'quantity': int.tryParse(_quantityController.text) ?? 1,
-        'available_quantity': int.tryParse(_quantityController.text) ?? 1,
+        'security_deposit': 0,
+        'quantity': _quantity,
+        'available_quantity': _quantity,
         'images': images,
-        'is_active': true,
+        'is_active': _isActive,
+        'sku': _sku,
+        'barcode': _barcode,
       };
 
-      // Optional fields
-      if (_descriptionController.text.trim().isNotEmpty) {
-        body['description'] = _descriptionController.text.trim();
-      }
-      if (_skuController.text.trim().isNotEmpty) {
-        body['sku'] = _skuController.text.trim();
-      }
-      if (_barcodeController.text.trim().isNotEmpty) {
-        body['barcode'] = _barcodeController.text.trim();
-      }
-      if (_selectedMaterial != null) body['material'] = _selectedMaterial;
-      if (_selectedMetalColor != null) body['metal_color'] = _selectedMetalColor;
-      if (_selectedCondition != null) body['condition'] = _selectedCondition;
-      if (_minDaysController.text.isNotEmpty) {
-        body['min_rental_days'] = int.tryParse(_minDaysController.text);
-      }
-      if (_maxDaysController.text.isNotEmpty) {
-        body['max_rental_days'] = int.tryParse(_maxDaysController.text);
-      }
+      final desc = _descCtl.text.trim();
+      if (desc.isNotEmpty) body['description'] = desc;
+      if (_categoryId != null) body['category_id'] = _categoryId;
+      if (_subcategoryId != null) body['subcategory_id'] = _subcategoryId;
+      if (_subvariantId != null) body['subvariant_id'] = _subvariantId;
 
+      // 4. Create or update
       if (isEdit) {
         await ref.read(productsProvider.notifier).updateProduct(widget.productId!, body);
       } else {
@@ -715,18 +752,24 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isEdit ? 'Product updated!' : 'Product created!'),
-            backgroundColor: const Color(0xFF2ECC71),
-          ),
-        );
+        _snack(isEdit ? 'Product updated!' : 'Product created!');
         Navigator.of(context).pop();
       }
     } catch (e) {
-      _showError(e.toString().replaceFirst('Exception: ', ''));
+      _snack(e.toString().replaceFirst('Exception: ', ''), isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _snack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, maxLines: 2, overflow: TextOverflow.ellipsis),
+        backgroundColor: isError ? Colors.red[400] : const Color(0xFF2ECC71),
+        duration: Duration(seconds: isError ? 3 : 2),
+      ),
+    );
   }
 }
