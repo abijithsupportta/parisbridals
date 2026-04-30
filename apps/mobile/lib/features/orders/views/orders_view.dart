@@ -6,7 +6,7 @@ import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
-import 'order_detail_view.dart';
+import 'order_detail_view_new.dart';
 import 'order_form_view.dart';
 
 /// Orders list with horizontal filter chips matching DB statuses.
@@ -265,7 +265,7 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
         child: InkWell(
           borderRadius: BorderRadius.circular(Responsive.r(14)),
           onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => OrderDetailView(order: order)))
+              .push(MaterialPageRoute(builder: (_) => OrderDetailViewNew(order: order)))
               .then((_) => ref.invalidate(ordersProvider)),
           child: Padding(
             padding: Responsive.all(12),
