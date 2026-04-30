@@ -129,6 +129,21 @@ export class ProductService {
       }
     }
 
+    // Check barcode uniqueness if provided
+    if (data.barcode && data.barcode.trim().length > 0) {
+      const barcodeCheck = await productRepository.isBarcodeUnique(data.barcode.trim());
+      if (!barcodeCheck.unique) {
+        return {
+          data: null,
+          error: {
+            message: `Barcode "${data.barcode}" is already assigned to "${barcodeCheck.existingProductName}"`,
+            code: 'BARCODE_EXISTS'
+          } as any,
+          success: false,
+        };
+      }
+    }
+
     // Handle "all branches" for admin/super admin
     let branchId = data.branch_id;
     if ((userRole === 'admin' || userRole === 'super_admin') && data.branch_id === 'all') {
@@ -251,6 +266,21 @@ export class ProductService {
             success: false,
           };
         }
+      }
+    }
+
+    // Check barcode uniqueness if changed
+    if (data.barcode && data.barcode.trim().length > 0 && data.barcode !== existingProduct.data.barcode) {
+      const barcodeCheck = await productRepository.isBarcodeUnique(data.barcode.trim(), id);
+      if (!barcodeCheck.unique) {
+        return {
+          data: null,
+          error: {
+            message: `Barcode "${data.barcode}" is already assigned to "${barcodeCheck.existingProductName}"`,
+            code: 'BARCODE_EXISTS'
+          } as any,
+          success: false,
+        };
       }
     }
 
@@ -378,6 +408,25 @@ export class ProductService {
    */
   async searchProducts(query: string, limit: number = 10): Promise<RepositoryResult<Product[]>> {
     return await productRepository.search(query, limit);
+  }
+
+  /**
+   * Get product by barcode
+   * Used for barcode scanner lookup in order forms.
+   */
+  async getProductByBarcode(barcode: string): Promise<RepositoryResult<ProductWithRelations>> {
+    if (!barcode || barcode.trim().length === 0) {
+      return {
+        data: null,
+        error: {
+          message: 'Barcode is required',
+          code: 'VALIDATION_ERROR'
+        } as any,
+        success: false,
+      };
+    }
+
+    return await productRepository.findByBarcode(barcode.trim());
   }
 
   /**

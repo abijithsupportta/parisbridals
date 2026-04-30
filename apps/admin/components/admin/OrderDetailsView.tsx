@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
-  Package, CheckCircle2, AlertTriangle,
-  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2, Edit3, ReceiptText
+  Package, CheckCircle2, AlertTriangle, Loader2,
+  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2, Edit3, ReceiptText, ScanBarcode
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Modal from "@/components/admin/Modal";
-import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments } from "@/hooks";
+import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments, useLookupProductByBarcode } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
 import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
 import { PaymentType, PaymentMode } from "@/domain/types/payment";
 import { startOfDay } from "date-fns";
+import dynamic from 'next/dynamic';
+
+const BarcodeScanner = dynamic(() => import('./BarcodeScanner'), { ssr: false });
 
 export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const router = useRouter();
@@ -29,6 +32,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const { updateOrder, isLoading: isUpdating } = useUpdateOrder();
   const { createPayment, isPending: isCreatingPayment } = useCreatePayment();
   const { showSuccess, showError } = useAppStore();
+  const { lookupByBarcode } = useLookupProductByBarcode();
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
@@ -52,6 +56,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   });
   const [isEditingDeposit, setIsEditingDeposit] = useState(false);
   const [editDepositValue, setEditDepositValue] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');  
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Start Rental stock check
+  const [isCheckingStock, setIsCheckingStock] = useState(false);
+  const [isStockErrorModalOpen, setIsStockErrorModalOpen] = useState(false);
+  const [stockCheckResults, setStockCheckResults] = useState<{ product_name: string; requested: number; available: number; isAvailable: boolean }[]>([]);
 
   // Local state for the return checklist
   const [returnItems, setReturnItems] = useState<Record<string, {
@@ -97,15 +110,92 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     setReturnItems(updated);
   };
 
-  const handleStartOrder = () => {
-    if (!order) return;
-    updateOrder({
-      id: order.id,
-      data: {
-        status: OrderStatus.ONGOING,
-        start_date: new Date().toISOString().split('T')[0]
+  // Barcode scan handler for return
+  const handleBarcodeScan = async (barcode: string) => {
+    if (!barcode.trim() || !order || !isReturnable) return;
+    try {
+      const product = await lookupByBarcode(barcode.trim());
+      if (!product) return;
+
+      // Find matching item in the order
+      const matchingItem = order.items.find(item => {
+        const itemProduct = (item as any).product;
+        return itemProduct?.id === product.id || item.product_id === product.id;
+      });
+
+      if (!matchingItem) {
+        showError('Barcode Scan', 'This item is not in this order');
+        return;
       }
-    });
+
+      // Highlight the item with a green flash
+      setHighlightedItemId(matchingItem.id);
+      setTimeout(() => setHighlightedItemId(null), 2000);
+
+      // Auto-mark as excellent
+      setReturnItems(prev => ({
+        ...prev,
+        [matchingItem.id]: { ...prev[matchingItem.id], status: 'excellent', damage_fee: 0, notes: '' }
+      }));
+      showSuccess('Item Scanned', `${product.name} marked as Good condition`);
+      setBarcodeInput('');
+    } catch {
+      // Error already shown by the hook
+    }
+  };
+
+  // Handle barcode text input (supports USB scanner which fires Enter after scan)
+  const handleBarcodeInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && barcodeInput.trim()) {
+      e.preventDefault();
+      handleBarcodeScan(barcodeInput);
+    }
+  };
+
+  const handleStartOrder = async () => {
+    if (!order) return;
+    setIsCheckingStock(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const items = order.items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        product_name: (item as any).product?.name || `Product #${item.product_id?.slice(0, 6)}`,
+      }));
+
+      const res = await fetch('/api/orders/check-availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items,
+          start_date: today,
+          end_date: order.end_date,
+          exclude_order_id: order.id,
+        }),
+      });
+      const result = await res.json();
+
+      if (!result.success || !result.data?.allAvailable) {
+        // Stock insufficient — block
+        setStockCheckResults(result.data?.items || []);
+        setIsStockErrorModalOpen(true);
+        setIsCheckingStock(false);
+        return;
+      }
+
+      // All stock available — proceed
+      updateOrder({
+        id: order.id,
+        data: {
+          status: OrderStatus.ONGOING,
+          start_date: today,
+        }
+      });
+    } catch (err) {
+      showError('Stock Check Failed', 'Could not verify stock availability. Please try again.');
+    } finally {
+      setIsCheckingStock(false);
+    }
   };
 
   const handleItemUpdate = (itemId: string, field: string, value: any) => {
@@ -231,7 +321,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
   const getStatusDisplay = (status: string) => {
     switch (status) {
-      case OrderStatus.SCHEDULED: return { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Scheduled' };
+      case OrderStatus.CONFIRMED: case OrderStatus.SCHEDULED: return { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Scheduled' };
       case OrderStatus.ONGOING: case OrderStatus.IN_USE: return { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Ongoing' };
       case OrderStatus.LATE_RETURN: return { color: 'bg-red-100 text-red-800 border-red-300 shadow-[0_0_10px_rgba(239,68,68,0.3)]', label: 'Late' };
       case OrderStatus.PARTIAL: return { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Partial' };
@@ -264,46 +354,50 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
           {/* Payment Pill */}
           {amount_due > 0 ? (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-3 rounded-xl text-xl font-black flex-1 lg:flex-none text-center">
+            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-2 rounded-xl text-base font-black text-center whitespace-nowrap">
               DUE: {formatCurrency(amount_due)}
             </div>
           ) : (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-6 py-3 rounded-xl text-sm font-black flex-1 lg:flex-none text-center">
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-sm font-black text-center">
               PAID
             </div>
           )}
 
-          {/* Primary Action Button */}
-          {order.status === OrderStatus.SCHEDULED && (() => {
+          {/* Primary Action Button — Start Rental for confirmed + scheduled */}
+          {(order.status === OrderStatus.CONFIRMED || order.status === OrderStatus.SCHEDULED) && (() => {
             const today = startOfDay(new Date());
             const rentalStart = startOfDay(new Date(order.start_date));
-            const canStart = today >= rentalStart;
+            const isEarlyStart = today < rentalStart;
             return (
-              <div className="flex items-center gap-3 flex-1 lg:flex-none">
-                <Button onClick={handleStartOrder} disabled={isUpdating || !canStart} className="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none disabled:opacity-50 disabled:cursor-not-allowed">
-                  Start Rental
+              <>
+                <Button onClick={handleStartOrder} disabled={isUpdating || isCheckingStock} className="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isCheckingStock ? (
+                    <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Checking...</>
+                  ) : (
+                    'Start Rental'
+                  )}
                 </Button>
                 <Button
                   onClick={() => setIsCancelModalOpen(true)}
                   disabled={isUpdating}
                   variant="outline"
-                  className="h-14 px-6 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-bold text-lg rounded-xl"
+                  className="h-11 px-4 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-bold text-sm rounded-xl"
                 >
-                  <XCircle className="w-5 h-5 mr-2" /> Cancel
+                  <XCircle className="w-4 h-4 mr-1.5" /> Cancel
                 </Button>
-                {!canStart && (
-                  <p className="text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-                    Available on {format(rentalStart, "dd MMM, yyyy")}
+                {isEarlyStart && (
+                  <p className="text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                    Original pickup: {format(rentalStart, "dd MMM, yyyy")}
                   </p>
                 )}
-              </div>
+              </>
             );
           })()}
           {order.status !== OrderStatus.SCHEDULED && amount_due > 0 && (
-            <Button onClick={() => setIsPaymentModalOpen(true)} className="h-14 px-8 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
+            <Button onClick={() => setIsPaymentModalOpen(true)} className="h-11 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl">
               Collect Payment
             </Button>
           )}
@@ -393,17 +487,20 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       {/* 3. Split View */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
-        {/* Left Column: Physical Items */}
+        {/* Left Column: Order Items */}
         <div className="xl:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="bg-slate-50 px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wide">Physical Items</h2>
+              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wide">Order Items</h2>
               {isReturnable && (
-                <Button onClick={handleMarkAllExcellent} variant="outline" className="font-bold border-slate-300 text-slate-700">
-                  <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> Mark All Good
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleMarkAllExcellent} variant="outline" className="font-bold border-slate-300 text-slate-700">
+                    <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> Mark All Good
+                  </Button>
+                </div>
               )}
             </div>
+
             
             <div className="divide-y divide-slate-100">
               {order.items.map((item) => {
@@ -415,7 +512,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 const imgUrl = getImageUrl(product);
 
                 return (
-                  <div key={item.id} className={`p-6 transition-colors ${isExcellent ? 'bg-emerald-50/50' : isDamaged ? 'bg-orange-50/50' : isMissing ? 'bg-red-50/50' : ''}`}>
+                  <div key={item.id} className={`p-6 transition-all duration-300 ${highlightedItemId === item.id ? 'bg-emerald-100/80 ring-2 ring-emerald-400' : isExcellent ? 'bg-emerald-50/50' : isDamaged ? 'bg-orange-50/50' : isMissing ? 'bg-red-50/50' : ''}`}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                       <div className="w-20 h-20 rounded-xl bg-slate-100 flex-shrink-0 border-2 border-slate-200 overflow-hidden shadow-sm">
                         {imgUrl ? (
@@ -601,6 +698,12 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 <span>Grand Total</span>
                 <span>{formatCurrency(order.total_amount)}</span>
               </div>
+              {(order.advance_amount || 0) > 0 && (
+                <div className="flex justify-between text-blue-700 font-bold text-sm bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                  <span>Less: Advance Paid</span>
+                  <span>−{formatCurrency(order.advance_amount)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-600 font-bold text-sm">
                 <span>Total Paid</span>
                 <span>{formatCurrency(order.amount_paid || 0)}</span>
@@ -913,6 +1016,75 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 className="h-12 px-8 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-md"
               >
                 {isUpdating ? "Cancelling..." : "Cancel Order"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Stock Insufficient Modal */}
+        <Modal
+          open={isStockErrorModalOpen}
+          onClose={() => setIsStockErrorModalOpen(false)}
+          title="Cannot Start Rental"
+          maxWidth="max-w-lg"
+        >
+          <div className="p-6">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">Insufficient Stock</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Some items don't have enough stock for today. Please edit the order to adjust quantities before starting the rental.
+                </p>
+              </div>
+            </div>
+
+            {/* Per-item breakdown */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-5">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Item</th>
+                    <th className="text-center px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Ordered</th>
+                    <th className="text-center px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Available</th>
+                    <th className="text-center px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {stockCheckResults.map((item, idx) => (
+                    <tr key={idx} className={!item.isAvailable ? 'bg-red-50/50' : ''}>
+                      <td className="px-4 py-3 font-medium text-slate-900">{item.product_name}</td>
+                      <td className="px-4 py-3 text-center text-slate-600">{item.requested}</td>
+                      <td className="px-4 py-3 text-center font-bold text-slate-900">{item.available}</td>
+                      <td className="px-4 py-3 text-center">
+                        {item.isAvailable ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> OK
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-600 font-semibold text-xs">
+                            <XCircle className="w-3.5 h-3.5" /> Short
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setIsStockErrorModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Close</Button>
+              <Button
+                onClick={() => {
+                  setIsStockErrorModalOpen(false);
+                  router.push(`/dashboard/orders/${order.id}/edit`);
+                }}
+                className="h-12 px-8 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-md"
+              >
+                <Edit3 className="w-4 h-4 mr-2" /> Edit Order
               </Button>
             </div>
           </div>

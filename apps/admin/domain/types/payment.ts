@@ -9,6 +9,7 @@
 // Payment Type Enum
 export enum PaymentType {
   DEPOSIT = 'deposit',
+  ADVANCE = 'advance',
   FINAL = 'final',
   REFUND = 'refund',
   ADJUSTMENT = 'adjustment',

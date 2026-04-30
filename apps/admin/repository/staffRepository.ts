@@ -15,7 +15,7 @@ export class StaffRepository extends BaseRepository {
   async findAll(storeId: string): Promise<RepositoryResult<StaffWithBranch[]>> {
     const { data, error } = await this.client
       .from(this.tableName)
-      .select('*, branch:branches(id, name)')
+      .select('*, branch:branches!staff_branch_id_fkey(id, name)')
       .eq('store_id', storeId)
       .order('name');
 
@@ -35,7 +35,7 @@ export class StaffRepository extends BaseRepository {
   async findById(id: string): Promise<RepositoryResult<StaffWithBranch>> {
     const { data, error } = await this.client
       .from(this.tableName)
-      .select('*, branch:branches(id, name)')
+      .select('*, branch:branches!staff_branch_id_fkey(id, name)')
       .eq('id', id)
       .single();
 

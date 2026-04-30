@@ -18,3 +18,4 @@ export { SettingsService, settingsService } from './settingsService';
 export { PaymentService, paymentService } from './paymentService';
 export { InvoiceService, invoiceService } from './invoiceService';
 export { BranchInventoryService, branchInventoryService } from './branchInventoryService';
+export { StaffService, staffService } from './staffService';

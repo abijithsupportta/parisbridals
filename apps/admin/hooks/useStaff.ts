@@ -6,6 +6,11 @@
  *
  * Flow: UI → hooks → fetch(/api/staff) → service → repository → supabase
  *
+ * Performance:
+ * - staleTime: 0 with refetchOnMount: 'always' ensures fresh data on navigation
+ * - onSettled with await ensures cache is refreshed before mutateAsync resolves
+ * - structuralSharing prevents unnecessary re-renders when data shape is identical
+ *
  * @module hooks/useStaff
  */
 
@@ -23,6 +28,7 @@ const staffKeys = {
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
     ...options,
   });
   if (!res.ok) {
@@ -39,12 +45,17 @@ export function useStaff() {
       const response = await apiFetch<ApiSuccessResponse<StaffWithBranch[]>>('/api/staff');
       return response.data;
     },
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
+    retry: 1,
   });
 
   return {
     staff: query.data || [],
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
     error: query.error,
   };
 }
@@ -57,7 +68,8 @@ export function useStaffByBranch(branchId: string) {
       return response.data;
     },
     enabled: !!branchId,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   return {
@@ -75,7 +87,8 @@ export function useStaffMember(id: string) {
       return response.data;
     },
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   return {
@@ -91,12 +104,14 @@ export function useCreateStaff() {
 
   return useMutation({
     mutationFn: (data: Omit<CreateStaffDTO, 'store_id'>) =>
-      apiFetch('/api/staff', { method: 'POST', body: JSON.stringify(data) }),
+      apiFetch<ApiSuccessResponse<Staff>>('/api/staff', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: staffKeys.all });
       showSuccess('Staff member created successfully');
     },
     onError: (error) => showError('Failed to create staff', error.message),
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: staffKeys.all });
+    },
   });
 }
 
@@ -106,13 +121,17 @@ export function useUpdateStaff() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateStaffDTO }) =>
-      apiFetch(`/api/staff/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: staffKeys.all });
-      queryClient.invalidateQueries({ queryKey: staffKeys.detail(variables.id) });
+      apiFetch<ApiSuccessResponse<Staff>>(`/api/staff/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => {
       showSuccess('Staff member updated successfully');
     },
     onError: (error) => showError('Failed to update staff', error.message),
+    onSettled: async (_data, _error, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: staffKeys.all }),
+        queryClient.invalidateQueries({ queryKey: staffKeys.detail(variables.id) }),
+      ]);
+    },
   });
 }
 
@@ -124,9 +143,42 @@ export function useDeleteStaff() {
     mutationFn: (id: string) =>
       apiFetch(`/api/staff/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: staffKeys.all });
-      showSuccess('Staff member deleted successfully');
+      showSuccess('Staff member deactivated successfully');
     },
-    onError: (error) => showError('Failed to delete staff', error.message),
+    onError: (error) => showError('Failed to deactivate staff', error.message),
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: staffKeys.all });
+    },
+  });
+}
+
+/**
+ * Toggle staff active/inactive status via PATCH.
+ * Shows appropriate toast based on the new status.
+ */
+export function useToggleStaffStatus() {
+  const queryClient = useQueryClient();
+  const { showSuccess, showError } = useAppStore();
+
+  return useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      apiFetch<ApiSuccessResponse<Staff>>(`/api/staff/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active }),
+      }),
+    onSuccess: (_data, variables) => {
+      showSuccess(
+        variables.is_active
+          ? 'Staff member activated successfully'
+          : 'Staff member deactivated successfully'
+      );
+    },
+    onError: (error) => showError('Failed to update staff status', error.message),
+    onSettled: async (_data, _error, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: staffKeys.all }),
+        queryClient.invalidateQueries({ queryKey: staffKeys.detail(variables.id) }),
+      ]);
+    },
   });
 }

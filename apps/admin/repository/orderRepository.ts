@@ -18,6 +18,10 @@ import {
   ReturnOrderDTO
 } from '@/domain/types/order';
 
+/** Buffer days for cleaning/prep before and after each rental (in milliseconds) */
+const BUFFER_DAYS = 1;
+const BUFFER_MS = BUFFER_DAYS * 86400000;
+
 export class OrderRepository extends BaseRepository {
   private readonly tableName = 'orders';
   private readonly orderItemsTable = 'order_items';
@@ -176,8 +180,11 @@ export class OrderRepository extends BaseRepository {
       const ordStart = new Date(order.start_date).getTime();
       const ordEnd = new Date(order.end_date).getTime();
 
-      // Overlap condition (inclusive end dates — jewellery rental model)
-      if (ordStart <= reqEnd && ordEnd >= reqStart) {
+      // Overlap condition with buffer days (±1 day for cleaning/prep)
+      // A booking's effective range is [start - BUFFER, end + BUFFER]
+      const effectiveStart = ordStart - BUFFER_MS;
+      const effectiveEnd = ordEnd + BUFFER_MS;
+      if (effectiveStart <= reqEnd && effectiveEnd >= reqStart) {
         const unreturned = item.quantity - (item.returned_quantity || 0);
         if (unreturned > 0) {
           const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
@@ -195,13 +202,14 @@ export class OrderRepository extends BaseRepository {
       }
     }
 
-    // ─── Sweep Line Algorithm ─────────────────────────────────────────
-    // Create events: +qty at start, -qty at (end + 1 day)
+    // ─── Sweep Line Algorithm (with buffer days) ─────────────────────
+    // Each booking blocks the product from (start - BUFFER) to (end + BUFFER).
+    // Events: +qty at (start - BUFFER), -qty at (end + BUFFER + 1 day)
     const events: { time: number; delta: number }[] = [];
     for (const booking of overlappingBookings) {
-      events.push({ time: booking.start, delta: +booking.quantity });
-      // End + 1 day: the item is released the day AFTER the end date
-      events.push({ time: booking.end + 86400000, delta: -booking.quantity });
+      events.push({ time: booking.start - BUFFER_MS, delta: +booking.quantity });
+      // Release: 1 day after the buffer-extended end date
+      events.push({ time: booking.end + BUFFER_MS + 86400000, delta: -booking.quantity });
     }
 
     // Sort: by time, then releases (-delta) before acquisitions (+delta)
@@ -210,19 +218,21 @@ export class OrderRepository extends BaseRepository {
     let currentUsage = 0;
     let peakUsage = 0;
     for (const event of events) {
-      // Only count events within the requested range
-      if (event.time > reqEnd + 86400000) break;
+      // Only count events within the requested range (including buffer)
+      if (event.time > reqEnd + BUFFER_MS + 86400000) break;
       currentUsage += event.delta;
-      if (event.time >= reqStart && event.time <= reqEnd) {
+      if (event.time >= reqStart - BUFFER_MS && event.time <= reqEnd + BUFFER_MS) {
         peakUsage = Math.max(peakUsage, currentUsage);
       }
     }
 
     // Also check usage at the very start of the requested range
-    // (events before reqStart contribute to the baseline)
+    // (bookings whose buffered range covers reqStart contribute to baseline)
     let baselineAtStart = 0;
     for (const booking of overlappingBookings) {
-      if (booking.start <= reqStart && booking.end >= reqStart) {
+      const bufferedStart = booking.start - BUFFER_MS;
+      const bufferedEnd = booking.end + BUFFER_MS;
+      if (bufferedStart <= reqStart && bufferedEnd >= reqStart) {
         baselineAtStart += booking.quantity;
       }
     }
@@ -303,8 +313,10 @@ export class OrderRepository extends BaseRepository {
       const bookingStart = new Date(order.start_date);
       const bookingEnd = new Date(order.end_date);
 
-      // Only include if it overlaps with our view range
-      if (bookingStart <= viewEnd && bookingEnd >= viewStart) {
+      // Include if the booking's buffered range overlaps with our view range
+      const bufferedStart = new Date(bookingStart.getTime() - BUFFER_MS);
+      const bufferedEnd = new Date(bookingEnd.getTime() + BUFFER_MS);
+      if (bufferedStart <= viewEnd && bufferedEnd >= viewStart) {
         const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
         bookings.push({
           start: bookingStart,
@@ -319,18 +331,34 @@ export class OrderRepository extends BaseRepository {
       }
     }
 
-    // Build per-day availability map
+    // Build per-day availability map (with buffer day detection)
     const days: any[] = [];
     const current = new Date(viewStart);
     while (current <= viewEnd) {
       const dateStr = current.toISOString().split('T')[0];
+      const currentTime = current.getTime();
       let reserved = 0;
+      let bufferReserved = 0;
       const dayBookings: any[] = [];
 
       for (const booking of bookings) {
-        // Check if this booking covers the current day (inclusive)
-        if (booking.start <= current && booking.end >= current) {
+        const bookingStartTime = booking.start.getTime();
+        const bookingEndTime = booking.end.getTime();
+        const bufferedStartTime = bookingStartTime - BUFFER_MS;
+        const bufferedEndTime = bookingEndTime + BUFFER_MS;
+
+        // Check if this booking (including buffer) covers the current day
+        if (bufferedStartTime <= currentTime && bufferedEndTime >= currentTime) {
           reserved += booking.quantity;
+
+          // Determine if this day is a buffer day or an actual rental day
+          const isActualRentalDay = bookingStartTime <= currentTime && bookingEndTime >= currentTime;
+          const isBuffer = !isActualRentalDay;
+
+          if (isBuffer) {
+            bufferReserved += booking.quantity;
+          }
+
           dayBookings.push({
             orderId: booking.orderId,
             customerName: booking.customerName,
@@ -338,16 +366,19 @@ export class OrderRepository extends BaseRepository {
             startDate: booking.startDate,
             endDate: booking.endDate,
             status: booking.status,
+            isBuffer,
           });
         }
       }
 
       const available = Math.max(0, totalQuantity - reserved);
-      let status: 'available' | 'partial' | 'unavailable' = 'available';
-      if (available === 0) status = 'unavailable';
+      let status: 'available' | 'partial' | 'unavailable' | 'buffer' = 'available';
+      if (available === 0 && bufferReserved === reserved) status = 'buffer';
+      else if (available === 0) status = 'unavailable';
+      else if (reserved > 0 && bufferReserved === reserved) status = 'buffer';
       else if (reserved > 0) status = 'partial';
 
-      days.push({ date: dateStr, total: totalQuantity, reserved, available, status, bookings: dayBookings });
+      days.push({ date: dateStr, total: totalQuantity, reserved, bufferReserved, available, status, bookings: dayBookings });
       current.setDate(current.getDate() + 1);
     }
 
@@ -412,7 +443,7 @@ export class OrderRepository extends BaseRepository {
 
     const todayStr = new Date().toISOString().split('T')[0];
     const startDateStr = startDate.toISOString().split('T')[0];
-    const initialStatus = startDateStr > todayStr ? 'scheduled' : 'ongoing';
+    const initialStatus = 'scheduled';
 
     // Start a transaction by creating the order first
     // DB columns: start_date, end_date, event_date (all DATE type)
@@ -432,12 +463,16 @@ export class OrderRepository extends BaseRepository {
         subtotal,
         gst_amount: gstAmount,
         security_deposit: (data as any).security_deposit || 0,
+        advance_amount: data.advance_amount || 0,
+        advance_collected: data.advance_collected || false,
+        advance_payment_method: data.advance_payment_method || null,
+        advance_collected_at: data.advance_collected ? new Date().toISOString() : null,
         total_amount: totalAmount,
         deposit_collected: (data as any).deposit_collected || false,
         deposit_payment_method: (data as any).deposit_payment_method || null,
         deposit_collected_at: (data as any).deposit_collected_at || null,
-        amount_paid: (data as any).amount_paid || 0,
-        payment_status: (data as any).payment_status || 'pending',
+        amount_paid: data.advance_collected && data.advance_amount ? (data.advance_amount + ((data as any).amount_paid || 0)) : ((data as any).amount_paid || 0),
+        payment_status: data.advance_collected && data.advance_amount ? 'partial' : ((data as any).payment_status || 'pending'),
         notes: data.notes || null,
       })
       .select()
@@ -469,38 +504,9 @@ export class OrderRepository extends BaseRepository {
       return this.handleResponse<OrderWithRelations>(itemsResponse);
     }
 
-    // Deduct inventory only if starting immediately
-    if (initialStatus === 'ongoing') {
-      for (const item of data.items) {
-        const { data: inv } = await this.client
-          .from('product_inventory')
-          .select('available_quantity')
-          .eq('product_id', item.product_id)
-          .eq('branch_id', data.branch_id)
-          .single();
-          
-        if (inv) {
-          await this.client
-            .from('product_inventory')
-            .update({ available_quantity: Math.max(0, inv.available_quantity - item.quantity) })
-            .eq('product_id', item.product_id)
-            .eq('branch_id', data.branch_id);
-        }
-        
-        const { data: prod } = await this.client
-          .from('products')
-          .select('available_quantity')
-          .eq('id', item.product_id)
-          .single();
-          
-        if (prod) {
-          await this.client
-            .from('products')
-            .update({ available_quantity: Math.max(0, prod.available_quantity - item.quantity) })
-            .eq('id', item.product_id);
-        }
-      }
-    }
+    // NOTE: Inventory is NOT deducted at creation time.
+    // Stock deduction happens only when the user manually starts the rental
+    // (transitions to ongoing/in_use) via the order details page.
 
     // Create initial status history
     await this.client

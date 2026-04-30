@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
       guard.user.store_id
     );
 
-    const result = await branchService.getBranches();
+    const simple = request.nextUrl.searchParams.get('simple') === 'true';
+    const result = simple 
+      ? await branchService.getSimpleBranches()
+      : await branchService.getBranches();
+
     if (!result.success) {
       return apiRepositoryError(result.error, 'Failed to fetch branches');
     }
