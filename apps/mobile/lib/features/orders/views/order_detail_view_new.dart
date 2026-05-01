@@ -65,8 +65,19 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     return orderAsync.when(
       data: (order) {
-        _cachedOrder = order;
-        _initializeReturnItems(order);
+        if (_cachedOrder?.id != order.id) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              setState(() {
+                _cachedOrder = order;
+                _returnItems.clear();
+                _initializeReturnItems(order);
+              });
+            }
+          });
+        } else {
+          _cachedOrder = order;
+        }
         return _buildContent(order, canManage);
       },
       loading: () => Scaffold(
