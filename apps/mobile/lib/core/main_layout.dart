@@ -4,15 +4,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'providers/auth_provider.dart' as core_auth;
 import '../features/auth/providers/auth_provider.dart';
 import '../features/auth/views/login_view.dart';
-import '../features/products/views/products_view.dart';
 import '../features/dashboard/views/dashboard_view.dart';
 import '../features/orders/views/orders_view.dart';
 import '../features/calendar/views/calendar_view.dart';
-// import '../features/categories/views/categories_view.dart';
+import '../features/products/views/products_view.dart';
 import '../features/branches/models/branch.dart';
 import '../features/branches/providers/branch_provider.dart';
-import '../features/branches/views/branches_view.dart';
-import '../features/customers/views/customers_view.dart';
 import 'responsive.dart';
 
 class MainLayout extends StatefulWidget {
@@ -83,7 +80,7 @@ class _MainLayoutState extends State<MainLayout> {
       );
     }
 
-    final titles = ['', 'Orders', 'Calendar', 'Products', 'Categories'];
+    final titles = ['', 'Orders', 'Calendar', 'Products'];
     return AppBar(
       backgroundColor: _primary,
       iconTheme: const IconThemeData(color: Colors.white),
@@ -181,72 +178,11 @@ class _MainLayoutState extends State<MainLayout> {
                 children: [
                   // Admin-only menu items
                   if (isAdmin) ...[
-                    _buildDrawerSectionLabel('Management'),
-                    _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    // _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
-                    _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
-                    _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
-                    _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
-                    Padding(
-                      padding: Responsive.symmetric(horizontal: 24),
-                      child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
-                    ),
-                    _buildDrawerSectionLabel('Management'),
-                    _buildDrawerItem(Icons.storefront_rounded, 'Branches', null, onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const BranchesView()),
-                      );
-                    }),
-                    _buildDrawerItem(Icons.people_rounded, 'Customers', null, onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const CustomersView()),
-                      );
-                    }),
-                    Padding(
-                      padding: Responsive.symmetric(horizontal: 24),
-                      child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
-                    ),
-                    _buildDrawerSectionLabel('Settings'),
-                    _buildDrawerItem(Icons.settings_rounded, 'Settings', null, onTap: () {
-                      Navigator.pop(context);
-                      // TODO: navigate to settings
-                    }),
+                    // Minimal menu - only logout available
                   ] else if (canManage) ...[
-                    // Manager sees nav items but no settings
-                    _buildDrawerSectionLabel('Navigation'),
-                    _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    // _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
-                    _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
-                    _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
-                    _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
-                    Padding(
-                      padding: Responsive.symmetric(horizontal: 24),
-                      child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
-                    ),
-                    _buildDrawerSectionLabel('Management'),
-                    _buildDrawerItem(Icons.storefront_rounded, 'Branches', null, onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const BranchesView()),
-                      );
-                    }),
-                    _buildDrawerItem(Icons.people_rounded, 'Customers', null, onTap: () {
-                      Navigator.pop(context);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const CustomersView()),
-                      );
-                    }),
+                    // Manager minimal menu - only logout available
                   ] else ...[
-                    // Staff sees minimal menu
-                    _buildDrawerSectionLabel('Navigation'),
-                    _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
+                    // Staff minimal menu - only logout available
                   ],
                 ],
               ),
@@ -276,63 +212,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  Widget _buildDrawerSectionLabel(String label) {
-    return Padding(
-      padding: Responsive.only(left: 24, top: 8, bottom: 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w700, color: Colors.grey[400], letterSpacing: 1.2),
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(IconData icon, String label, int? tabIndex, {VoidCallback? onTap}) {
-    final isSelected = tabIndex != null && _selectedIndex == tabIndex;
-
-    return Padding(
-      padding: Responsive.symmetric(horizontal: 12, vertical: 2),
-      child: Material(
-        color: isSelected ? _primary.withValues(alpha: 0.08) : Colors.transparent,
-        borderRadius: BorderRadius.circular(Responsive.r(12)),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-          onTap: () {
-            if (onTap != null) {
-              onTap();
-            } else if (tabIndex != null) {
-              setState(() => _selectedIndex = tabIndex);
-              Navigator.pop(context);
-            }
-          },
-          child: Padding(
-            padding: Responsive.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, size: Responsive.icon(22), color: isSelected ? _primary : Colors.grey[600]),
-                SizedBox(width: Responsive.w(16)),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: Responsive.sp(15),
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? _primary : Colors.grey[800],
-                  ),
-                ),
-                if (isSelected) ...[
-                  const Spacer(),
-                  Container(
-                    width: Responsive.w(6), height: Responsive.h(6),
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: _primary),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
+  
   void _confirmLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
@@ -503,6 +383,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
+  
   // ── Bottom Nav ──
   Widget _buildBottomNav() {
     return Container(
@@ -533,7 +414,6 @@ class _MainLayoutState extends State<MainLayout> {
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), activeIcon: Icon(Icons.calendar_month_rounded), label: 'Calendar'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2_rounded), label: 'Products'),
-          // BottomNavigationBarItem(icon: Icon(Icons.category_outlined), activeIcon: Icon(Icons.category_rounded), label: 'Categories'),
         ],
       ),
     );
@@ -546,7 +426,6 @@ class _MainLayoutState extends State<MainLayout> {
       case 1: return const OrdersView();
       case 2: return const CalendarView();
       case 3: return const ProductsView();
-      // case 4: return const CategoriesView();
       default: return const DashboardView();
     }
   }

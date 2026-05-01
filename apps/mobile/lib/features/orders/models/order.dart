@@ -178,9 +178,16 @@ class Order {
   final double damageChargesTotal;
   final String createdAt;
   final String? updatedAt;
+  // Advance payment fields
+  final double advanceAmount;
+  final bool? advanceCollected;
+  final String? advanceCollectedAt;
+  final PaymentMethod? advancePaymentMethod;
+  // Relations
   final CustomerInfo? customer;
   final List<OrderItem>? items;
   final BranchInfo? branch;
+  final StoreInfo? store;
 
   Order({
     required this.id,
@@ -211,9 +218,14 @@ class Order {
     required this.damageChargesTotal,
     required this.createdAt,
     this.updatedAt,
+    this.advanceAmount = 0,
+    this.advanceCollected,
+    this.advanceCollectedAt,
+    this.advancePaymentMethod,
     this.customer,
     this.items,
     this.branch,
+    this.store,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -250,11 +262,20 @@ class Order {
       damageChargesTotal: (json['damage_charges_total'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
+      // Advance payment fields
+      advanceAmount: (json['advance_amount'] as num?)?.toDouble() ?? 0.0,
+      advanceCollected: json['advance_collected'] as bool?,
+      advanceCollectedAt: json['advance_collected_at'] as String?,
+      advancePaymentMethod: json['advance_payment_method'] != null
+          ? _parsePaymentMethod(json['advance_payment_method'] as String)
+          : null,
+      // Relations
       customer: json['customer'] != null ? CustomerInfo.fromJson(json['customer']) : null,
       items: (json['items'] as List<dynamic>?)
           ?.map((e) => OrderItem.fromJson(e))
           .toList(),
       branch: json['branch'] != null ? BranchInfo.fromJson(json['branch']) : null,
+      store: json['store'] != null ? StoreInfo.fromJson(json['store']) : null,
     );
   }
 
@@ -448,6 +469,46 @@ class BranchInfo {
     return {
       'id': id,
       'name': name,
+    };
+  }
+}
+
+class StoreInfo {
+  final String id;
+  final String name;
+  final String? address;
+  final String? phone;
+  final String? email;
+  final String? gstin;
+
+  StoreInfo({
+    required this.id,
+    required this.name,
+    this.address,
+    this.phone,
+    this.email,
+    this.gstin,
+  });
+
+  factory StoreInfo.fromJson(Map<String, dynamic> json) {
+    return StoreInfo(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      address: json['address'] as String?,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
+      gstin: json['gstin'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'address': address,
+      'phone': phone,
+      'email': email,
+      'gstin': gstin,
     };
   }
 }

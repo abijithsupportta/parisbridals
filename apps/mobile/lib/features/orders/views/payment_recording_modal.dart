@@ -247,7 +247,18 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
             TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
-              onChanged: (_) => setState(() {}),
+              onChanged: (value) {
+                // Validate input and limit to due amount
+                final amount = double.tryParse(value) ?? 0;
+                if (amount > widget.amountDue) {
+                  // Truncate to due amount
+                  _amountController.text = widget.amountDue.toStringAsFixed(0);
+                  _amountController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _amountController.text.length),
+                  );
+                }
+                setState(() {});
+              },
               style: TextStyle(fontSize: Responsive.sp(20), fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: '0',

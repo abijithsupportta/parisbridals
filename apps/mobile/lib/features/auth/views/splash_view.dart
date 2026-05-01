@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../../core/responsive.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/main_layout.dart';
+import '../../../core/api_client.dart';
 import 'login_view.dart';
 
 class SplashView extends StatefulWidget {
@@ -16,13 +17,14 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  String _statusMessage = 'Loading...';
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 800),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -39,32 +41,39 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
   }
 
   Future<void> _checkLoginStatus() async {
-    // Wait for the animation to finish
-    await Future.delayed(const Duration(milliseconds: 1500));
-    
     try {
+      setState(() => _statusMessage = 'Connecting...');
+
+      // Preload token into cache immediately
+      await apiClientInstance.preloadToken();
+
+      setState(() => _statusMessage = 'Verifying...');
+
       // Check if user is logged in
       const storage = FlutterSecureStorage();
       final token = await storage.read(key: 'auth_token');
-      
+
+      // Small delay to show animation completing
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      final hasToken = token != null;
+      final message = hasToken ? 'Welcome back!' : 'Please sign in';
+      final destination = hasToken
+          ? MaterialPageRoute(builder: (_) => const MainLayout())
+          : MaterialPageRoute(builder: (_) => const LoginView());
+
       if (mounted) {
-        if (token != null) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const MainLayout()),
-          );
-        } else {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const LoginView()),
-          );
-        }
+        setState(() => _statusMessage = message);
+      }
+      await Future.delayed(const Duration(milliseconds: 200));
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(destination);
       }
     } catch (e) {
-      // SELF-HEALING: If anything goes wrong reading local storage
-      // (corrupt data, crash), automatically clear the cache and force login.
-      // This prevents the dreaded "infinite loading screen" issue.
       const storage = FlutterSecureStorage();
-      await storage.deleteAll(); // Nuclear wipe of local secure storage
-      
+      await storage.deleteAll();
+
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const LoginView()),
@@ -83,7 +92,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     Responsive.init(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF434343), // Charcoal
+      backgroundColor: const Color(0xFF434343),
       body: Center(
         child: FadeTransition(
           opacity: _fadeAnimation,
@@ -96,7 +105,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                   'assets/images/logo_paris.svg',
                   width: Responsive.w(100),
                   height: Responsive.w(100),
-                  colorFilter: const ColorFilter.mode(Color(0xFFF7C873), BlendMode.srcIn), // Golden Accent
+                  colorFilter: const ColorFilter.mode(Color(0xFFF7C873), BlendMode.srcIn),
                 ),
                 SizedBox(height: Responsive.h(24)),
                 Text(
@@ -105,7 +114,7 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                     fontSize: Responsive.sp(26),
                     fontWeight: FontWeight.w800,
                     letterSpacing: Responsive.w(4),
-                    color: const Color(0xFFF8F8F8), // Off-white
+                    color: const Color(0xFFF8F8F8),
                   ),
                 ),
                 SizedBox(height: Responsive.h(8)),
@@ -115,7 +124,23 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                     fontSize: Responsive.sp(11),
                     fontWeight: FontWeight.w400,
                     letterSpacing: Responsive.w(5),
-                    color: const Color(0xFFFAEBCD).withValues(alpha: 0.8), // Almond, semi-transparent
+                    color: const Color(0xFFFAEBCD).withValues(alpha: 0.8),
+                  ),
+                ),
+                SizedBox(height: Responsive.h(32)),
+                SizedBox(
+                  width: Responsive.w(100),
+                  child: LinearProgressIndicator(
+                    backgroundColor: Colors.white24,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFF7C873)),
+                  ),
+                ),
+                SizedBox(height: Responsive.h(12)),
+                Text(
+                  _statusMessage,
+                  style: TextStyle(
+                    fontSize: Responsive.sp(12),
+                    color: Colors.white54,
                   ),
                 ),
               ],

@@ -99,7 +99,8 @@ export class PaymentRepository extends BaseRepository {
    * Create a new payment
    */
   async create(data: CreatePaymentDTO): Promise<RepositoryResult<Payment>> {
-    const response = await this.client
+    // First create the payment
+    const paymentResponse = await this.client
       .from(this.tableName)
       .insert({
         ...data,
@@ -108,7 +109,39 @@ export class PaymentRepository extends BaseRepository {
       .select()
       .maybeSingle();
 
-    return this.handleResponse<Payment>(response);
+    if (paymentResponse.error) {
+      return this.handleResponse<Payment>(paymentResponse);
+    }
+
+    const payment = paymentResponse.data as Payment;
+
+    // Then update the order's amount_paid
+    const orderUpdateResponse = await this.client
+      .from('orders')
+      .select('amount_paid')
+      .eq('id', data.order_id)
+      .single();
+
+    if (orderUpdateResponse.error) {
+      return { data: null, error: orderUpdateResponse.error, success: false };
+    }
+
+    const currentAmountPaid = orderUpdateResponse.data.amount_paid || 0;
+    const newAmountPaid = currentAmountPaid + data.amount;
+
+    const updateResponse = await this.client
+      .from('orders')
+      .update({
+        amount_paid: newAmountPaid,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.order_id);
+
+    if (updateResponse.error) {
+      return { data: null, error: updateResponse.error, success: false };
+    }
+
+    return { data: payment, error: null, success: true };
   }
 
   /**

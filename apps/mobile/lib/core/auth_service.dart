@@ -62,22 +62,27 @@ class AuthService {
   /// Login with email and password
   Future<AuthUser?> login(String email, String password) async {
     try {
-      final response = await _client.post('/auth/login', data: {
-        'email': email,
-        'password': password,
-      });
+      final response = await _client.post(
+        '/auth/login',
+        data: {'email': email, 'password': password},
+      );
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final userData = response.data['data'];
         final authUser = AuthUser.fromJson(userData);
-        
+
         // Store token and user data securely as JSON
         await _storage.write(key: _tokenKey, value: authUser.accessToken);
         if (authUser.refreshToken != null) {
           await _storage.write(key: _refreshKey, value: authUser.refreshToken!);
         }
-        await _storage.write(key: _userKey, value: jsonEncode(authUser.toJson()));
-        
+        await _storage.write(
+          key: _userKey,
+          value: jsonEncode(authUser.toJson()),
+        );
+        apiClientInstance.clearCachedToken();
+        await apiClientInstance.preloadToken();
+
         return authUser;
       }
       return null;
@@ -92,6 +97,7 @@ class AuthService {
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _refreshKey);
     await _storage.delete(key: _userKey);
+    apiClientInstance.clearCachedToken();
   }
 
   /// Get the current auth token
@@ -107,13 +113,17 @@ class AuthService {
 
       final response = await _client.get('/auth/me');
       if (response.statusCode == 200 && response.data['success'] == true) {
-        final userData = response.data['data']?['user'] as Map<String, dynamic>?;
+        final userData =
+            response.data['data']?['user'] as Map<String, dynamic>?;
         if (userData != null) {
           final authUser = AuthUser.fromJson({
             ...userData,
             'access_token': token,
           });
-          await _storage.write(key: _userKey, value: jsonEncode(authUser.toJson()));
+          await _storage.write(
+            key: _userKey,
+            value: jsonEncode(authUser.toJson()),
+          );
           return authUser;
         }
       }
