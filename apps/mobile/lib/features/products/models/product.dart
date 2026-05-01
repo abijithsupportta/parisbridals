@@ -34,7 +34,7 @@ class BranchInventory {
       id: json['id'] as String? ?? '',
       productId: json['product_id'] as String? ?? '',
       branchId: json['branch_id'] as String? ?? '',
-      stockCount: json['stock_count'] as int? ?? json['quantity'] as int? ?? 0,
+      stockCount: json['available_quantity'] as int? ?? json['stock_count'] as int? ?? json['quantity'] as int? ?? 0,
       branchName: branchName,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String? ?? '',
