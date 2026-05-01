@@ -51,9 +51,12 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   final List<CartItem> _cart = [];
 
   // Step 4
+  bool _collectDeposit = false;
+  bool _collectAdvance = false;
   double _advanceAmount = 0;
   double _securityDeposit = 0;
-  PaymentMethod _paymentMethod = PaymentMethod.cash;
+  PaymentMethod _depositPaymentMethod = PaymentMethod.cash;
+  PaymentMethod _advancePaymentMethod = PaymentMethod.cash;
   final _notesController = TextEditingController();
 
   bool _isSubmitting = false;
@@ -161,12 +164,16 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
       }).toList(),
     };
 
-    if (_securityDeposit > 0) body['security_deposit'] = _securityDeposit;
+    if (_collectDeposit && _securityDeposit > 0) {
+      body['security_deposit'] = _securityDeposit;
+      body['deposit_collected'] = true;
+      body['deposit_payment_method'] = _depositPaymentMethod.name;
+    }
     if (_notesController.text.trim().isNotEmpty) body['notes'] = _notesController.text.trim();
-    if (_advanceAmount > 0) {
+    if (_collectAdvance && _advanceAmount > 0) {
       body['advance_collected'] = true;
       body['advance_amount'] = _advanceAmount;
-      body['advance_payment_method'] = _paymentMethod.name;
+      body['advance_payment_method'] = _advancePaymentMethod.name;
     }
 
     try {
@@ -251,15 +258,21 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                 ),
                 StepPayment(
                   subtotal: _subtotal,
+                  collectDeposit: _collectDeposit,
                   securityDeposit: _securityDeposit,
+                  depositPaymentMethod: _depositPaymentMethod,
+                  collectAdvance: _collectAdvance,
                   advanceAmount: _advanceAmount,
-                  paymentMethod: _paymentMethod,
+                  advancePaymentMethod: _advancePaymentMethod,
                   notesController: _notesController,
                   rentalDays: _rentalDays,
                   cart: _cart,
+                  onCollectDepositChanged: (v) => setState(() { _collectDeposit = v; if (!v) _securityDeposit = 0; }),
                   onSecurityDepositChanged: (v) => setState(() => _securityDeposit = v),
+                  onDepositPaymentMethodChanged: (m) => setState(() => _depositPaymentMethod = m),
+                  onCollectAdvanceChanged: (v) => setState(() { _collectAdvance = v; if (!v) _advanceAmount = 0; }),
                   onAdvanceChanged: (v) => setState(() => _advanceAmount = v),
-                  onPaymentMethodChanged: (m) => setState(() => _paymentMethod = m),
+                  onAdvancePaymentMethodChanged: (m) => setState(() => _advancePaymentMethod = m),
                 ),
               ],
             ),
