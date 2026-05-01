@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shimmer/shimmer.dart';
@@ -11,14 +10,11 @@ import '../../orders/views/order_form_view.dart';
 import '../../customers/views/customer_form_view.dart';
 import '../../products/views/product_form_view.dart';
 
-enum TimeRange { all, today, yesterday, thisWeek, thisMonth }
-
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key});
 
   static const _primary = Color(0xFF434343);
   static const _accent = Color(0xFFF7C873);
-
   static const _bg = Color(0xFFF8F8F8);
   static const _danger = Color(0xFFFF6B8A);
   static const _success = Color(0xFF10B981);
@@ -29,7 +25,6 @@ class DashboardView extends ConsumerStatefulWidget {
 
 class _DashboardViewState extends ConsumerState<DashboardView> {
   final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
-  TimeRange _selectedRange = TimeRange.all;
 
   @override
   Widget build(BuildContext context) {
@@ -48,8 +43,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             _buildGreetingBanner(user),
             SizedBox(height: Responsive.h(14)),
             _buildQuickActions(),
-            SizedBox(height: Responsive.h(14)),
-            _buildTimeRangeSelector(),
             SizedBox(height: Responsive.h(14)),
             metricsAsync.when(
               data: (metrics) => _buildDashboardContent(metrics),
@@ -88,7 +81,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           ),
           SizedBox(height: Responsive.h(4)),
           Text(
-            'Here is the pulse of Paris Bridals today',
+            'Here is the pulse of Paris Bridals',
             style: TextStyle(fontSize: Responsive.sp(13), color: Colors.white.withValues(alpha: 0.85)),
           ),
         ],
@@ -175,108 +168,49 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductFormView()));
   }
 
-  Widget _buildTimeRangeSelector() {
-    return Container(
-      height: Responsive.h(40),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: Responsive.r(6),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _buildTimeRangeChip('All', TimeRange.all),
-          _buildTimeRangeChip('Today', TimeRange.today),
-          _buildTimeRangeChip('Yesterday', TimeRange.yesterday),
-          _buildTimeRangeChip('Week', TimeRange.thisWeek),
-          _buildTimeRangeChip('Month', TimeRange.thisMonth),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeRangeChip(String label, TimeRange range) {
-    final isSelected = _selectedRange == range;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedRange = range),
-        child: Container(
-          alignment: Alignment.center,
-          margin: Responsive.symmetric(horizontal: 2, vertical: 4),
-          decoration: BoxDecoration(
-            color: isSelected ? DashboardView._primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(Responsive.r(8)),
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: Responsive.sp(10),
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                color: isSelected ? Colors.white : Colors.grey[600],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildDashboardContent(DashboardMetrics metrics) {
-    final hasAlerts = metrics.lowStockCount > 0 || metrics.overdueReturns > 0;
-
     return Column(
       children: [
-        _buildRevenuePacingCards(metrics),
+        _buildOverviewCards(metrics),
         SizedBox(height: Responsive.h(14)),
         _buildOrderStatusBreakdown(metrics),
-        SizedBox(height: Responsive.h(14)),
-        _buildInventoryDetails(metrics),
-        if (hasAlerts) ...[
-          SizedBox(height: Responsive.h(14)),
-          _buildAlertSection(metrics),
-        ],
-        SizedBox(height: Responsive.h(14)),
-        _buildRecentProductsSection(metrics),
         SizedBox(height: Responsive.h(20)),
       ],
     );
   }
 
-  Widget _buildRevenuePacingCards(DashboardMetrics metrics) {
+  Widget _buildOverviewCards(DashboardMetrics metrics) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: Responsive.symmetric(horizontal: 4),
           child: Text(
-            'Revenue Overview',
+            'Branch Overview',
             style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: DashboardView._primary),
           ),
         ),
         SizedBox(height: Responsive.h(8)),
         Row(
           children: [
-            Expanded(child: _buildRevenueCard('Today', metrics.revenueToday, metrics.revenueChangeToday)),
+            Expanded(child: _buildMetricCard('Total Revenue', _currencyFormat.format(metrics.totalRevenue), Icons.account_balance_wallet, DashboardView._success)),
             SizedBox(width: Responsive.w(8)),
-            Expanded(child: _buildRevenueCard('Week', metrics.revenueThisWeek, metrics.revenueChangeThisWeek)),
+            Expanded(child: _buildMetricCard('Revenue Today', _currencyFormat.format(metrics.revenueToday), Icons.payments, DashboardView._accent)),
           ],
         ),
         SizedBox(height: Responsive.h(8)),
-        _buildRevenueCard('Month', metrics.revenueThisMonth, metrics.revenueChangeThisMonth),
+        Row(
+          children: [
+            Expanded(child: _buildMetricCard('Total Orders', metrics.totalOrders.toString(), Icons.receipt_long, DashboardView._primary)),
+            SizedBox(width: Responsive.w(8)),
+            Expanded(child: _buildMetricCard('Orders Today', metrics.ordersToday.toString(), Icons.shopping_bag, Colors.blue)),
+          ],
+        ),
       ],
     );
   }
 
-  Widget _buildRevenueCard(String period, double amount, double changePercent) {
-    final isPositive = changePercent >= 0;
+  Widget _buildMetricCard(String label, String value, IconData icon, Color color) {
     return Container(
       padding: Responsive.all(12),
       decoration: BoxDecoration(
@@ -293,41 +227,28 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            period,
-            style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600], fontWeight: FontWeight.w500),
-          ),
-          SizedBox(height: Responsive.h(6)),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _currencyFormat.format(amount),
-              style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.bold, color: DashboardView._primary),
-            ),
-          ),
-          SizedBox(height: Responsive.h(4)),
           Row(
             children: [
-              Icon(
-                isPositive ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                size: Responsive.icon(12),
-                color: isPositive ? DashboardView._success : DashboardView._danger,
-              ),
-              SizedBox(width: Responsive.w(3)),
-              Flexible(
+              Icon(icon, size: Responsive.icon(16), color: color),
+              SizedBox(width: Responsive.w(6)),
+              Expanded(
                 child: Text(
-                  '${changePercent.abs().toStringAsFixed(1)}% vs last',
-                  style: TextStyle(
-                    fontSize: Responsive.sp(9),
-                    fontWeight: FontWeight.w600,
-                    color: isPositive ? DashboardView._success : DashboardView._danger,
-                  ),
+                  label,
+                  style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600], fontWeight: FontWeight.w600),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
+          ),
+          SizedBox(height: Responsive.h(8)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(fontSize: Responsive.sp(20), fontWeight: FontWeight.bold, color: DashboardView._primary),
+            ),
           ),
         ],
       ),
@@ -364,12 +285,11 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             physics: const NeverScrollableScrollPhysics(),
             childAspectRatio: 1.0,
             children: [
-              _buildStatusCard('Total', metrics.newOrdersToday + metrics.pendingOrders + metrics.activeRentals, Icons.receipt_long, DashboardView._primary),
-              _buildStatusCard('Pending', metrics.pendingOrders, Icons.pending_actions, Colors.orange),
-              _buildStatusCard('Scheduled', metrics.todaysPickups, Icons.event_available, Colors.blue),
-              _buildStatusCard('Ongoing', metrics.activeRentals, Icons.local_shipping, DashboardView._success),
-              _buildStatusCard('Late', metrics.overdueReturns, Icons.warning_amber, DashboardView._danger),
-              _buildStatusCard('Flagged', 0, Icons.flag, Colors.red),
+              _buildStatusCard('Scheduled', metrics.totalScheduled, Icons.event_available, Colors.blue),
+              _buildStatusCard('Ongoing', metrics.totalOngoing, Icons.local_shipping, DashboardView._success),
+              _buildStatusCard('Late Return', metrics.totalLates, Icons.warning_amber, DashboardView._danger),
+              _buildStatusCard('Partial Return', metrics.totalPartial, Icons.inventory_2_outlined, Colors.orange),
+              _buildStatusCard('Flagged', metrics.totalFlagged, Icons.flag, Colors.red),
             ],
           ),
         ],
@@ -412,334 +332,15 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
     );
   }
 
-  Widget _buildInventoryDetails(DashboardMetrics metrics) {
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: Responsive.r(6),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Branch Inventory',
-            style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: DashboardView._primary),
-          ),
-          SizedBox(height: Responsive.h(10)),
-          Row(
-            children: [
-              Expanded(child: _buildInventoryItem('Total', metrics.totalProducts, Icons.inventory_2_outlined, DashboardView._primary)),
-              SizedBox(width: Responsive.w(8)),
-              Expanded(child: _buildInventoryItem('Available', metrics.availableProducts, Icons.check_circle_outline, DashboardView._success)),
-            ],
-          ),
-          SizedBox(height: Responsive.h(8)),
-          Row(
-            children: [
-              Expanded(child: _buildInventoryItem('Low Stock', metrics.lowStockCount, Icons.warning_amber_outlined, DashboardView._danger)),
-              SizedBox(width: Responsive.w(8)),
-              Expanded(child: _buildInventoryItem('Featured', metrics.featuredProducts, Icons.star_outline, DashboardView._accent)),
-            ],
-          ),
-          SizedBox(height: Responsive.h(10)),
-          Container(
-            padding: Responsive.all(10),
-            decoration: BoxDecoration(
-              color: DashboardView._accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(Responsive.r(8)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.account_balance_wallet_outlined, color: DashboardView._accent, size: Responsive.icon(18)),
-                SizedBox(width: Responsive.w(8)),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Security Deposits',
-                        style: TextStyle(fontSize: Responsive.sp(10), color: Colors.grey[700]),
-                      ),
-                      SizedBox(height: Responsive.h(2)),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _currencyFormat.format(metrics.depositsHeld),
-                          style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: DashboardView._primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: Responsive.h(8)),
-          Container(
-            padding: Responsive.all(10),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(Responsive.r(8)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.people_outline, color: Colors.blue, size: Responsive.icon(18)),
-                SizedBox(width: Responsive.w(8)),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Total Customers',
-                        style: TextStyle(fontSize: Responsive.sp(10), color: Colors.grey[700]),
-                      ),
-                      SizedBox(height: Responsive.h(2)),
-                      Text(
-                        metrics.totalCustomers.toString(),
-                        style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: DashboardView._primary),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInventoryItem(String label, int value, IconData icon, Color color) {
-    return Container(
-      padding: Responsive.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(Responsive.r(8)),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: Responsive.icon(16), color: color),
-          SizedBox(height: Responsive.h(6)),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value.toString(),
-              style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold, color: color),
-            ),
-          ),
-          SizedBox(height: Responsive.h(2)),
-          Text(
-            label,
-            style: TextStyle(fontSize: Responsive.sp(9), color: color, fontWeight: FontWeight.w600),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAlertSection(DashboardMetrics metrics) {
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: DashboardView._danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        border: Border.all(color: DashboardView._danger.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: DashboardView._danger, size: Responsive.icon(18)),
-              SizedBox(width: Responsive.w(6)),
-              Flexible(
-                child: Text(
-                  'Action Required',
-                  style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold, color: DashboardView._danger),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: Responsive.h(8)),
-          if (metrics.overdueReturns > 0) _buildAlertItem('${metrics.overdueReturns} overdue returns'),
-          if (metrics.lowStockCount > 0) _buildAlertItem('${metrics.lowStockCount} low stock items'),
-          if (metrics.upcomingPickupsTomorrow > 0) _buildAlertItem('${metrics.upcomingPickupsTomorrow} pickups tomorrow'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAlertItem(String message) {
-    return Padding(
-      padding: Responsive.only(bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: Responsive.w(5),
-            height: Responsive.w(5),
-            decoration: const BoxDecoration(shape: BoxShape.circle, color: DashboardView._danger),
-          ),
-          SizedBox(width: Responsive.w(6)),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(fontSize: Responsive.sp(11), color: DashboardView._danger, fontWeight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecentProductsSection(DashboardMetrics metrics) {
-    if (metrics.recentProducts.isEmpty) {
-      return Container(
-        padding: Responsive.all(16),
-        decoration: BoxDecoration(color: DashboardView._primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(Responsive.r(8))),
-        child: Text(
-          'No recent products',
-          style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[500]),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: Responsive.r(6),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Recent Products',
-            style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: DashboardView._primary),
-          ),
-          SizedBox(height: Responsive.h(10)),
-          ...metrics.recentProducts.take(5).map(_buildProductCard),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductCard(DashboardProduct product) {
-    return Container(
-      margin: Responsive.only(bottom: 8),
-      padding: Responsive.all(10),
-      decoration: BoxDecoration(
-        color: DashboardView._primary.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(Responsive.r(8)),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(Responsive.r(6)),
-            child: product.imageUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: product.imageUrl!,
-                    width: Responsive.w(45),
-                    height: Responsive.h(45),
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => _buildImageFallback(),
-                    errorWidget: (context, url, error) => _buildImageFallback(),
-                  )
-                : _buildImageFallback(),
-          ),
-          SizedBox(width: Responsive.w(10)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: Responsive.sp(12), color: DashboardView._primary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (product.categoryName != null) ...[
-                  SizedBox(height: Responsive.h(2)),
-                  Text(
-                    product.categoryName!,
-                    style: TextStyle(color: Colors.grey[600], fontSize: Responsive.sp(10)),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-                SizedBox(height: Responsive.h(3)),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '${_currencyFormat.format(product.pricePerDay)}/day',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: Responsive.sp(11), color: DashboardView._accent),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              '${product.availableQuantity}',
-              style: TextStyle(
-                fontSize: Responsive.sp(10),
-                color: product.availableQuantity < 10 ? DashboardView._danger : Colors.green,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageFallback() {
-    return Container(
-      width: Responsive.w(45),
-      height: Responsive.h(45),
-      color: Colors.grey[200],
-      child: Icon(Icons.inventory_2_outlined, color: Colors.grey[400], size: Responsive.icon(20)),
-    );
-  }
-
   Widget _buildLoadingState() {
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
       child: Column(
         children: [
-          _buildShimmerCard(),
+          _buildShimmerCard(height: 110),
           SizedBox(height: Responsive.h(16)),
           _buildShimmerGrid(),
-          SizedBox(height: Responsive.h(16)),
-          _buildShimmerCard(),
         ],
       ),
     );
@@ -753,13 +354,13 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.35,
-      children: List.generate(4, (_) => _buildShimmerCard()),
+      children: List.generate(4, (_) => _buildShimmerCard(height: 100)),
     );
   }
 
-  Widget _buildShimmerCard() {
+  Widget _buildShimmerCard({required double height}) {
     return Container(
-      height: Responsive.h(110),
+      height: Responsive.h(height),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(Responsive.r(12)),
