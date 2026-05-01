@@ -7,7 +7,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
 import 'order_detail_view_new.dart';
-import 'order_form_view.dart';
+import 'create_order/create_order_view.dart';
 
 /// Orders list with horizontal filter chips matching DB statuses.
 class OrdersView extends ConsumerStatefulWidget {
@@ -103,7 +103,7 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
               child: FloatingActionButton.extended(
                 heroTag: 'order_fab',
                 onPressed: () => Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const OrderFormView()))
+                    .push(MaterialPageRoute(builder: (_) => const CreateOrderView()))
                     .then((_) => ref.invalidate(ordersProvider)),
                 backgroundColor: _accent,
                 foregroundColor: _primary,
