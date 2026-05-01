@@ -322,26 +322,116 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   bool _isProcessing = false;
 
   Future<void> _startRental() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Start Rental'),
-        content: const Text('Mark this order as ongoing? This will set today as the start date.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2ECC71)),
-            child: const Text('Start', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+    if (widget.order.items == null || widget.order.items!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No items in this order'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
 
     setState(() => _isProcessing = true);
+
+    // Step 1: Check stock availability
     try {
       final repo = ref.read(orderRepositoryProvider);
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final availResult = await repo.checkStockAvailability(
+        items: widget.order.items!.map((item) => {
+          'product_id': item.productId,
+          'quantity': item.quantity,
+        }).toList(),
+        startDate: today,
+        endDate: widget.order.endDate,
+        branchId: widget.order.branchId,
+        excludeOrderId: widget.order.id,
+      );
+
+      if (!mounted) return;
+
+      final allAvailable = availResult['allAvailable'] == true;
+      final items = (availResult['items'] as List?) ?? [];
+
+      // Step 2: Show stock check results
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(16))),
+          title: Row(
+            children: [
+              Icon(
+                allAvailable ? Icons.check_circle_rounded : Icons.warning_rounded,
+                color: allAvailable ? const Color(0xFF2ECC71) : const Color(0xFFFF6B8A),
+                size: Responsive.icon(24),
+              ),
+              SizedBox(width: Responsive.w(8)),
+              Text(
+                allAvailable ? 'Stock Available' : 'Stock Issue',
+                style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ...items.map((item) {
+                final isOk = item['isAvailable'] == true;
+                return Padding(
+                  padding: Responsive.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isOk ? Icons.check_circle : Icons.cancel,
+                        size: Responsive.icon(18),
+                        color: isOk ? const Color(0xFF2ECC71) : const Color(0xFFFF6B8A),
+                      ),
+                      SizedBox(width: Responsive.w(8)),
+                      Expanded(
+                        child: Text(
+                          '${item['product_name'] ?? 'Product'}: ${item['requested']} requested, ${item['available']} available',
+                          style: TextStyle(fontSize: Responsive.sp(13)),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              if (!allAvailable) ...[
+                SizedBox(height: Responsive.h(8)),
+                Text(
+                  'Some items are not available. Starting the rental may cause conflicts.',
+                  style: TextStyle(fontSize: Responsive.sp(12), color: Colors.red[700]),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: allAvailable ? const Color(0xFF2ECC71) : const Color(0xFFF5A623),
+              ),
+              child: Text(
+                allAvailable ? 'Start Rental' : 'Start Anyway',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (proceed != true || !mounted) {
+        setState(() => _isProcessing = false);
+        return;
+      }
+
+      // Step 3: Actually start the rental
       await repo.startRental(widget.order.id);
       if (mounted) {
         ref.invalidate(ordersProvider);
@@ -814,19 +904,27 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       return;
     }
 
-    final items = _returnItems.entries.map((e) => {
-      'order_item_id': e.key,
-      'condition': e.value.status,
-      'damage_notes': e.value.notes.isNotEmpty ? e.value.notes : null,
-      'damage_fee': e.value.damageFee,
+    // Build items payload matching ReturnOrderDTO from the admin API
+    final orderItems = widget.order.items!;
+    final returnItemsList = _returnItems.entries.map((e) {
+      // Find the corresponding OrderItem to get the quantity
+      final orderItem = orderItems.firstWhere((oi) => oi.id == e.key);
+      return {
+        'item_id': e.key,
+        'returned_quantity': orderItem.quantity,
+        'condition_rating': e.value.status == 'excellent' ? 'excellent' : (e.value.status == 'damaged' ? 'damaged' : 'good'),
+        if (e.value.notes.isNotEmpty) 'damage_description': e.value.notes,
+        if (e.value.damageFee > 0) 'damage_charges': e.value.damageFee,
+      };
     }).toList();
 
     try {
-      await ref.read(ordersProvider.notifier).updateOrder(widget.order.id, {
-        'status': 'returned',
-        'late_fee': _lateFee,
-        'discount': _discount,
-        'return_items': items,
+      final repo = ref.read(orderRepositoryProvider);
+      await repo.processReturn(widget.order.id, {
+        'order_id': widget.order.id,
+        'items': returnItemsList,
+        if (_lateFee > 0) 'late_fee': _lateFee,
+        if (_discount > 0) 'discount': _discount,
       });
       if (mounted) {
         ref.invalidate(ordersProvider);

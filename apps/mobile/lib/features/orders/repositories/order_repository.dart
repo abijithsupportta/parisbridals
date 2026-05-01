@@ -146,4 +146,74 @@ class OrderRepository {
   Future<Order> cancelOrder(String id) async {
     return updateOrder(id, {'status': 'cancelled'});
   }
+
+  /// Batch check stock availability for order items.
+  /// Returns { allAvailable: bool, items: [...] }
+  Future<Map<String, dynamic>> checkStockAvailability({
+    required List<Map<String, dynamic>> items,
+    required String startDate,
+    required String endDate,
+    required String branchId,
+    String? excludeOrderId,
+  }) async {
+    final body = <String, dynamic>{
+      'items': items,
+      'start_date': startDate,
+      'end_date': endDate,
+      'branch_id': branchId,
+    };
+    if (excludeOrderId != null) {
+      body['exclude_order_id'] = excludeOrderId;
+    }
+
+    final response = await _client.post('/orders/check-availability', data: body);
+
+    if (response.statusCode == 200) {
+      final data = response.data;
+      if (data['success'] == true && data['data'] != null) {
+        return data['data'] as Map<String, dynamic>;
+      }
+    }
+    throw Exception('Failed to check stock availability');
+  }
+
+  /// Process order return via the dedicated return endpoint.
+  /// Expects ReturnOrderDTO: { order_id, items: [...], notes?, late_fee?, discount? }
+  Future<Order> processReturn(String orderId, Map<String, dynamic> returnData) async {
+    final response = await _client.patch('/orders/$orderId/return', data: returnData);
+
+    if (response.statusCode == 200) {
+      final data = response.data;
+      if (data['success'] == true && data['data'] != null) {
+        return Order.fromJson(data['data']);
+      }
+    }
+    throw Exception('Failed to process return');
+  }
+
+  /// Mark deposit as returned.
+  Future<Order> markDepositReturned(String id) async {
+    final response = await _client.patch('/orders/$id/deposit');
+
+    if (response.statusCode == 200) {
+      final data = response.data;
+      if (data['success'] == true && data['data'] != null) {
+        return Order.fromJson(data['data']);
+      }
+    }
+    throw Exception('Failed to mark deposit as returned');
+  }
+
+  /// Fetch order status history.
+  Future<List<Map<String, dynamic>>> getOrderHistory(String id) async {
+    final response = await _client.get('/orders/$id/history');
+
+    if (response.statusCode == 200) {
+      final data = response.data;
+      if (data['success'] == true && data['data'] != null) {
+        return (data['data'] as List).cast<Map<String, dynamic>>();
+      }
+    }
+    throw Exception('Failed to load order history');
+  }
 }

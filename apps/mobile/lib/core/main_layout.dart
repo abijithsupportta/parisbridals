@@ -8,7 +8,7 @@ import '../features/products/views/products_view.dart';
 import '../features/dashboard/views/dashboard_view.dart';
 import '../features/orders/views/orders_view.dart';
 import '../features/calendar/views/calendar_view.dart';
-import '../features/categories/views/categories_view.dart';
+// import '../features/categories/views/categories_view.dart';
 import '../features/branches/models/branch.dart';
 import '../features/branches/providers/branch_provider.dart';
 import '../features/branches/views/branches_view.dart';
@@ -183,7 +183,7 @@ class _MainLayoutState extends State<MainLayout> {
                   if (isAdmin) ...[
                     _buildDrawerSectionLabel('Management'),
                     _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
+                    // _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
                     _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
                     _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
                     _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
@@ -219,7 +219,7 @@ class _MainLayoutState extends State<MainLayout> {
                     // Manager sees nav items but no settings
                     _buildDrawerSectionLabel('Navigation'),
                     _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
+                    // _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
                     _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
                     _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
                     _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
@@ -533,7 +533,7 @@ class _MainLayoutState extends State<MainLayout> {
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), activeIcon: Icon(Icons.calendar_month_rounded), label: 'Calendar'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2_rounded), label: 'Products'),
-          BottomNavigationBarItem(icon: Icon(Icons.category_outlined), activeIcon: Icon(Icons.category_rounded), label: 'Categories'),
+          // BottomNavigationBarItem(icon: Icon(Icons.category_outlined), activeIcon: Icon(Icons.category_rounded), label: 'Categories'),
         ],
       ),
     );
@@ -546,7 +546,7 @@ class _MainLayoutState extends State<MainLayout> {
       case 1: return const OrdersView();
       case 2: return const CalendarView();
       case 3: return const ProductsView();
-      case 4: return const CategoriesView();
+      // case 4: return const CategoriesView();
       default: return const DashboardView();
     }
   }
