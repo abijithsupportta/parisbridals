@@ -6,15 +6,19 @@ import '../../../../core/responsive.dart';
 class StepRentalPeriod extends StatelessWidget {
   final DateTime? startDate;
   final DateTime? endDate;
+  final DateTime? eventDate;
   final ValueChanged<DateTime> onStartChanged;
   final ValueChanged<DateTime> onEndChanged;
+  final ValueChanged<DateTime> onEventChanged;
 
   const StepRentalPeriod({
     super.key,
     this.startDate,
     this.endDate,
+    this.eventDate,
     required this.onStartChanged,
     required this.onEndChanged,
+    required this.onEventChanged,
   });
 
   static const _primary = Color(0xFF434343);
@@ -113,6 +117,10 @@ class StepRentalPeriod extends StatelessWidget {
                 SizedBox(height: Responsive.h(12)),
                 _buildDateCard(context, 'End Date', endDate, Icons.stop_rounded, const Color(0xFFFF6B8A), () {
                   _pickDate(context, 'End Date', endDate, onEndChanged, firstDate: startDate ?? DateTime.now());
+                }),
+                SizedBox(height: Responsive.h(12)),
+                _buildDateCard(context, 'Event Date', eventDate, Icons.event_rounded, const Color(0xFFF7C873), () {
+                  _pickDate(context, 'Event Date', eventDate, onEventChanged);
                 }),
               ],
             ),

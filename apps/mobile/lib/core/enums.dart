@@ -3,8 +3,8 @@
 /// This file consolidates payment enums to avoid duplication across models.
 library;
 
-/// Payment method/mode used for transactions.
-enum PaymentType {
+/// Payment method/mode used for transactions (cash, UPI, card, etc.)
+enum PaymentMethod {
   cash,
   upi,
   card,
@@ -14,54 +14,110 @@ enum PaymentType {
 
   String get displayName {
     switch (this) {
-      case PaymentType.cash:
+      case PaymentMethod.cash:
         return 'Cash';
-      case PaymentType.upi:
+      case PaymentMethod.upi:
         return 'UPI';
-      case PaymentType.card:
+      case PaymentMethod.card:
         return 'Card';
-      case PaymentType.bankTransfer:
+      case PaymentMethod.bankTransfer:
         return 'Bank Transfer';
-      case PaymentType.cheque:
+      case PaymentMethod.cheque:
         return 'Cheque';
-      case PaymentType.other:
+      case PaymentMethod.other:
         return 'Other';
     }
   }
 
-  static PaymentType fromString(String value) {
+  static PaymentMethod fromString(String value) {
     switch (value.toLowerCase()) {
       case 'cash':
-        return PaymentType.cash;
+        return PaymentMethod.cash;
       case 'upi':
-        return PaymentType.upi;
+        return PaymentMethod.upi;
       case 'card':
-        return PaymentType.card;
+        return PaymentMethod.card;
       case 'bank_transfer':
       case 'banktransfer':
-        return PaymentType.bankTransfer;
+        return PaymentMethod.bankTransfer;
       case 'cheque':
-        return PaymentType.cheque;
+        return PaymentMethod.cheque;
       case 'other':
       default:
-        return PaymentType.other;
+        return PaymentMethod.other;
     }
   }
 
   String toApiString() {
     switch (this) {
-      case PaymentType.cash:
+      case PaymentMethod.cash:
         return 'cash';
-      case PaymentType.upi:
+      case PaymentMethod.upi:
         return 'upi';
-      case PaymentType.card:
+      case PaymentMethod.card:
         return 'card';
-      case PaymentType.bankTransfer:
+      case PaymentMethod.bankTransfer:
         return 'bank_transfer';
-      case PaymentType.cheque:
+      case PaymentMethod.cheque:
         return 'cheque';
-      case PaymentType.other:
+      case PaymentMethod.other:
         return 'other';
+    }
+  }
+}
+
+/// Payment type/kind (deposit, advance, final, refund, adjustment)
+enum PaymentKind {
+  deposit,
+  advance,
+  final_,
+  refund,
+  adjustment;
+
+  String get displayName {
+    switch (this) {
+      case PaymentKind.deposit:
+        return 'Deposit';
+      case PaymentKind.advance:
+        return 'Advance';
+      case PaymentKind.final_:
+        return 'Final Payment';
+      case PaymentKind.refund:
+        return 'Refund';
+      case PaymentKind.adjustment:
+        return 'Adjustment';
+    }
+  }
+
+  static PaymentKind fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'deposit':
+        return PaymentKind.deposit;
+      case 'advance':
+        return PaymentKind.advance;
+      case 'final':
+        return PaymentKind.final_;
+      case 'refund':
+        return PaymentKind.refund;
+      case 'adjustment':
+        return PaymentKind.adjustment;
+      default:
+        return PaymentKind.final_;
+    }
+  }
+
+  String toApiString() {
+    switch (this) {
+      case PaymentKind.deposit:
+        return 'deposit';
+      case PaymentKind.advance:
+        return 'advance';
+      case PaymentKind.final_:
+        return 'final';
+      case PaymentKind.refund:
+        return 'refund';
+      case PaymentKind.adjustment:
+        return 'adjustment';
     }
   }
 }

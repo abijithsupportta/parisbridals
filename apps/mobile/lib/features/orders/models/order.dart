@@ -7,6 +7,8 @@
 /// @module features/orders/models/order
 library;
 
+import '../../../core/enums.dart';
+
 enum OrderStatus {
   pending,
   confirmed,
@@ -26,14 +28,6 @@ enum PaymentStatus {
   pending,
   partial,
   paid,
-}
-
-enum PaymentMethod {
-  cash,
-  upi,
-  bankTransfer,
-  card,
-  other,
 }
 
 enum ConditionRating {

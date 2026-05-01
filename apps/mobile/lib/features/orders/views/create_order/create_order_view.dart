@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/enums.dart';
 import '../../../../core/responsive.dart';
 import '../../../branches/providers/branch_provider.dart';
 import '../../../customers/models/customer.dart';
@@ -46,6 +47,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   // Step 2
   DateTime? _startDate;
   DateTime? _endDate;
+  DateTime? _eventDate;
 
   // Step 3
   final List<CartItem> _cart = [];
@@ -153,6 +155,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
       'branch_id': branchId,
       'rental_start_date': DateFormat('yyyy-MM-dd').format(_startDate!),
       'rental_end_date': DateFormat('yyyy-MM-dd').format(_endDate!),
+      if (_eventDate != null) 'event_date': DateFormat('yyyy-MM-dd').format(_eventDate!),
       'items': _cart.map((c) => <String, dynamic>{
         'product_id': c.product.id,
         'quantity': c.quantity,
@@ -231,6 +234,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                 StepRentalPeriod(
                   startDate: _startDate,
                   endDate: _endDate,
+                  eventDate: _eventDate,
                   onStartChanged: (d) {
                     setState(() {
                       _startDate = d;
@@ -243,6 +247,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                     setState(() => _endDate = d);
                     _checkAvailability();
                   },
+                  onEventChanged: (d) => setState(() => _eventDate = d),
                 ),
                 StepProducts(
                   branchId: branchId,
