@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
     const todayStart = startOfDay(now);
     const todayEnd = endOfDay(now);
 
+    // Run all queries in parallel. Each is wrapped with safe() so one failure
+    // doesn't crash the entire endpoint — it just returns 0 for that metric.
     const [
       totalOrders,
       ordersToday,
@@ -28,15 +30,15 @@ export async function GET(request: NextRequest) {
       totalPartial,
       totalFlagged
     ] = await Promise.all([
-      countOrders(supabase, { branchId }),
-      countOrders(supabase, { branchId, createdFrom: todayStart, createdTo: todayEnd }),
-      sumPayments(supabase, undefined, undefined, branchId),
-      sumPayments(supabase, todayStart, todayEnd, branchId),
-      countOrders(supabase, { branchId, statuses: ['scheduled'] }),
-      countOrders(supabase, { branchId, statuses: ['ongoing', 'in_use'] }),
-      countOrders(supabase, { branchId, statuses: ['late_return'] }),
-      countOrders(supabase, { branchId, statuses: ['partial'] }),
-      countOrders(supabase, { branchId, statuses: ['flagged'] })
+      safe(countOrders(supabase, { branchId })),
+      safe(countOrders(supabase, { branchId, createdFrom: todayStart, createdTo: todayEnd })),
+      safe(sumRevenue(supabase, branchId)),
+      safe(sumRevenue(supabase, branchId, todayStart, todayEnd)),
+      safe(countOrders(supabase, { branchId, statuses: ['scheduled'] })),
+      safe(countOrders(supabase, { branchId, statuses: ['ongoing', 'in_use'] })),
+      safe(countOrders(supabase, { branchId, statuses: ['late_return'] })),
+      safe(countOrders(supabase, { branchId, statuses: ['partial'] })),
+      safe(countOrders(supabase, { branchId, statuses: ['flagged'] }))
     ]);
 
     return apiSuccess({
@@ -56,30 +58,47 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function scopeOrderQuery(query: any, branchId?: string) {
-  if (branchId) return query.eq('branch_id', branchId);
-  return query;
+/** Wraps a promise so it returns 0 on failure instead of throwing. */
+async function safe(promise: Promise<number>): Promise<number> {
+  try {
+    return await promise;
+  } catch (e) {
+    console.error('Dashboard metric query failed:', e);
+    return 0;
+  }
 }
 
-function scopePaymentQuery(query: any, branchId?: string) {
-  if (branchId) return query.eq('orders.branch_id', branchId);
-  return query;
-}
+/**
+ * Sum revenue from payments table. Uses a simple select without FK joins
+ * (matching how dashboardService.ts queries payments) to avoid Supabase
+ * relationship errors. Branch filtering is done by fetching order IDs first.
+ */
+async function sumRevenue(supabase: any, branchId?: string, from?: Date, to?: Date): Promise<number> {
+  // If branch filtering is needed, get order IDs for that branch first
+  let orderIds: string[] | undefined;
+  if (branchId) {
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('branch_id', branchId);
+    if (ordersError) throw ordersError;
+    orderIds = (orders || []).map((o: any) => o.id);
+    if (!orderIds || orderIds.length === 0) return 0;
+  }
 
-async function sumPayments(supabase: any, from?: Date, to?: Date, branchId?: string) {
   let query = supabase
     .from('payments')
-    .select('amount, orders!inner(branch_id)')
+    .select('amount, payment_type')
     .neq('payment_type', 'refund');
 
   if (from) query = query.gte('payment_date', from.toISOString());
   if (to) query = query.lte('payment_date', to.toISOString());
-  
-  query = scopePaymentQuery(query, branchId);
+  if (orderIds) query = query.in('order_id', orderIds);
+
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data || []).reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
+  return (data || []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
 }
 
 interface OrderCountParams {
@@ -89,9 +108,9 @@ interface OrderCountParams {
   createdTo?: Date;
 }
 
-async function countOrders(supabase: any, params: OrderCountParams) {
+async function countOrders(supabase: any, params: OrderCountParams): Promise<number> {
   let query = supabase.from('orders').select('*', { count: 'exact', head: true });
-  query = scopeOrderQuery(query, params.branchId);
+  if (params.branchId) query = query.eq('branch_id', params.branchId);
 
   if (params.statuses?.length) query = query.in('status', params.statuses);
   if (params.createdFrom) query = query.gte('created_at', params.createdFrom.toISOString());
@@ -101,4 +120,3 @@ async function countOrders(supabase: any, params: OrderCountParams) {
   if (error) throw error;
   return count || 0;
 }
-
