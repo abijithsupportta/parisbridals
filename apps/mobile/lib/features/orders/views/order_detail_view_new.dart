@@ -336,7 +336,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final repo = ref.read(orderRepositoryProvider);
       final today = DateTime.now().toIso8601String().split('T')[0];
       final availResult = await repo.checkStockAvailability(
-        items: widget.order.items!.map((item) => {
+        items: widget.order.items!.map((item) => <String, dynamic>{
           'product_id': item.productId,
           'quantity': item.quantity,
         }).toList(),

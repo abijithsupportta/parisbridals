@@ -153,7 +153,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
       'branch_id': branchId,
       'rental_start_date': DateFormat('yyyy-MM-dd').format(_startDate!),
       'rental_end_date': DateFormat('yyyy-MM-dd').format(_endDate!),
-      'items': _cart.map((c) => {
+      'items': _cart.map((c) => <String, dynamic>{
         'product_id': c.product.id,
         'quantity': c.quantity,
         'price_per_day': c.product.pricePerDay,

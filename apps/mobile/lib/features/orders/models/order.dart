@@ -1,3 +1,12 @@
+/// Order domain models for Paris Bridals mobile app.
+///
+/// Contains Order, OrderItem, CustomerInfo, BranchInfo classes and related enums
+/// for managing jewellery rental orders. Includes order status tracking, payment
+/// status, delivery methods, and condition ratings for returned items.
+///
+/// @module features/orders/models/order
+library;
+
 enum OrderStatus {
   pending,
   confirmed,
@@ -43,6 +52,7 @@ class OrderItem {
   final String id;
   final String orderId;
   final String productId;
+  final String? productName;
   final int quantity;
   final double pricePerDay;
   final double totalPrice;
@@ -59,6 +69,7 @@ class OrderItem {
     required this.id,
     required this.orderId,
     required this.productId,
+    this.productName,
     required this.quantity,
     required this.pricePerDay,
     required this.totalPrice,
@@ -74,9 +85,10 @@ class OrderItem {
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? '',
       orderId: json['order_id'] as String,
       productId: json['product_id'] as String,
+      productName: json['product_name'] as String?,
       quantity: json['quantity'] as int,
       pricePerDay: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
@@ -212,7 +224,7 @@ class Order {
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? '',
       storeId: json['store_id'] as String,
       customerId: json['customer_id'] as String,
       branchId: json['branch_id'] as String,
@@ -405,9 +417,9 @@ class CustomerInfo {
 
   factory CustomerInfo.fromJson(Map<String, dynamic> json) {
     return CustomerInfo(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      phone: json['phone'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
       email: json['email'] as String?,
     );
   }
@@ -433,8 +445,8 @@ class BranchInfo {
 
   factory BranchInfo.fromJson(Map<String, dynamic> json) {
     return BranchInfo(
-      id: json['id'] as String,
-      name: json['name'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
     );
   }
 
