@@ -1,24 +1,24 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../products/models/product.dart';
-import '../../products/repositories/product_repository.dart';
+import '../../products/providers/product_provider.dart';
 
 /// Searchable product picker with branch-specific stock display.
 /// Out-of-stock items are shown greyed out and cannot be selected.
-class ProductSearchField extends StatefulWidget {
+class ProductSearchField extends ConsumerStatefulWidget {
   final String? branchId;
   final ValueChanged<Product> onSelected;
 
   const ProductSearchField({super.key, this.branchId, required this.onSelected});
 
   @override
-  State<ProductSearchField> createState() => _ProductSearchFieldState();
+  ConsumerState<ProductSearchField> createState() => _ProductSearchFieldState();
 }
 
-class _ProductSearchFieldState extends State<ProductSearchField> {
+class _ProductSearchFieldState extends ConsumerState<ProductSearchField> {
   final _controller = TextEditingController();
-  final _repo = ProductRepository();
   List<Product> _results = [];
   bool _isSearching = false;
   bool _showResults = false;
@@ -56,7 +56,8 @@ class _ProductSearchFieldState extends State<ProductSearchField> {
     if (query.isEmpty) return;
     setState(() { _isSearching = true; _error = null; });
     try {
-      final result = await _repo.getProducts(
+      final repo = ref.read(productRepositoryProvider);
+      final result = await repo.getProducts(
         search: query,
         branchId: widget.branchId,
         limit: 10,

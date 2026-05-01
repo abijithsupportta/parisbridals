@@ -265,7 +265,7 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
         child: InkWell(
           borderRadius: BorderRadius.circular(Responsive.r(14)),
           onTap: () => Navigator.of(context)
-              .push(MaterialPageRoute(builder: (_) => OrderDetailViewNew(order: order)))
+              .push(MaterialPageRoute(builder: (_) => OrderDetailViewNew(orderId: order.id)))
               .then((_) => ref.invalidate(ordersProvider)),
           child: Padding(
             padding: Responsive.all(12),

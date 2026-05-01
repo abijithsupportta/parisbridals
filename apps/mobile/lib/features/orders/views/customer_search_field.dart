@@ -1,23 +1,23 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../customers/models/customer.dart';
-import '../../customers/repositories/customer_repository.dart';
+import '../../customers/providers/customer_provider.dart';
 
 /// Lightweight customer picker: debounced search, slim dropdown, bottom-sheet quick-add.
-class CustomerSearchField extends StatefulWidget {
+class CustomerSearchField extends ConsumerStatefulWidget {
   final Customer? initialCustomer;
   final ValueChanged<Customer?> onSelected;
 
   const CustomerSearchField({super.key, this.initialCustomer, required this.onSelected});
 
   @override
-  State<CustomerSearchField> createState() => _CustomerSearchFieldState();
+  ConsumerState<CustomerSearchField> createState() => _CustomerSearchFieldState();
 }
 
-class _CustomerSearchFieldState extends State<CustomerSearchField> {
+class _CustomerSearchFieldState extends ConsumerState<CustomerSearchField> {
   final _controller = TextEditingController();
-  final _repo = CustomerRepository();
 
   Customer? _selected;
   List<Customer> _results = [];
@@ -59,7 +59,8 @@ class _CustomerSearchFieldState extends State<CustomerSearchField> {
     if (query.isEmpty) return;
     setState(() { _isSearching = true; _searchError = null; });
     try {
-      final result = await _repo.getCustomers(query: query, limit: 5);
+      final repo = ref.read(customerRepositoryProvider);
+      final result = await repo.getCustomers(query: query, limit: 5);
       if (mounted) {
         setState(() {
           _results = result.customers;
@@ -106,7 +107,6 @@ class _CustomerSearchFieldState extends State<CustomerSearchField> {
       builder: (_) => _QuickAddSheet(
         initialName: isPhone ? '' : text,
         initialPhone: isPhone ? text : '',
-        repo: _repo,
         onCreated: (c) {
           if (mounted) _selectCustomer(c);
         },
@@ -283,24 +283,22 @@ class _CustomerSearchFieldState extends State<CustomerSearchField> {
 // Quick-Add Bottom Sheet
 // ────────────────────────────────────────────────────────
 
-class _QuickAddSheet extends StatefulWidget {
+class _QuickAddSheet extends ConsumerStatefulWidget {
   final String initialName;
   final String initialPhone;
-  final CustomerRepository repo;
   final ValueChanged<Customer> onCreated;
 
   const _QuickAddSheet({
     required this.initialName,
     required this.initialPhone,
-    required this.repo,
     required this.onCreated,
   });
 
   @override
-  State<_QuickAddSheet> createState() => _QuickAddSheetState();
+  ConsumerState<_QuickAddSheet> createState() => _QuickAddSheetState();
 }
 
-class _QuickAddSheetState extends State<_QuickAddSheet> {
+class _QuickAddSheetState extends ConsumerState<_QuickAddSheet> {
   late final TextEditingController _phone;
   late final TextEditingController _name;
   late final TextEditingController _address;
@@ -340,7 +338,8 @@ class _QuickAddSheetState extends State<_QuickAddSheet> {
       final addr = _address.text.trim();
       if (addr.isNotEmpty) body['address'] = addr;
 
-      final customer = await widget.repo.createCustomer(body);
+      final repo = ref.read(customerRepositoryProvider);
+      final customer = await repo.createCustomer(body);
       if (mounted) {
         Navigator.pop(context);
         widget.onCreated(customer);

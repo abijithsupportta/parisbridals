@@ -14,9 +14,9 @@ String formatCurrency(double amount) {
 
 /// Comprehensive Order Detail View matching admin functionality
 class OrderDetailViewNew extends ConsumerStatefulWidget {
-  final Order order;
+  final String orderId;
 
-  const OrderDetailViewNew({super.key, required this.order});
+  const OrderDetailViewNew({super.key, required this.orderId});
 
   @override
   ConsumerState<OrderDetailViewNew> createState() => _OrderDetailViewNewState();
@@ -30,49 +30,79 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   final Map<String, ReturnItemState> _returnItems = {};
   double _lateFee = 0;
   double _discount = 0;
+  Order? _cachedOrder;
 
   @override
   void initState() {
     super.initState();
-    _initializeReturnItems();
   }
 
-  void _initializeReturnItems() {
-    if (_isReturnable && widget.order.items != null) {
-      for (var item in widget.order.items!) {
+  void _initializeReturnItems(Order order) {
+    if (_returnItems.isNotEmpty) return;
+    if (_isReturnable(order) && order.items != null) {
+      for (var item in order.items!) {
         _returnItems[item.id] = ReturnItemState();
       }
     }
   }
 
-  bool get _isReturnable {
-    return widget.order.status == OrderStatus.inUse ||
-        widget.order.status == OrderStatus.ongoing ||
-        widget.order.status == OrderStatus.lateReturn ||
-        widget.order.status == OrderStatus.partial;
+  bool _isReturnable(Order order) {
+    return order.status == OrderStatus.inUse ||
+        order.status == OrderStatus.ongoing ||
+        order.status == OrderStatus.lateReturn ||
+        order.status == OrderStatus.partial;
   }
 
-  double get _amountDue {
-    return (widget.order.totalAmount - widget.order.amountPaid).clamp(0, double.infinity);
+  double _amountDue(Order order) {
+    return (order.totalAmount - order.amountPaid).clamp(0, double.infinity);
   }
 
   @override
   Widget build(BuildContext context) {
     Responsive.init(context);
     final canManage = ref.watch(canManageProvider);
+    final orderAsync = ref.watch(orderByIdProvider(widget.orderId));
 
+    return orderAsync.when(
+      data: (order) {
+        _cachedOrder = order;
+        _initializeReturnItems(order);
+        return _buildContent(order, canManage);
+      },
+      loading: () => Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          title: const Text('Order Details'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          title: const Text('Order Details'),
+        ),
+        body: Center(child: Text('Error: $error')),
+      ),
+    );
+  }
+
+  Widget _buildContent(Order order, bool canManage) {
     return Scaffold(
       backgroundColor: _bg,
-      appBar: _buildAppBar(),
+      appBar: _buildAppBar(order),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeroBanner(canManage),
-            if (canManage) _buildActionButtons(),
-            _buildLogisticsBar(),
-            _buildOrderItemsSection(),
-            _buildCustomerCard(),
-            _buildFinancialCard(),
+            _buildHeroBanner(order, canManage),
+            if (canManage) _buildActionButtons(order),
+            _buildLogisticsBar(order),
+            _buildOrderItemsSection(order),
+            _buildCustomerCard(order),
+            _buildFinancialCard(order),
             SizedBox(height: Responsive.h(80)),
           ],
         ),
@@ -80,19 +110,19 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(Order order) {
     return AppBar(
       backgroundColor: _primary,
       foregroundColor: Colors.white,
       elevation: 0,
       title: Text(
-        'Order #${widget.order.id.substring(0, 6).toUpperCase()}',
+        'Order #${order.id.substring(0, 6).toUpperCase()}',
         style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold),
       ),
       actions: [
         IconButton(
           icon: Icon(Icons.refresh_rounded, size: Responsive.icon(24)),
-          onPressed: () => ref.invalidate(orderByIdProvider(widget.order.id)),
+          onPressed: () => ref.invalidate(orderByIdProvider(widget.orderId)),
         ),
       ],
     );
@@ -154,9 +184,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
   }
 
-  Widget _buildHeroBanner(bool canManage) {
-    final statusColor = _getStatusColor(widget.order.status);
-    final statusLabel = _getStatusLabel(widget.order.status);
+  Widget _buildHeroBanner(Order order, bool canManage) {
+    final statusColor = _getStatusColor(order.status);
+    final statusLabel = _getStatusLabel(order.status);
 
     return Container(
       margin: Responsive.all(16),
@@ -182,7 +212,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.order.customer?.name ?? 'Unknown Customer',
+                      order.customer?.name ?? 'Unknown Customer',
                       style: TextStyle(
                         fontSize: Responsive.sp(18),
                         fontWeight: FontWeight.w900,
@@ -193,7 +223,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                     ),
                     SizedBox(height: Responsive.h(4)),
                     Text(
-                      widget.order.customer?.phone ?? '',
+                      order.customer?.phone ?? '',
                       style: TextStyle(
                         fontSize: Responsive.sp(13),
                         color: Colors.grey[600],
@@ -222,7 +252,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
             ],
           ),
           SizedBox(height: Responsive.h(12)),
-          if (_amountDue > 0)
+          if (_amountDue(order) > 0)
             Container(
               padding: Responsive.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -236,7 +266,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                   Icon(Icons.warning_rounded, size: Responsive.icon(16), color: const Color(0xFFFF6B8A)),
                   SizedBox(width: Responsive.w(6)),
                   Text(
-                    'DUE: ${formatCurrency(_amountDue)}',
+                    'DUE: ${formatCurrency(_amountDue(order))}',
                     style: TextStyle(
                       fontSize: Responsive.sp(14),
                       fontWeight: FontWeight.w900,
@@ -274,8 +304,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       ),
     );
   }
-  Widget _buildActionButtons() {
-    final status = widget.order.status;
+  Widget _buildActionButtons(Order order) {
+    final status = order.status;
     final isScheduled = status == OrderStatus.scheduled || status == OrderStatus.confirmed || status == OrderStatus.pending;
     final isCancellable = status == OrderStatus.pending || status == OrderStatus.confirmed || status == OrderStatus.scheduled;
 
@@ -322,7 +352,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   bool _isProcessing = false;
 
   Future<void> _startRental() async {
-    if (widget.order.items == null || widget.order.items!.isEmpty) {
+    if (_cachedOrder!.items == null || _cachedOrder!.items!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No items in this order'), backgroundColor: Colors.orange),
       );
@@ -336,14 +366,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final repo = ref.read(orderRepositoryProvider);
       final today = DateTime.now().toIso8601String().split('T')[0];
       final availResult = await repo.checkStockAvailability(
-        items: widget.order.items!.map((item) => <String, dynamic>{
+        items: _cachedOrder!.items!.map((item) => <String, dynamic>{
           'product_id': item.productId,
           'quantity': item.quantity,
         }).toList(),
         startDate: today,
-        endDate: widget.order.endDate,
-        branchId: widget.order.branchId,
-        excludeOrderId: widget.order.id,
+        endDate: _cachedOrder!.endDate,
+        branchId: _cachedOrder!.branchId,
+        excludeOrderId: _cachedOrder!.id,
       );
 
       if (!mounted) return;
@@ -432,7 +462,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       }
 
       // Step 3: Actually start the rental
-      await repo.startRental(widget.order.id);
+      await repo.startRental(_cachedOrder!.id);
       if (mounted) {
         ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -472,7 +502,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     setState(() => _isProcessing = true);
     try {
       final repo = ref.read(orderRepositoryProvider);
-      await repo.cancelOrder(widget.order.id);
+      await repo.cancelOrder(_cachedOrder!.id);
       if (mounted) {
         ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -491,8 +521,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
   }
 
-  Widget _buildLogisticsBar() {
-    final isLate = widget.order.status == OrderStatus.lateReturn;
+  Widget _buildLogisticsBar(Order order) {
+    final isLate = order.status == OrderStatus.lateReturn;
 
     return Padding(
       padding: Responsive.symmetric(horizontal: 16),
@@ -501,7 +531,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           Expanded(
             child: _buildLogisticsCard(
               'OUT',
-              _formatDate(widget.order.startDate),
+              _formatDate(order.startDate),
               Colors.blue[50]!,
               Colors.blue[700]!,
             ),
@@ -510,7 +540,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           Expanded(
             child: _buildLogisticsCard(
               'IN',
-              _formatDate(widget.order.endDate),
+              _formatDate(order.endDate),
               isLate ? Colors.red[50]! : Colors.green[50]!,
               isLate ? Colors.red[700]! : Colors.green[700]!,
               isLate: isLate,
@@ -520,7 +550,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           Expanded(
             child: _buildLogisticsCard(
               'ITEMS',
-              '${widget.order.items?.length ?? 0}',
+              '${order.items?.length ?? 0}',
               Colors.grey[100]!,
               _primary,
             ),
@@ -567,8 +597,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     );
   }
 
-  Widget _buildOrderItemsSection() {
-    if (widget.order.items == null || widget.order.items!.isEmpty) {
+  Widget _buildOrderItemsSection(Order order) {
+    if (order.items == null || order.items!.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -602,7 +632,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                     letterSpacing: 1,
                   ),
                 ),
-                if (_isReturnable)
+                if (_isReturnable(order))
                   TextButton.icon(
                     onPressed: _markAllExcellent,
                     icon: Icon(Icons.check_circle_rounded, size: Responsive.icon(16), color: const Color(0xFF2ECC71)),
@@ -619,14 +649,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
             ),
           ),
           Divider(height: 1, color: Colors.grey[200]),
-          ...widget.order.items!.map((item) => _buildOrderItem(item)),
-          if (_isReturnable) _buildSettlementFooter(),
+          ...order.items!.map((item) => _buildOrderItem(order, item)),
+          if (_isReturnable(order)) _buildSettlementFooter(),
         ],
       ),
     );
   }
 
-  Widget _buildOrderItem(OrderItem item) {
+  Widget _buildOrderItem(Order order, OrderItem item) {
     final returnState = _returnItems[item.id];
     final isExcellent = returnState?.status == 'excellent';
     final isDamaged = returnState?.status == 'damaged';
@@ -684,7 +714,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
               ),
             ],
           ),
-          if (_isReturnable) ...[
+          if (_isReturnable(order)) ...[
             SizedBox(height: Responsive.h(12)),
             Row(
               children: [
@@ -905,7 +935,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
 
     // Build items payload matching ReturnOrderDTO from the admin API
-    final orderItems = widget.order.items!;
+    final orderItems = _cachedOrder!.items!;
     final returnItemsList = _returnItems.entries.map((e) {
       // Find the corresponding OrderItem to get the quantity
       final orderItem = orderItems.firstWhere((oi) => oi.id == e.key);
@@ -920,8 +950,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     try {
       final repo = ref.read(orderRepositoryProvider);
-      await repo.processReturn(widget.order.id, {
-        'order_id': widget.order.id,
+      await repo.processReturn(_cachedOrder!.id, {
+        'order_id': _cachedOrder!.id,
         'items': returnItemsList,
         if (_lateFee > 0) 'late_fee': _lateFee,
         if (_discount > 0) 'discount': _discount,
@@ -942,7 +972,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
   }
 
-  Widget _buildCustomerCard() {
+  Widget _buildCustomerCard(Order order) {
     return Container(
       margin: Responsive.only(left: 16, right: 16, top: 16),
       padding: Responsive.all(16),
@@ -971,7 +1001,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           ),
           SizedBox(height: Responsive.h(12)),
           Text(
-            widget.order.customer?.name ?? 'Unknown',
+            order.customer?.name ?? 'Unknown',
             style: TextStyle(
               fontSize: Responsive.sp(20),
               fontWeight: FontWeight.w900,
@@ -981,7 +1011,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           SizedBox(height: Responsive.h(12)),
           InkWell(
             onTap: () async {
-              final phone = widget.order.customer?.phone;
+              final phone = order.customer?.phone;
               if (phone != null && phone.isNotEmpty) {
                 final uri = Uri(scheme: 'tel', path: phone);
                 if (await canLaunchUrl(uri)) {
@@ -1002,7 +1032,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                   Icon(Icons.phone_rounded, size: Responsive.icon(20), color: const Color(0xFF2ECC71)),
                   SizedBox(width: Responsive.w(8)),
                   Text(
-                    widget.order.customer?.phone ?? 'N/A',
+                    order.customer?.phone ?? 'N/A',
                     style: TextStyle(
                       fontSize: Responsive.sp(16),
                       fontWeight: FontWeight.w900,
@@ -1018,7 +1048,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     );
   }
 
-  Widget _buildFinancialCard() {
+  Widget _buildFinancialCard(Order order) {
     return Container(
       margin: Responsive.only(left: 16, right: 16, top: 16),
       padding: Responsive.all(16),
@@ -1046,33 +1076,33 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
             ),
           ),
           SizedBox(height: Responsive.h(16)),
-          _buildFinancialRow('Subtotal', formatCurrency(widget.order.subtotal)),
-          if (widget.order.gstAmount > 0) ...[
+          _buildFinancialRow('Subtotal', formatCurrency(order.subtotal)),
+          if (order.gstAmount > 0) ...[
             SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('GST', formatCurrency(widget.order.gstAmount)),
+            _buildFinancialRow('GST', formatCurrency(order.gstAmount)),
           ],
           SizedBox(height: Responsive.h(8)),
-          _buildFinancialRow('Security Deposit', formatCurrency(widget.order.securityDeposit)),
-          if (widget.order.lateFee > 0) ...[
+          _buildFinancialRow('Security Deposit', formatCurrency(order.securityDeposit)),
+          if (order.lateFee > 0) ...[
             SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('Late Fee', '+ ${formatCurrency(widget.order.lateFee)}', color: Colors.red[700]),
+            _buildFinancialRow('Late Fee', '+ ${formatCurrency(order.lateFee)}', color: Colors.red[700]),
           ],
-          if (widget.order.damageChargesTotal > 0) ...[
+          if (order.damageChargesTotal > 0) ...[
             SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('Damage Charges', '+ ${formatCurrency(widget.order.damageChargesTotal)}', color: Colors.orange[700]),
+            _buildFinancialRow('Damage Charges', '+ ${formatCurrency(order.damageChargesTotal)}', color: Colors.orange[700]),
           ],
-          if (widget.order.discount > 0) ...[
+          if (order.discount > 0) ...[
             SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('Discount', '- ${formatCurrency(widget.order.discount)}', color: Colors.green[700]),
+            _buildFinancialRow('Discount', '- ${formatCurrency(order.discount)}', color: Colors.green[700]),
           ],
           Divider(height: Responsive.h(24), thickness: 2),
           _buildFinancialRow(
             'Grand Total',
-            formatCurrency(widget.order.totalAmount),
+            formatCurrency(order.totalAmount),
             isBold: true,
           ),
           SizedBox(height: Responsive.h(8)),
-          _buildFinancialRow('Total Paid', formatCurrency(widget.order.amountPaid)),
+          _buildFinancialRow('Total Paid', formatCurrency(order.amountPaid)),
           Divider(height: Responsive.h(24), thickness: 2),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1086,16 +1116,16 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                 ),
               ),
               Text(
-                formatCurrency(_amountDue),
+                formatCurrency(_amountDue(order)),
                 style: TextStyle(
                   fontSize: Responsive.sp(20),
                   fontWeight: FontWeight.w900,
-                  color: _amountDue > 0 ? Colors.red[700] : Colors.green[700],
+                  color: _amountDue(order) > 0 ? Colors.red[700] : Colors.green[700],
                 ),
               ),
             ],
           ),
-          if (_amountDue > 0) ...[
+          if (_amountDue(order) > 0) ...[
             SizedBox(height: Responsive.h(16)),
             SizedBox(
               width: double.infinity,
@@ -1107,10 +1137,10 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
                     builder: (_) => PaymentRecordingModal(
-                      orderId: widget.order.id,
-                      amountDue: _amountDue,
+                      orderId: widget.orderId,
+                      amountDue: _amountDue(order),
                       onSuccess: () {
-                        ref.invalidate(orderByIdProvider(widget.order.id));
+                        ref.invalidate(orderByIdProvider(widget.orderId));
                         ref.invalidate(ordersProvider);
                       },
                     ),

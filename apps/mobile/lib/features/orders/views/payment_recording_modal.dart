@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../models/payment.dart';
-import '../repositories/payment_repository.dart';
+import '../providers/payment_provider.dart';
 
 String formatCurrency(double amount) => '₹${amount.toStringAsFixed(0)}';
 
@@ -54,7 +54,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
     setState(() => _isSubmitting = true);
 
     try {
-      final repository = PaymentRepository();
+      final repository = ref.read(paymentRepositoryProvider);
       await repository.createPayment(CreatePaymentDTO(
         orderId: widget.orderId,
         paymentType: _selectedType,

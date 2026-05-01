@@ -143,7 +143,17 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
           });
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check stock availability: ${e.toString().replaceFirst('Exception: ', '')}'),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _submit() async {
