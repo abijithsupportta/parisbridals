@@ -13,7 +13,6 @@ class StepPayment extends StatelessWidget {
   final double advanceAmount;
   final PaymentMethod advancePaymentMethod;
   final TextEditingController notesController;
-  final int rentalDays;
   final List<CartItem> cart;
   final ValueChanged<bool> onCollectDepositChanged;
   final ValueChanged<double> onSecurityDepositChanged;
@@ -32,7 +31,6 @@ class StepPayment extends StatelessWidget {
     required this.advanceAmount,
     required this.advancePaymentMethod,
     required this.notesController,
-    required this.rentalDays,
     required this.cart,
     required this.onCollectDepositChanged,
     required this.onSecurityDepositChanged,
@@ -68,12 +66,12 @@ class StepPayment extends StatelessWidget {
                   Expanded(child: Text('${item.product.name} × ${item.quantity}',
                       style: TextStyle(fontSize: Responsive.sp(12), color: Colors.grey[700]),
                       maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  Text('₹${(item.lineTotal * rentalDays).toStringAsFixed(0)}',
+                  Text('₹${item.lineTotal.toStringAsFixed(0)}',
                       style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: _primary)),
                 ]),
               )),
               Divider(height: Responsive.h(16), color: Colors.grey[200]),
-              _summaryRow('Rental ($rentalDays days)', '₹${subtotal.toStringAsFixed(0)}'),
+              _summaryRow('Rental Total', '₹${subtotal.toStringAsFixed(0)}'),
             ],
           )),
           SizedBox(height: Responsive.h(12)),

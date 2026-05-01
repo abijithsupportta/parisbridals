@@ -6,9 +6,8 @@ import '../../../core/responsive.dart';
 import '../providers/dashboard_provider.dart';
 import '../repositories/dashboard_repository.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../orders/views/order_form_view.dart';
-import '../../customers/views/customer_form_view.dart';
-import '../../products/views/product_form_view.dart';
+import '../../orders/views/create_order/create_order_view.dart';
+import '../../orders/providers/order_provider.dart';
 
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key});
@@ -31,26 +30,49 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
     Responsive.init(context);
     final metricsAsync = ref.watch(dashboardMetricsProvider);
     final user = ref.watch(authUserProvider);
+    final canManage = ref.watch(canManageProvider);
 
     return Container(
       color: DashboardView._bg,
-      child: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(dashboardMetricsProvider),
-        color: DashboardView._accent,
-        child: ListView(
-          padding: Responsive.all(14),
-          children: [
-            _buildGreetingBanner(user),
-            SizedBox(height: Responsive.h(14)),
-            _buildQuickActions(),
-            SizedBox(height: Responsive.h(14)),
-            metricsAsync.when(
-              data: (metrics) => _buildDashboardContent(metrics),
-              loading: () => _buildLoadingState(),
-              error: (error, _) => _buildErrorState(error),
+      child: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: () async => ref.invalidate(dashboardMetricsProvider),
+            color: DashboardView._accent,
+            child: ListView(
+              padding: Responsive.only(left: 14, right: 14, top: 14, bottom: 80),
+              children: [
+                _buildGreetingBanner(user),
+                SizedBox(height: Responsive.h(14)),
+                metricsAsync.when(
+                  data: (metrics) => _buildDashboardContent(metrics),
+                  loading: () => _buildLoadingState(),
+                  error: (error, _) => _buildErrorState(error),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (canManage)
+            Positioned(
+              right: Responsive.w(16),
+              bottom: Responsive.h(16),
+              child: FloatingActionButton.extended(
+                heroTag: 'dashboard_order_fab',
+                onPressed: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const CreateOrderView()))
+                    .then((_) {
+                  ref.invalidate(dashboardMetricsProvider);
+                  ref.invalidate(ordersProvider);
+                }),
+                backgroundColor: DashboardView._accent,
+                foregroundColor: DashboardView._primary,
+                icon: Icon(Icons.add_rounded, size: Responsive.icon(24)),
+                label: Text('New Order',
+                    style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold)),
+                elevation: 3,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -87,85 +109,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
         ],
       ),
     );
-  }
-
-  Widget _buildQuickActions() {
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: Responsive.r(8),
-            offset: Offset(0, Responsive.h(3)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quick Actions',
-            style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold, color: DashboardView._primary),
-          ),
-          SizedBox(height: Responsive.h(10)),
-          Row(
-            children: [
-              Expanded(child: _buildActionButton('New Order', Icons.add_shopping_cart, DashboardView._accent, () => _navigateToOrderForm())),
-              SizedBox(width: Responsive.w(8)),
-              Expanded(child: _buildActionButton('New Customer', Icons.person_add, Colors.blue, () => _navigateToCustomerForm())),
-            ],
-          ),
-          SizedBox(height: Responsive.h(8)),
-          _buildActionButton('New Product', Icons.inventory_2, DashboardView._primary, () => _navigateToProductForm()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton(String label, IconData icon, Color color, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Responsive.r(8)),
-      child: Container(
-        padding: Responsive.symmetric(vertical: 10, horizontal: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(Responsive.r(8)),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: Responsive.icon(18)),
-            SizedBox(width: Responsive.w(6)),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w600, color: color),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _navigateToOrderForm() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderFormView()));
-  }
-
-  void _navigateToCustomerForm() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const CustomerFormView()));
-  }
-
-  void _navigateToProductForm() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductFormView()));
   }
 
   Widget _buildDashboardContent(DashboardMetrics metrics) {

@@ -61,12 +61,8 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
 
   bool _isSubmitting = false;
 
-  int get _rentalDays {
-    if (_startDate == null || _endDate == null) return 0;
-    return _endDate!.difference(_startDate!).inDays.clamp(1, 365);
-  }
 
-  double get _subtotal => _cart.fold(0.0, (s, i) => s + i.lineTotal * _rentalDays);
+  double get _subtotal => _cart.fold(0.0, (s, i) => s + i.lineTotal);
 
 
 
@@ -254,7 +250,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                   onAddProduct: _addToCart,
                   onUpdateQty: _updateQty,
                   onRemove: _removeFromCart,
-                  rentalDays: _rentalDays,
                 ),
                 StepPayment(
                   subtotal: _subtotal,
@@ -265,7 +260,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                   advanceAmount: _advanceAmount,
                   advancePaymentMethod: _advancePaymentMethod,
                   notesController: _notesController,
-                  rentalDays: _rentalDays,
                   cart: _cart,
                   onCollectDepositChanged: (v) => setState(() { _collectDeposit = v; if (!v) _securityDeposit = 0; }),
                   onSecurityDepositChanged: (v) => setState(() => _securityDeposit = v),

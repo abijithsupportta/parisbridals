@@ -13,7 +13,6 @@ class StepProducts extends StatefulWidget {
   final ValueChanged<Product> onAddProduct;
   final void Function(int index, int delta) onUpdateQty;
   final ValueChanged<int> onRemove;
-  final int rentalDays;
 
   const StepProducts({
     super.key,
@@ -22,7 +21,6 @@ class StepProducts extends StatefulWidget {
     required this.onAddProduct,
     required this.onUpdateQty,
     required this.onRemove,
-    required this.rentalDays,
   });
 
   @override
@@ -32,6 +30,53 @@ class StepProducts extends StatefulWidget {
 class _StepProductsState extends State<StepProducts> {
   static const _primary = Color(0xFF434343);
   static const _accent = Color(0xFFF7C873);
+
+  /// Get branch-specific stock for a product.
+  int _getBranchStock(Product p) {
+    if (widget.branchId != null && p.branchInventory.isNotEmpty) {
+      final branchInv = p.branchInventory.where((b) => b.branchId == widget.branchId);
+      if (branchInv.isNotEmpty) return branchInv.first.stockCount;
+    }
+    return p.availableQuantity;
+  }
+
+  /// Attempt to add a product — block if out of stock for this branch.
+  void _tryAddProduct(Product p) {
+    final stock = _getBranchStock(p);
+    if (stock <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${p.name} is out of stock at this branch'),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Check if adding would exceed branch stock
+    final existing = widget.cart.where((i) => i.product.id == p.id);
+    final currentQty = existing.isNotEmpty ? existing.first.quantity : 0;
+    if (currentQty >= stock) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Only $stock available for ${p.name}'),
+          backgroundColor: Colors.orange[700],
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    widget.onAddProduct(p);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Added: ${p.name}'),
+        backgroundColor: Colors.green[700],
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
 
   Future<void> _openScanner() async {
     final barcode = await Navigator.push<String>(
@@ -48,10 +93,7 @@ class _StepProductsState extends State<StepProducts> {
       final repo = ProductRepository();
       final result = await repo.getProducts(search: barcode, branchId: widget.branchId, limit: 1);
       if (result.products.isNotEmpty && mounted) {
-        widget.onAddProduct(result.products.first);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added: ${result.products.first.name}'), backgroundColor: Colors.green[700], duration: const Duration(seconds: 1)),
-        );
+        _tryAddProduct(result.products.first);
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('No product found for barcode: $barcode'), backgroundColor: Colors.orange[700]),
@@ -114,27 +156,23 @@ class _StepProductsState extends State<StepProducts> {
               borderRadius: BorderRadius.circular(Responsive.r(16)),
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
             ),
-            child: Column(
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: ProductSearchField(branchId: widget.branchId, onSelected: widget.onAddProduct),
-                    ),
-                    SizedBox(width: Responsive.w(8)),
-                    InkWell(
-                      onTap: _openScanner,
+                Expanded(
+                  child: ProductSearchField(branchId: widget.branchId, onSelected: _tryAddProduct),
+                ),
+                SizedBox(width: Responsive.w(8)),
+                InkWell(
+                  onTap: _openScanner,
+                  borderRadius: BorderRadius.circular(Responsive.r(12)),
+                  child: Container(
+                    padding: Responsive.all(12),
+                    decoration: BoxDecoration(
+                      color: _primary,
                       borderRadius: BorderRadius.circular(Responsive.r(12)),
-                      child: Container(
-                        padding: Responsive.all(12),
-                        decoration: BoxDecoration(
-                          color: _primary,
-                          borderRadius: BorderRadius.circular(Responsive.r(12)),
-                        ),
-                        child: Icon(Icons.qr_code_scanner_rounded, size: Responsive.icon(24), color: Colors.white),
-                      ),
                     ),
-                  ],
+                    child: Icon(Icons.qr_code_scanner_rounded, size: Responsive.icon(24), color: Colors.white),
+                  ),
                 ),
               ],
             ),
@@ -168,6 +206,8 @@ class _StepProductsState extends State<StepProducts> {
 
   Widget _buildCartItem(int index, CartItem item) {
     final available = item.isAvailable;
+    final branchStock = _getBranchStock(item.product);
+
     return Container(
       margin: Responsive.only(bottom: 10),
       padding: Responsive.all(12),
@@ -207,11 +247,28 @@ class _StepProductsState extends State<StepProducts> {
                   children: [
                     Text(item.product.name, style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w700, color: _primary), maxLines: 1, overflow: TextOverflow.ellipsis),
                     SizedBox(height: Responsive.h(2)),
-                    Text('₹${item.product.pricePerDay.toStringAsFixed(0)}/day', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600])),
+                    Row(
+                      children: [
+                        Text('₹${item.product.pricePerDay.toStringAsFixed(0)}', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600])),
+                        SizedBox(width: Responsive.w(6)),
+                        Container(
+                          padding: Responsive.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: branchStock > 0 ? const Color(0xFF2ECC71).withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(Responsive.r(4)),
+                          ),
+                          child: Text(
+                            'Stock: $branchStock',
+                            style: TextStyle(fontSize: Responsive.sp(9), fontWeight: FontWeight.w600,
+                                color: branchStock > 0 ? const Color(0xFF2ECC71) : Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
-              // Qty controls
+              // Qty controls — block increment beyond branch stock
               Container(
                 decoration: BoxDecoration(color: Colors.grey[50], borderRadius: BorderRadius.circular(Responsive.r(10)), border: Border.all(color: Colors.grey[200]!)),
                 child: Row(
@@ -226,8 +283,17 @@ class _StepProductsState extends State<StepProducts> {
                       child: Text('${item.quantity}', style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold)),
                     ),
                     InkWell(
-                      onTap: () => widget.onUpdateQty(index, 1),
-                      child: Padding(padding: Responsive.all(6), child: Icon(Icons.add, size: Responsive.icon(16), color: _primary)),
+                      onTap: item.quantity < branchStock
+                          ? () => widget.onUpdateQty(index, 1)
+                          : () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Max $branchStock available'), backgroundColor: Colors.orange[700], duration: const Duration(seconds: 1)),
+                              );
+                            },
+                      child: Padding(
+                        padding: Responsive.all(6),
+                        child: Icon(Icons.add, size: Responsive.icon(16), color: item.quantity < branchStock ? _primary : Colors.grey[400]),
+                      ),
                     ),
                   ],
                 ),
@@ -239,7 +305,7 @@ class _StepProductsState extends State<StepProducts> {
               ),
             ],
           ),
-          // Availability indicator
+          // Availability indicator from API check
           if (available != null) ...[
             SizedBox(height: Responsive.h(6)),
             Container(
@@ -255,7 +321,7 @@ class _StepProductsState extends State<StepProducts> {
                       color: available ? const Color(0xFF2ECC71) : Colors.red),
                   SizedBox(width: Responsive.w(4)),
                   Text(
-                    available ? 'Available (${item.availableQty} in stock)' : 'Only ${item.availableQty ?? 0} available',
+                    available ? 'Available for rental period' : 'Not available — only ${item.availableQty ?? 0} free',
                     style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w600,
                         color: available ? const Color(0xFF2ECC71) : Colors.red),
                   ),
@@ -263,17 +329,15 @@ class _StepProductsState extends State<StepProducts> {
               ),
             ),
           ],
-          // Line subtotal
-          if (widget.rentalDays > 0) ...[
-            SizedBox(height: Responsive.h(6)),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                '₹${(item.lineTotal * widget.rentalDays).toStringAsFixed(0)} for ${widget.rentalDays}d',
-                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w700, color: _primary),
-              ),
+          // Line subtotal — flat rental price × qty
+          SizedBox(height: Responsive.h(6)),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '₹${item.lineTotal.toStringAsFixed(0)}',
+              style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.w700, color: _primary),
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -325,10 +389,7 @@ class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
         foregroundColor: Colors.white,
         title: Text('Scan Barcode', style: TextStyle(fontSize: Responsive.sp(16))),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.flash_on),
-            onPressed: () => _controller.toggleTorch(),
-          ),
+          IconButton(icon: const Icon(Icons.flash_on), onPressed: () => _controller.toggleTorch()),
         ],
       ),
       body: Stack(
@@ -344,11 +405,9 @@ class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
               }
             },
           ),
-          // Scan overlay
           Center(
             child: Container(
-              width: Responsive.w(250),
-              height: Responsive.w(250),
+              width: Responsive.w(250), height: Responsive.w(250),
               decoration: BoxDecoration(
                 border: Border.all(color: const Color(0xFFF7C873), width: 2),
                 borderRadius: BorderRadius.circular(Responsive.r(16)),
@@ -356,11 +415,8 @@ class _BarcodeScannerPageState extends State<_BarcodeScannerPage> {
             ),
           ),
           Positioned(
-            bottom: Responsive.h(60),
-            left: 0, right: 0,
-            child: Center(
-              child: Text('Align barcode within the frame', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.white70)),
-            ),
+            bottom: Responsive.h(60), left: 0, right: 0,
+            child: Center(child: Text('Align barcode within the frame', style: TextStyle(fontSize: Responsive.sp(13), color: Colors.white70))),
           ),
         ],
       ),
