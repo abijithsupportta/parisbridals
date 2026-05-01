@@ -52,9 +52,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   // Step 2
   DateTime? _startDate;
   DateTime? _endDate;
-  DateTime? _eventDate;
-  TimeOfDay _pickupTime = const TimeOfDay(hour: 10, minute: 0);
-  TimeOfDay _returnTime = const TimeOfDay(hour: 18, minute: 0);
   DeliveryMethod _deliveryMethod = DeliveryMethod.pickup;
   final _deliveryAddressController = TextEditingController();
 
@@ -71,12 +68,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   final _notesController = TextEditingController();
 
   bool _isSubmitting = false;
-
-  String _formatTime(TimeOfDay time) {
-    final hh = time.hour.toString().padLeft(2, '0');
-    final mm = time.minute.toString().padLeft(2, '0');
-    return '$hh:$mm';
-  }
 
   double get _subtotal => _cart.fold(0.0, (s, i) => s + i.lineTotal);
 
@@ -231,8 +222,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
       'branch_id': branchId,
       'rental_start_date': DateFormat('yyyy-MM-dd').format(_startDate!),
       'rental_end_date': DateFormat('yyyy-MM-dd').format(_endDate!),
-      if (_eventDate != null)
-        'event_date': DateFormat('yyyy-MM-dd').format(_eventDate!),
       'items': _cart
           .map(
             (c) => <String, dynamic>{
@@ -242,8 +231,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
             },
           )
           .toList(),
-      'pickup_time': _formatTime(_pickupTime),
-      'return_time': _formatTime(_returnTime),
       'delivery_method': _deliveryMethod.name,
       if (_deliveryMethod == DeliveryMethod.delivery)
         'delivery_address': _deliveryAddressController.text.trim(),
@@ -338,9 +325,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                 StepRentalPeriod(
                   startDate: _startDate,
                   endDate: _endDate,
-                  eventDate: _eventDate,
-                  pickupTime: _pickupTime,
-                  returnTime: _returnTime,
                   deliveryMethod: _deliveryMethod,
                   deliveryAddressController: _deliveryAddressController,
                   onStartChanged: (d) {
@@ -356,9 +340,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                     setState(() => _endDate = d);
                     _checkAvailability();
                   },
-                  onEventChanged: (d) => setState(() => _eventDate = d),
-                  onPickupTimeChanged: (t) => setState(() => _pickupTime = t),
-                  onReturnTimeChanged: (t) => setState(() => _returnTime = t),
                   onDeliveryMethodChanged: (m) =>
                       setState(() => _deliveryMethod = m),
                 ),

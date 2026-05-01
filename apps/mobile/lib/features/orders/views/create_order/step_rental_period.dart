@@ -7,32 +7,20 @@ import '../../models/order.dart';
 class StepRentalPeriod extends StatelessWidget {
   final DateTime? startDate;
   final DateTime? endDate;
-  final DateTime? eventDate;
-  final TimeOfDay pickupTime;
-  final TimeOfDay returnTime;
   final DeliveryMethod deliveryMethod;
   final TextEditingController deliveryAddressController;
   final ValueChanged<DateTime> onStartChanged;
   final ValueChanged<DateTime> onEndChanged;
-  final ValueChanged<DateTime> onEventChanged;
-  final ValueChanged<TimeOfDay> onPickupTimeChanged;
-  final ValueChanged<TimeOfDay> onReturnTimeChanged;
   final ValueChanged<DeliveryMethod> onDeliveryMethodChanged;
 
   const StepRentalPeriod({
     super.key,
     this.startDate,
     this.endDate,
-    this.eventDate,
-    required this.pickupTime,
-    required this.returnTime,
     required this.deliveryMethod,
     required this.deliveryAddressController,
     required this.onStartChanged,
     required this.onEndChanged,
-    required this.onEventChanged,
-    required this.onPickupTimeChanged,
-    required this.onReturnTimeChanged,
     required this.onDeliveryMethodChanged,
   });
 
@@ -85,38 +73,9 @@ class StepRentalPeriod extends StatelessWidget {
     if (picked != null) onPicked(picked);
   }
 
-  Future<void> _pickTime(
-    BuildContext context,
-    String label,
-    TimeOfDay initial,
-    ValueChanged<TimeOfDay> onPicked,
-  ) async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      helpText: label,
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: _primary,
-            onPrimary: Colors.white,
-            surface: Colors.white,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) onPicked(picked);
-  }
-
   String _fmtDate(DateTime? d) =>
       d != null ? DateFormat('dd MMM yyyy').format(d) : 'Select';
   String _fmtDay(DateTime? d) => d != null ? DateFormat('EEEE').format(d) : '';
-  String _fmtTime(TimeOfDay t) {
-    final hh = t.hour.toString().padLeft(2, '0');
-    final mm = t.minute.toString().padLeft(2, '0');
-    return '$hh:$mm';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -225,23 +184,6 @@ class StepRentalPeriod extends StatelessWidget {
                     );
                   },
                 ),
-                SizedBox(height: Responsive.h(12)),
-                _buildDateCard(
-                  context,
-                  'Event Date',
-                  eventDate,
-                  Icons.event_rounded,
-                  const Color(0xFFF7C873),
-                  () {
-                    _pickDate(
-                      context,
-                      'Event Date',
-                      eventDate,
-                      onEventChanged,
-                      firstDate: startDate ?? DateTime.now(),
-                    );
-                  },
-                ),
               ],
             ),
           ),
@@ -264,7 +206,7 @@ class StepRentalPeriod extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'DELIVERY & TIMING',
+                  'DELIVERY METHOD',
                   style: TextStyle(
                     fontSize: Responsive.sp(10),
                     fontWeight: FontWeight.w900,
@@ -326,42 +268,6 @@ class StepRentalPeriod extends StatelessWidget {
                     ),
                   ),
                 ],
-                SizedBox(height: Responsive.h(12)),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTimeCard(
-                        context,
-                        label: 'Pickup Time',
-                        value: _fmtTime(pickupTime),
-                        icon: Icons.access_time_rounded,
-                        color: const Color(0xFF2ECC71),
-                        onTap: () => _pickTime(
-                          context,
-                          'Pickup Time',
-                          pickupTime,
-                          onPickupTimeChanged,
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: Responsive.w(10)),
-                    Expanded(
-                      child: _buildTimeCard(
-                        context,
-                        label: 'Return Time',
-                        value: _fmtTime(returnTime),
-                        icon: Icons.schedule_rounded,
-                        color: const Color(0xFF4A90D9),
-                        onTap: () => _pickTime(
-                          context,
-                          'Return Time',
-                          returnTime,
-                          onReturnTimeChanged,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -552,58 +458,6 @@ class StepRentalPeriod extends StatelessWidget {
               Icons.edit_calendar_rounded,
               size: Responsive.icon(20),
               color: Colors.grey[400],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeCard(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Responsive.r(12)),
-      child: Container(
-        padding: Responsive.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-          border: Border.all(color: color.withValues(alpha: 0.35)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: Responsive.icon(18), color: color),
-            SizedBox(width: Responsive.w(8)),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: Responsive.sp(10),
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  SizedBox(height: Responsive.h(2)),
-                  Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: Responsive.sp(13),
-                      fontWeight: FontWeight.w700,
-                      color: _primary,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
