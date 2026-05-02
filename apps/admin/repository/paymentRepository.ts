@@ -12,8 +12,10 @@ import {
   PaymentWithRelations, 
   CreatePaymentDTO, 
   UpdatePaymentDTO,
-  PaymentSearchParams 
+  PaymentSearchParams,
+  PaymentType,
 } from '@/domain/types/payment';
+import { PaymentStatus } from '@/domain/types/order';
 
 export class PaymentRepository extends BaseRepository {
   private readonly tableName = 'payments';
@@ -99,7 +101,9 @@ export class PaymentRepository extends BaseRepository {
    * Create a new payment
    */
   async create(data: CreatePaymentDTO): Promise<RepositoryResult<Payment>> {
-    // First create the payment
+    console.log('Creating payment:', data); // Debug log
+    
+    // First create payment
     const paymentResponse = await this.client
       .from(this.tableName)
       .insert({
@@ -110,24 +114,36 @@ export class PaymentRepository extends BaseRepository {
       .maybeSingle();
 
     if (paymentResponse.error) {
+      console.log('Payment creation failed:', paymentResponse.error);
       return this.handleResponse<Payment>(paymentResponse);
     }
 
     const payment = paymentResponse.data as Payment;
+    console.log('Payment created:', payment);
 
     // Then update the order's amount_paid
     const orderUpdateResponse = await this.client
       .from('orders')
-      .select('amount_paid')
+      .select('amount_paid, total_amount')
       .eq('id', data.order_id)
       .single();
 
     if (orderUpdateResponse.error) {
+      console.log('Order fetch failed:', orderUpdateResponse.error);
       return { data: null, error: orderUpdateResponse.error, success: false };
     }
 
-    const currentAmountPaid = orderUpdateResponse.data.amount_paid || 0;
-    const newAmountPaid = currentAmountPaid + data.amount;
+    const currentAmountPaid = Number(orderUpdateResponse.data.amount_paid || 0);
+    const totalAmount = Number(orderUpdateResponse.data.total_amount || 0);
+    const signedAmount = data.payment_type === PaymentType.REFUND ? -data.amount : data.amount;
+    const newAmountPaid = currentAmountPaid + signedAmount;
+    
+    console.log('Payment calculation:', {
+      currentAmountPaid,
+      totalAmount,
+      signedAmount,
+      newAmountPaid
+    });
 
     const updateResponse = await this.client
       .from('orders')
@@ -138,9 +154,11 @@ export class PaymentRepository extends BaseRepository {
       .eq('id', data.order_id);
 
     if (updateResponse.error) {
+      console.log('Order update failed:', updateResponse.error);
       return { data: null, error: updateResponse.error, success: false };
     }
 
+    console.log('Order updated successfully with new amount_paid:', newAmountPaid);
     return { data: payment, error: null, success: true };
   }
 

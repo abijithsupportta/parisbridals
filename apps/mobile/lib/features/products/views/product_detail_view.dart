@@ -113,14 +113,14 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
                     onPageChanged: (i) =>
                         setState(() => _currentImageIndex = i),
                     itemCount: product.images.length,
-                    itemBuilder: (_, i) {
-                      final img = product.images[i];
+                    itemBuilder: (context, index) {
+                      final img = product.images[index];
                       return CachedNetworkImage(
                         imageUrl: img.url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
+                        placeholder: (context, url) => Container(
                             color: _primary.withValues(alpha: 0.1)),
-                        errorWidget: (_, __, ___) =>
+                        errorWidget: (context, url, error) =>
                             _buildPlaceholderImage(),
                       );
                     },
@@ -689,22 +689,31 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
     );
 
     if (confirmed == true && mounted) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
       try {
         await ref
             .read(productsProvider.notifier)
             .deleteProduct(product.id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${product.name} deleted'),
-              backgroundColor: const Color(0xFF2ECC71),
-            ),
-          );
-          Navigator.of(context).pop();
+          if (mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('${product.name} deleted'),
+                backgroundColor: const Color(0xFF2ECC71),
+              ),
+            );
+          }
+          if (mounted) {
+            navigator.pop();
+          }
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          if (!mounted) return;
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
             SnackBar(
               content: Text(e.toString().replaceFirst('Exception: ', '')),
               backgroundColor: Colors.red[400],

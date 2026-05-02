@@ -128,8 +128,8 @@ class _ProductSearchFieldState extends ConsumerState<ProductSearchField> {
               shrinkWrap: true,
               padding: Responsive.symmetric(vertical: 4),
               itemCount: _results.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey[100]),
-              itemBuilder: (_, i) => _buildProductTile(_results[i]),
+              separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[100]),
+              itemBuilder: (context, index) => _buildProductTile(_results[index]),
             ),
           ),
 
@@ -181,7 +181,7 @@ class _ProductSearchFieldState extends ConsumerState<ProductSearchField> {
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(Responsive.r(8)),
                         child: Image.network(p.primaryImageUrl!, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(Icons.diamond_outlined, size: Responsive.icon(18), color: _primary)),
+                            errorBuilder: (context, error, stackTrace) => Icon(Icons.diamond_outlined, size: Responsive.icon(18), color: _primary)),
                       )
                     : Icon(Icons.diamond_outlined, size: Responsive.icon(18), color: _primary),
               ),

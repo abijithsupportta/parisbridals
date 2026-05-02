@@ -2,9 +2,17 @@ import 'package:dio/dio.dart';
 import '../../../core/api_client.dart';
 import '../models/payment.dart';
 
+/// Payment Repository
+///
+/// Data access layer for payment operations via the admin API.
+/// All business logic (including order amount_paid updates) is handled
+/// atomically on the server side in paymentRepository.create().
+///
+/// @module features/orders/repositories/payment_repository
 class PaymentRepository {
   final Dio _client = apiClient;
 
+  /// Fetch all payments for a given order.
   Future<List<Payment>> getPaymentsByOrder(String orderId) async {
     final response = await _client.get('/payments', queryParameters: {'order_id': orderId});
 
@@ -18,6 +26,10 @@ class PaymentRepository {
     throw Exception('Failed to load payments');
   }
 
+  /// Create a new payment record.
+  ///
+  /// The server handles updating the order's amount_paid atomically
+  /// in paymentRepository.create() — no client-side calculation needed.
   Future<Payment> createPayment(CreatePaymentDTO dto) async {
     try {
       final response = await _client.post('/payments', data: dto.toJson());
@@ -30,10 +42,8 @@ class PaymentRepository {
           throw Exception(data['message'] ?? 'Failed to create payment: Invalid response');
         }
       } else {
-        // Handle HTTP errors with detailed response
         final responseData = response.data;
         String errorMessage = 'Failed to create payment: HTTP ${response.statusCode}';
-        
         if (responseData != null) {
           if (responseData['message'] != null) {
             errorMessage += ' - ${responseData['message']}';
@@ -42,13 +52,10 @@ class PaymentRepository {
             errorMessage += ' - Errors: ${responseData['errors']}';
           }
         }
-        
         throw Exception(errorMessage);
       }
     } on DioException catch (e) {
-      // Handle Dio-specific errors
       String errorMessage = 'Failed to create payment: ';
-      
       switch (e.type) {
         case DioExceptionType.connectionTimeout:
           errorMessage += 'Connection timeout';
@@ -80,7 +87,6 @@ class PaymentRepository {
         default:
           errorMessage += 'Unknown error: ${e.message}';
       }
-      
       throw Exception(errorMessage);
     } catch (e) {
       throw Exception('Failed to create payment: ${e.toString()}');

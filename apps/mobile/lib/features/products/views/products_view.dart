@@ -482,7 +482,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                '₹${product.pricePerDay.toStringAsFixed(0)}/day',
+                                '₹${product.pricePerDay.toStringAsFixed(0)}',
                                 style: TextStyle(
                                   fontSize: Responsive.sp(14),
                                   fontWeight: FontWeight.w800,

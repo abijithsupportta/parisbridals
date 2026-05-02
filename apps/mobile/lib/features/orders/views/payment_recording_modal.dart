@@ -26,7 +26,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   PaymentMode _selectedMode = PaymentMode.cash;
-  PaymentType _selectedType = PaymentType.final_;
+  final PaymentType _selectedType = PaymentType.final_;
   bool _isSubmitting = false;
 
   static const _primary = Color(0xFF434343);

@@ -546,8 +546,8 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
             child: CachedNetworkImage(
               imageUrl: _imageUrls[i],
               fit: BoxFit.cover,
-              placeholder: (_, __) => Container(color: Colors.grey[200]),
-              errorWidget: (_, __, ___) =>
+              placeholder: (context, url) => Container(color: Colors.grey[200]),
+              errorWidget: (context, url, error) =>
                   Icon(Icons.broken_image, size: Responsive.icon(24), color: Colors.grey),
             ),
             onRemove: () => setState(() => _imageUrls.removeAt(i)),
@@ -724,7 +724,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   Widget _dropdown(
       String hint, List<Category> items, String? value, ValueChanged<String?> onChanged) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         contentPadding: Responsive.symmetric(horizontal: 14, vertical: 12),
       ),
@@ -974,7 +974,9 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
       if (mounted) {
         await _clearDraft();
         _snack(isEdit ? 'Product updated!' : 'Product created!');
-        Navigator.of(context).pop();
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
       _snack(e.toString().replaceFirst('Exception: ', ''), isError: true);

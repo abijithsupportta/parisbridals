@@ -236,7 +236,7 @@ class _StepProductsState extends State<StepProducts> {
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(Responsive.r(10)),
                         child: Image.network(item.product.primaryImageUrl!, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Icon(Icons.diamond_outlined, size: Responsive.icon(22), color: _primary)),
+                            errorBuilder: (context, error, stackTrace) => Icon(Icons.diamond_outlined, size: Responsive.icon(22), color: _primary)),
                       )
                     : Icon(Icons.diamond_outlined, size: Responsive.icon(22), color: _primary),
               ),
