@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../models/payment.dart';
 import '../providers/payment_provider.dart';
-
-String formatCurrency(double amount) => '₹${amount.toStringAsFixed(0)}';
+import 'order_detail_helpers.dart';
 
 class PaymentRecordingModal extends ConsumerStatefulWidget {
   final String orderId;
@@ -28,8 +27,6 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
   PaymentMode _selectedMode = PaymentMode.cash;
   final PaymentType _selectedType = PaymentType.final_;
   bool _isSubmitting = false;
-
-  static const _primary = Color(0xFF434343);
 
   @override
   void dispose() {
@@ -118,7 +115,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                   style: TextStyle(
                     fontSize: Responsive.sp(18),
                     fontWeight: FontWeight.w900,
-                    color: _primary,
+                    color: kPrimary,
                   ),
                 ),
                 IconButton(
@@ -158,7 +155,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                         style: TextStyle(
                           fontSize: Responsive.sp(20),
                           fontWeight: FontWeight.w900,
-                          color: _primary,
+                          color: kPrimary,
                         ),
                       ),
                     ],
@@ -274,7 +271,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Responsive.r(12)),
-                  borderSide: BorderSide(color: _primary, width: 2),
+                  borderSide: BorderSide(color: kPrimary, width: 2),
                 ),
                 contentPadding: Responsive.symmetric(horizontal: 16, vertical: 14),
               ),
@@ -309,7 +306,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Responsive.r(12)),
-                  borderSide: BorderSide(color: _primary, width: 2),
+                  borderSide: BorderSide(color: kPrimary, width: 2),
                 ),
                 contentPadding: Responsive.symmetric(horizontal: 16, vertical: 14),
               ),
@@ -377,9 +374,9 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
         width: Responsive.w(75),
         padding: Responsive.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? _primary : Colors.white,
+          color: isSelected ? kPrimary : Colors.white,
           borderRadius: BorderRadius.circular(Responsive.r(12)),
-          border: Border.all(color: isSelected ? _primary : Colors.grey[300]!),
+          border: Border.all(color: isSelected ? kPrimary : Colors.grey[300]!),
         ),
         child: Column(
           children: [

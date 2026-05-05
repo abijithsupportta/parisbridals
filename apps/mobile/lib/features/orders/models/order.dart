@@ -47,6 +47,7 @@ class OrderItem {
   final String orderId;
   final String productId;
   final String? productName;
+  final String? productImageUrl;
   final int quantity;
   final double pricePerDay;
   final double totalPrice;
@@ -64,6 +65,7 @@ class OrderItem {
     required this.orderId,
     required this.productId,
     this.productName,
+    this.productImageUrl,
     required this.quantity,
     required this.pricePerDay,
     required this.totalPrice,
@@ -83,6 +85,8 @@ class OrderItem {
       orderId: json['order_id'] as String,
       productId: json['product_id'] as String,
       productName: json['product_name'] as String?,
+      productImageUrl: (json['product_image_url'] as String?) ??
+          (json['primary_image_url'] as String?),
       quantity: json['quantity'] as int,
       pricePerDay: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,

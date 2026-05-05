@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../core/api_client.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/responsive.dart';
 import '../../models/order.dart';
 import '../order_detail_helpers.dart';
@@ -40,64 +40,6 @@ class OrderItemsSection extends StatefulWidget {
 }
 
 class _OrderItemsSectionState extends State<OrderItemsSection> {
-  // Product data cache
-  final Map<String, Map<String, dynamic>> _productCache = {};
-
-  Future<Map<String, dynamic>?> _fetchProductData(String productId) async {
-    if (_productCache.containsKey(productId)) {
-      return _productCache[productId];
-    }
-
-    try {
-      final response = await apiClient.get('/products/$productId');
-      if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true && data['data'] != null) {
-          final product = data['data'];
-          _productCache[productId] = product;
-          return product;
-        }
-      }
-    } catch (e) {
-      // Silently fail and return null
-    }
-    return null;
-  }
-
-  Future<String?> _fetchProductImage(String productId) async {
-    try {
-      final productData = await _fetchProductData(productId);
-      if (productData == null) return null;
-
-      String? imageUrl = productData['primary_image_url'] as String?;
-      if (imageUrl == null || imageUrl.isEmpty) {
-        imageUrl = productData['image_url'] as String?;
-      }
-      if (imageUrl == null || imageUrl.isEmpty) {
-        imageUrl =
-            productData['images'] != null && productData['images'].isNotEmpty
-            ? productData['images'][0]['url'] as String?
-            : null;
-      }
-
-      if (imageUrl != null && imageUrl.isNotEmpty) {
-        if (!imageUrl.startsWith('http')) {
-          imageUrl =
-              'https://via.placeholder.com/60x60/434343/FFFFFF?text=Jewel';
-        }
-        return imageUrl;
-      }
-    } catch (e) {
-      // Silently handle errors
-    }
-    return null;
-  }
-
-  Future<String?> _fetchProductName(String productId) async {
-    final productData = await _fetchProductData(productId);
-    return productData?['name'] as String?;
-  }
-
   void _markAllExcellent() {
     setState(() {
       for (var key in widget.returnItems.keys) {
@@ -185,40 +127,20 @@ class _OrderItemsSectionState extends State<OrderItemsSection> {
     );
   }
 
-  Widget _buildProductImage(String productId) {
-    return FutureBuilder(
-      future: _fetchProductImage(
-        productId,
-      ).timeout(const Duration(seconds: 5), onTimeout: () => null),
-      builder: (context, snapshot) {
-        if (snapshot.hasData &&
-            snapshot.data != null &&
-            snapshot.data!.isNotEmpty) {
-          return Image.network(
-            snapshot.data!,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              if (loadingProgress.expectedTotalBytes != null) {
-                final progress =
-                    loadingProgress.cumulativeBytesLoaded /
-                    loadingProgress.expectedTotalBytes!;
-                if (progress > 0.5) return child;
-              }
-              return _buildLoadingIndicator();
-            },
-          );
-        } else if (snapshot.hasError ||
-            snapshot.connectionState == ConnectionState.waiting) {
-          return _buildImagePlaceholder();
-        } else {
-          return _buildImagePlaceholder();
-        }
-      },
-    );
+  Widget _buildProductImage(OrderItem item) {
+    final imageUrl = item.productImageUrl;
+
+    if (imageUrl != null && imageUrl.isNotEmpty && imageUrl.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (context, url) => _buildImagePlaceholder(),
+        errorWidget: (context, url, error) => _buildImagePlaceholder(),
+      );
+    }
+    return _buildImagePlaceholder();
   }
 
   Widget _buildImagePlaceholder() {
@@ -231,21 +153,6 @@ class _OrderItemsSectionState extends State<OrderItemsSection> {
         Icons.diamond_outlined,
         size: Responsive.icon(24),
         color: Colors.grey[400],
-      ),
-    );
-  }
-
-  Widget _buildLoadingIndicator() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-      ),
-      child: Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
-        ),
       ),
     );
   }
@@ -280,7 +187,7 @@ class _OrderItemsSectionState extends State<OrderItemsSection> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(Responsive.r(10)),
-                  child: _buildProductImage(item.productId),
+                  child: _buildProductImage(item),
                 ),
               ),
               SizedBox(width: Responsive.w(12)),
@@ -288,26 +195,15 @@ class _OrderItemsSectionState extends State<OrderItemsSection> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FutureBuilder<String?>(
-                      future: item.productName != null
-                          ? Future.value(item.productName)
-                          : _fetchProductName(item.productId),
-                      builder: (context, snapshot) {
-                        final displayName =
-                            snapshot.data ??
-                            item.productName ??
-                            'Product #${item.productId.substring(0, 8)}';
-                        return Text(
-                          displayName,
-                          style: TextStyle(
-                            fontSize: Responsive.sp(14),
-                            fontWeight: FontWeight.w700,
-                            color: kPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        );
-                      },
+                    Text(
+                      item.productName ?? 'Product #${item.productId.substring(0, 8)}',
+                      style: TextStyle(
+                        fontSize: Responsive.sp(14),
+                        fontWeight: FontWeight.w700,
+                        color: kPrimary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: Responsive.h(4)),
                     Text(

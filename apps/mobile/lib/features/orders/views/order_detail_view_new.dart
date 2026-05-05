@@ -71,7 +71,51 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           foregroundColor: Colors.white,
           title: const Text('Order Details'),
         ),
-        body: Center(child: Text('Error: $error')),
+        body: Center(
+          child: Padding(
+            padding: Responsive.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded,
+                    color: const Color(0xFFFF6B8A),
+                    size: Responsive.icon(36)),
+                SizedBox(height: Responsive.h(12)),
+                Text(
+                  'Failed to Load Order',
+                  style: TextStyle(
+                      fontSize: Responsive.sp(15),
+                      fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: Responsive.h(6)),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: Responsive.sp(12),
+                      color: Colors.grey[600]),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: Responsive.h(16)),
+                ElevatedButton.icon(
+                  onPressed: () =>
+                      ref.invalidate(orderByIdProvider(widget.orderId)),
+                  icon: Icon(Icons.refresh_rounded,
+                      size: Responsive.icon(18)),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(Responsive.r(10))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -149,7 +193,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   // ── Business actions (delegate to server via repository) ─────────────
 
   Future<void> _startRental() async {
-    if (_cachedOrder!.items == null || _cachedOrder!.items!.isEmpty) {
+    final order = _cachedOrder;
+    if (order == null) return;
+    if (order.items == null || order.items!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No items in this order'),
@@ -165,7 +211,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final repo = ref.read(orderRepositoryProvider);
       final today = DateTime.now().toIso8601String().split('T')[0];
       final availResult = await repo.checkStockAvailability(
-        items: _cachedOrder!.items!
+        items: order.items!
             .map(
               (item) => <String, dynamic>{
                 'product_id': item.productId,
@@ -174,9 +220,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
             )
             .toList(),
         startDate: today,
-        endDate: _cachedOrder!.endDate,
-        branchId: _cachedOrder!.branchId,
-        excludeOrderId: _cachedOrder!.id,
+        endDate: order.endDate,
+        branchId: order.branchId,
+        excludeOrderId: order.id,
       );
 
       if (!mounted) return;
@@ -194,7 +240,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         return;
       }
 
-      await repo.startRental(_cachedOrder!.id);
+      await repo.startRental(order.id);
       if (mounted) {
         invalidateOrdersCache();
         ref.invalidate(ordersProvider);
@@ -307,6 +353,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   }
 
   Future<void> _cancelOrder() async {
+    final order = _cachedOrder;
+    if (order == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -335,7 +383,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     setState(() => _isProcessing = true);
     try {
       final repo = ref.read(orderRepositoryProvider);
-      await repo.cancelOrder(_cachedOrder!.id);
+      await repo.cancelOrder(order.id);
       if (mounted) {
         invalidateOrdersCache();
         ref.invalidate(ordersProvider);

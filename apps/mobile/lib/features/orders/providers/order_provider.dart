@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../branches/providers/branch_provider.dart';
 import '../models/order.dart';
+import '../models/paginated_orders.dart';
 import '../repositories/order_repository.dart';
 
 // Orders cache for faster loading

@@ -1,26 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../../core/api_client.dart';
 import '../models/order.dart';
-
-class PaginatedOrders {
-  final List<Order> orders;
-  final int total;
-  final int page;
-  final int limit;
-  final int totalPages;
-  final bool hasNext;
-  final bool hasPrev;
-
-  PaginatedOrders({
-    required this.orders,
-    required this.total,
-    required this.page,
-    required this.limit,
-    required this.totalPages,
-    required this.hasNext,
-    required this.hasPrev,
-  });
-}
+import '../models/paginated_orders.dart';
 
 /// Repository layer for Orders.
 /// All HTTP calls go through here — providers never touch Dio directly.

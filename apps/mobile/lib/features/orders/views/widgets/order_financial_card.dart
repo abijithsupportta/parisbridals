@@ -6,7 +6,7 @@ import '../../models/order.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/payment_provider.dart';
 import '../order_detail_helpers.dart';
-import '../payment_recording_modal.dart' hide formatCurrency;
+import '../payment_recording_modal.dart';
 
 /// Financial receipt card showing breakdown, payment collection,
 /// deposit status, payment history, and status timeline.
