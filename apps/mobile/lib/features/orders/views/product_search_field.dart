@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../core/constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../products/models/product.dart';
@@ -25,7 +26,7 @@ class _ProductSearchFieldState extends ConsumerState<ProductSearchField> {
   String? _error;
   Timer? _debounce;
 
-  static const _primary = Color(0xFF434343);
+  static const _primary = AppColors.primary;
 
   @override
   void dispose() {
@@ -196,7 +197,7 @@ class _ProductSearchFieldState extends ConsumerState<ProductSearchField> {
                         style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.w600, color: _primary),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     SizedBox(height: Responsive.h(2)),
-                    Text('₹${p.pricePerDay.toStringAsFixed(0)}',
+                    Text('₹${p.rentalPrice.toStringAsFixed(0)}',
                         style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600])),
                   ],
                 ),

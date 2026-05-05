@@ -49,7 +49,7 @@ class OrderItem {
   final String? productName;
   final String? productImageUrl;
   final int quantity;
-  final double pricePerDay;
+  final double rentalPrice;
   final double totalPrice;
   final double subtotal;
   final ConditionRating? conditionRating;
@@ -67,7 +67,7 @@ class OrderItem {
     this.productName,
     this.productImageUrl,
     required this.quantity,
-    required this.pricePerDay,
+    required this.rentalPrice,
     required this.totalPrice,
     required this.subtotal,
     this.conditionRating,
@@ -88,7 +88,7 @@ class OrderItem {
       productImageUrl: (json['product_image_url'] as String?) ??
           (json['primary_image_url'] as String?),
       quantity: json['quantity'] as int,
-      pricePerDay: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
+      rentalPrice: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
       conditionRating: json['condition_rating'] != null
@@ -139,7 +139,7 @@ class OrderItem {
       'order_id': orderId,
       'product_id': productId,
       'quantity': quantity,
-      'price_per_day': pricePerDay,
+      'price_per_day': rentalPrice,
       'total_price': totalPrice,
       'subtotal': subtotal,
       'condition_rating': _conditionRatingToString(),

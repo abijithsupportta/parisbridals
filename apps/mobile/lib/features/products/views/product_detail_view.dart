@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/responsive.dart';
@@ -19,8 +20,8 @@ class ProductDetailView extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
-  static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
+  static const _primary = AppColors.primary;
+  static const _accent = AppColors.accent;
 
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
@@ -210,7 +211,7 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
                         Expanded(
                           child: _buildPriceItem(
                               'Rent / Day',
-                              '₹${product.pricePerDay.toStringAsFixed(0)}',
+                              '₹${product.rentalPrice.toStringAsFixed(0)}',
                               _accent),
                         ),
                         SizedBox(width: Responsive.w(12)),

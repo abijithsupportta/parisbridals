@@ -28,7 +28,7 @@ class CartItem {
     this.availableQty,
   });
 
-  double get lineTotal => product.pricePerDay * quantity;
+  double get lineTotal => product.rentalPrice * quantity;
 }
 
 /// 4-step Create Order flow.
@@ -227,7 +227,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
             (c) => <String, dynamic>{
               'product_id': c.product.id,
               'quantity': c.quantity,
-              'price_per_day': c.product.pricePerDay,
+              'price_per_day': c.product.rentalPrice,
             },
           )
           .toList(),

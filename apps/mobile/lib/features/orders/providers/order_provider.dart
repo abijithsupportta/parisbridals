@@ -1,53 +1,16 @@
+/// Order providers — state management for order lists and single-order views.
+///
+/// Uses Riverpod's built-in caching via `ref.keepAlive()` and
+/// `ref.invalidateSelf()` for cache control. No manual cache layer.
+///
+/// @module features/orders/providers/order_provider
+library;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../branches/providers/branch_provider.dart';
 import '../models/order.dart';
 import '../models/paginated_orders.dart';
 import '../repositories/order_repository.dart';
-
-// Orders cache for faster loading
-class OrdersCache {
-  PaginatedOrders? _data;
-  DateTime? _timestamp;
-  String? _branchId;
-  String? _search;
-  String? _status;
-  final Duration _ttl = const Duration(minutes: 1);
-
-  bool isValid(String? branchId, String? search, String? status) {
-    if (_data == null || _timestamp == null) return false;
-    if (DateTime.now().difference(_timestamp!) > _ttl) return false;
-    if (_branchId != branchId) return false;
-    if (_search != search) return false;
-    if (_status != status) return false;
-    return true;
-  }
-
-  void set(
-    PaginatedOrders orders,
-    String? branchId,
-    String? search,
-    String? status,
-  ) {
-    _data = orders;
-    _timestamp = DateTime.now();
-    _branchId = branchId;
-    _search = search;
-    _status = status;
-  }
-
-  PaginatedOrders? get data => _data;
-
-  void invalidate() {
-    _data = null;
-    _timestamp = null;
-  }
-}
-
-final ordersCache = OrdersCache();
-
-void invalidateOrdersCache() {
-  ordersCache.invalidate();
-}
 
 // Repository provider
 final orderRepositoryProvider = Provider<OrderRepository>((ref) {
@@ -55,6 +18,10 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
 });
 
 /// Main orders provider with pagination, search, status filter, and branch.
+///
+/// Riverpod's `ref.keepAlive()` handles caching. When data must be refreshed
+/// (e.g. after create/update/delete), `ref.invalidateSelf()` clears the cache
+/// and triggers a fresh build. No manual `OrdersCache` needed.
 class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   int _currentPage = 1;
   bool _isLoadingMore = false;
@@ -70,11 +37,6 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
     final repo = ref.watch(orderRepositoryProvider);
     final query = _currentSearch.isNotEmpty ? _currentSearch : null;
 
-    if (ordersCache.isValid(_currentBranchId, query, _currentStatus) &&
-        ordersCache.data != null) {
-      return ordersCache.data!;
-    }
-
     final data = await repo.getOrders(
       page: _currentPage,
       limit: 50,
@@ -82,14 +44,12 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
       status: _currentStatus,
       branchId: _currentBranchId,
     );
-    ordersCache.set(data, _currentBranchId, query, _currentStatus);
     return data;
   }
 
   Future<void> search(String query) async {
     _currentSearch = query;
     _currentPage = 1;
-    invalidateOrdersCache();
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(orderRepositoryProvider);
@@ -101,7 +61,6 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
         status: _currentStatus,
         branchId: _currentBranchId,
       );
-      ordersCache.set(data, _currentBranchId, normalizedQuery, _currentStatus);
       return data;
     });
   }
@@ -109,7 +68,6 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   Future<void> filterByStatus(String? status) async {
     _currentStatus = status;
     _currentPage = 1;
-    invalidateOrdersCache();
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(orderRepositoryProvider);
@@ -121,7 +79,6 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
         status: _currentStatus,
         branchId: _currentBranchId,
       );
-      ordersCache.set(data, _currentBranchId, query, _currentStatus);
       return data;
     });
   }
@@ -152,7 +109,6 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
         hasNext: next.hasNext,
         hasPrev: next.hasPrev,
       );
-      ordersCache.set(merged, _currentBranchId, query, _currentStatus);
       state = AsyncValue.data(merged);
     } finally {
       _isLoadingMore = false;
@@ -162,21 +118,18 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   Future<void> createOrder(Map<String, dynamic> body) async {
     final repo = ref.read(orderRepositoryProvider);
     await repo.createOrder(body);
-    invalidateOrdersCache();
     ref.invalidateSelf();
   }
 
   Future<void> updateOrder(String id, Map<String, dynamic> body) async {
     final repo = ref.read(orderRepositoryProvider);
     await repo.updateOrder(id, body);
-    invalidateOrdersCache();
     ref.invalidateSelf();
   }
 
   Future<void> deleteOrder(String id) async {
     final repo = ref.read(orderRepositoryProvider);
     await repo.deleteOrder(id);
-    invalidateOrdersCache();
     if (state.hasValue) {
       final current = state.value!;
       state = AsyncValue.data(

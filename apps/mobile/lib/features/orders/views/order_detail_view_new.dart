@@ -242,8 +242,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
       await repo.startRental(order.id);
       if (mounted) {
-        invalidateOrdersCache();
-        ref.invalidate(ordersProvider);
+                ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Rental started!'),
@@ -385,8 +384,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final repo = ref.read(orderRepositoryProvider);
       await repo.cancelOrder(order.id);
       if (mounted) {
-        invalidateOrdersCache();
-        ref.invalidate(ordersProvider);
+                ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order cancelled'),
@@ -440,7 +438,6 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     try {
       final repo = ref.read(orderRepositoryProvider);
       await repo.markDepositReturned(order.id);
-      invalidateOrdersCache();
       ref.invalidate(orderByIdProvider(widget.orderId));
       ref.invalidate(ordersProvider);
       if (mounted) {
@@ -501,8 +498,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         if (_discount > 0) 'discount': _discount,
       });
       if (mounted) {
-        invalidateOrdersCache();
-        ref.invalidate(ordersProvider);
+                ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Return processed successfully'),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/constants.dart';
 import '../../../../core/enums.dart';
 import '../../../../core/responsive.dart';
 import 'create_order_view.dart';
@@ -40,11 +41,15 @@ class StepPayment extends StatelessWidget {
     required this.onAdvancePaymentMethodChanged,
   });
 
-  static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
+  static const _primary = AppColors.primary;
+  static const _accent = AppColors.accent;
 
-  double get _total => subtotal + (collectDeposit ? securityDeposit : 0);
-  double get _balanceDue => _total - (collectAdvance ? advanceAmount : 0);
+  /// NOTE: These are CLIENT-SIDE ESTIMATES for display only.
+  /// The server computes the authoritative totals when the order is created.
+  /// See: POST /api/orders — the server recalculates subtotal, tax, and
+  /// total from the product prices and quantities in the payload.
+  double get _estimatedTotal => subtotal + (collectDeposit ? securityDeposit : 0);
+  double get _estimatedBalance => _estimatedTotal - (collectAdvance ? advanceAmount : 0);
 
   @override
   Widget build(BuildContext context) {
@@ -537,8 +542,8 @@ class StepPayment extends StatelessWidget {
           ],
           Divider(height: Responsive.h(16), color: Colors.white24),
           _summaryRowWhite(
-            'Total',
-            '₹${_total.toStringAsFixed(0)}',
+            'Estimated Total',
+            '₹${_estimatedTotal.toStringAsFixed(0)}',
             isBold: true,
           ),
           if (collectAdvance && advanceAmount > 0) ...[
@@ -550,8 +555,8 @@ class StepPayment extends StatelessWidget {
             ),
             SizedBox(height: Responsive.h(6)),
             _summaryRowWhite(
-              'Balance Due',
-              '₹${_balanceDue.toStringAsFixed(0)}',
+              'Estimated Balance',
+              '₹${_estimatedBalance.toStringAsFixed(0)}',
               isBold: true,
               color: _accent,
             ),

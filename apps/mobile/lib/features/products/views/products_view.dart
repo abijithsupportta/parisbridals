@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../../core/constants.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../branches/providers/branch_provider.dart';
@@ -22,9 +23,9 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
   final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
 
-  static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
-  static const _bg = Color(0xFFF8F8F8);
+  static const _primary = AppColors.primary;
+  static const _accent = AppColors.accent;
+  static const _bg = AppColors.background;
 
   @override
   void initState() {
@@ -482,7 +483,7 @@ class _ProductsViewState extends ConsumerState<ProductsView> {
                               fit: BoxFit.scaleDown,
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                '₹${product.pricePerDay.toStringAsFixed(0)}',
+                                '₹${product.rentalPrice.toStringAsFixed(0)}',
                                 style: TextStyle(
                                   fontSize: Responsive.sp(14),
                                   fontWeight: FontWeight.w800,

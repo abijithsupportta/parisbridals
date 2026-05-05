@@ -249,7 +249,7 @@ class _StepProductsState extends State<StepProducts> {
                     SizedBox(height: Responsive.h(2)),
                     Row(
                       children: [
-                        Text('₹${item.product.pricePerDay.toStringAsFixed(0)}', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600])),
+                        Text('₹${item.product.rentalPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: Responsive.sp(11), color: Colors.grey[600])),
                         SizedBox(width: Responsive.w(6)),
                         Container(
                           padding: Responsive.symmetric(horizontal: 5, vertical: 1),

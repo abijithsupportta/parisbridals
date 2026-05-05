@@ -207,7 +207,7 @@ class _OrderItemsSectionState extends State<OrderItemsSection> {
                     ),
                     SizedBox(height: Responsive.h(4)),
                     Text(
-                      'Qty: ${item.quantity} • Rent Price: ${formatCurrency(item.pricePerDay)}',
+                      'Qty: ${item.quantity} • Rent Price: ${formatCurrency(item.rentalPrice)}',
                       style: TextStyle(
                         fontSize: Responsive.sp(12),
                         color: Colors.grey[600],

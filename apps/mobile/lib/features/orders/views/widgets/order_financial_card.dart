@@ -347,7 +347,6 @@ class OrderFinancialCard extends ConsumerWidget {
               amountDue: amountDue(order),
               onSuccess: () {
                 Navigator.pop(context);
-                invalidateOrdersCache();
                 ref.invalidate(ordersProvider);
                 ref.invalidate(orderByIdProvider(orderId));
                 ref.invalidate(orderPaymentsProvider(orderId));

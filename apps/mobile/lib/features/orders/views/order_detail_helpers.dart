@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants.dart';
+import '../../../utils/currency_formatter.dart';
 import '../models/order.dart';
 
 /// Shared constants and helper functions for order detail widgets.
@@ -6,15 +8,18 @@ import '../models/order.dart';
 /// Centralizes colors, status helpers, and currency formatting so that
 /// extracted widgets remain consistent without duplicating logic.
 
-/// Primary charcoal color used across order detail screens.
-const Color kPrimary = Color(0xFF434343);
+/// Primary charcoal color — sourced from the canonical [AppColors.primary].
+const Color kPrimary = AppColors.primary;
 
-/// Background color for the order detail screen.
-const Color kBg = Color(0xFFF8F8F8);
+/// Background color — sourced from the canonical [AppColors.background].
+const Color kBg = AppColors.background;
 
-/// Format a double amount as Indian Rupees (no decimals).
+/// Format a double amount as Indian Rupees using proper locale formatting.
+///
+/// Delegates to [CurrencyFormatter.formatINR] for consistent comma grouping
+/// across the entire app (e.g. ₹1,50,000 instead of ₹150000).
 String formatCurrency(double amount) {
-  return '₹${amount.toStringAsFixed(0)}';
+  return CurrencyFormatter.formatINR(amount);
 }
 
 /// Calculate the amount still due on an order.

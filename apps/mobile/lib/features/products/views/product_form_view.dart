@@ -462,7 +462,7 @@ class _ProductFormViewState extends ConsumerState<ProductFormView> {
   void _populateFields(Product p) {
     _nameCtl.text = p.name;
     _descCtl.text = p.description ?? '';
-    _priceCtl.text = p.pricePerDay > 0 ? p.pricePerDay.toStringAsFixed(0) : '';
+    _priceCtl.text = p.rentalPrice > 0 ? p.rentalPrice.toStringAsFixed(0) : '';
     // Populate branch stocks from existing inventory
     _branchStocks.clear();
     for (final inv in p.branchInventory) {
