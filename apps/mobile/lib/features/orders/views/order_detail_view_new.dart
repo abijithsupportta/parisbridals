@@ -242,14 +242,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
       await repo.startRental(order.id);
       if (mounted) {
-                ref.invalidate(ordersProvider);
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Rental started!'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -384,14 +384,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final repo = ref.read(orderRepositoryProvider);
       await repo.cancelOrder(order.id);
       if (mounted) {
-                ref.invalidate(ordersProvider);
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Order cancelled'),
             backgroundColor: Colors.orange,
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -498,14 +498,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         if (_discount > 0) 'discount': _discount,
       });
       if (mounted) {
-                ref.invalidate(ordersProvider);
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Return processed successfully'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
