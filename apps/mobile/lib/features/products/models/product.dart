@@ -34,7 +34,7 @@ class BranchInventory {
       id: json['id'] as String? ?? '',
       productId: json['product_id'] as String? ?? '',
       branchId: json['branch_id'] as String? ?? '',
-      stockCount: json['stock_count'] as int? ?? json['quantity'] as int? ?? 0,
+      stockCount: json['available_quantity'] as int? ?? json['stock_count'] as int? ?? json['quantity'] as int? ?? 0,
       branchName: branchName,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String? ?? '',
@@ -137,7 +137,7 @@ class Product {
   final String? description;
   final String? sku;
   final String? barcode;
-  final double pricePerDay;
+  final double rentalPrice;
   final double securityDeposit;
 
   // Inventory
@@ -189,7 +189,7 @@ class Product {
     this.description,
     this.sku,
     this.barcode,
-    required this.pricePerDay,
+    required this.rentalPrice,
     this.securityDeposit = 0,
     required this.quantity,
     required this.availableQuantity,
@@ -243,7 +243,7 @@ class Product {
       description: json['description'] as String?,
       sku: json['sku'] as String?,
       barcode: json['barcode'] as String?,
-      pricePerDay: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
+      rentalPrice: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       securityDeposit: (json['security_deposit'] as num?)?.toDouble() ?? 0.0,
       quantity: json['quantity'] as int? ?? 0,
       availableQuantity: json['available_quantity'] as int? ?? 0,
@@ -303,7 +303,7 @@ class Product {
       'description': description,
       'sku': sku,
       'barcode': barcode,
-      'price_per_day': pricePerDay,
+      'price_per_day': rentalPrice,
       'security_deposit': securityDeposit,
       'quantity': quantity,
       'available_quantity': availableQuantity,

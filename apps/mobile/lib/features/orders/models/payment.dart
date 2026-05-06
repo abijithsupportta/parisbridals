@@ -1,3 +1,44 @@
+/// Payment domain models for Paris Bridals mobile app.
+///
+/// Contains Payment and CreatePaymentDTO classes with enums for payment types
+/// (deposit, advance, final, refund) and payment modes (cash, UPI, card, etc.).
+///
+/// @module features/orders/models/payment
+library;
+
+/// Helper methods for payment type and mode conversions
+class PaymentHelpers {
+  static String paymentTypeToString(PaymentType type) {
+    switch (type) {
+      case PaymentType.deposit:
+        return 'deposit';
+      case PaymentType.advance:
+        return 'advance';
+      case PaymentType.final_:
+        return 'final';
+      case PaymentType.refund:
+        return 'refund';
+      case PaymentType.adjustment:
+        return 'adjustment';
+    }
+  }
+
+  static String paymentModeToString(PaymentMode mode) {
+    switch (mode) {
+      case PaymentMode.cash:
+        return 'cash';
+      case PaymentMode.upi:
+        return 'upi';
+      case PaymentMode.card:
+        return 'card';
+      case PaymentMode.bankTransfer:
+        return 'bank_transfer';
+      case PaymentMode.cheque:
+        return 'cheque';
+    }
+  }
+}
+
 enum PaymentType {
   deposit,
   advance,
@@ -43,16 +84,16 @@ class Payment {
 
   factory Payment.fromJson(Map<String, dynamic> json) {
     return Payment(
-      id: json['id'] as String,
-      orderId: json['order_id'] as String,
+      id: json['id'] as String? ?? '',
+      orderId: json['order_id'] as String? ?? '',
       paymentType: _parsePaymentType(json['payment_type'] as String),
-      amount: (json['amount'] as num).toDouble(),
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       paymentMode: _parsePaymentMode(json['payment_mode'] as String),
       transactionId: json['transaction_id'] as String?,
-      paymentDate: json['payment_date'] as String,
+      paymentDate: json['payment_date'] as String? ?? '',
       notes: json['notes'] as String?,
       createdBy: json['created_by'] as String?,
-      createdAt: json['created_at'] as String,
+      createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
     );
   }
@@ -95,9 +136,9 @@ class Payment {
     return {
       'id': id,
       'order_id': orderId,
-      'payment_type': _paymentTypeToString(paymentType),
+      'payment_type': PaymentHelpers.paymentTypeToString(paymentType),
       'amount': amount,
-      'payment_mode': _paymentModeToString(paymentMode),
+      'payment_mode': PaymentHelpers.paymentModeToString(paymentMode),
       'transaction_id': transactionId,
       'payment_date': paymentDate,
       'notes': notes,
@@ -105,36 +146,6 @@ class Payment {
       'created_at': createdAt,
       'updated_at': updatedAt,
     };
-  }
-
-  String _paymentTypeToString(PaymentType type) {
-    switch (type) {
-      case PaymentType.deposit:
-        return 'deposit';
-      case PaymentType.advance:
-        return 'advance';
-      case PaymentType.final_:
-        return 'final';
-      case PaymentType.refund:
-        return 'refund';
-      case PaymentType.adjustment:
-        return 'adjustment';
-    }
-  }
-
-  String _paymentModeToString(PaymentMode mode) {
-    switch (mode) {
-      case PaymentMode.cash:
-        return 'cash';
-      case PaymentMode.upi:
-        return 'upi';
-      case PaymentMode.card:
-        return 'card';
-      case PaymentMode.bankTransfer:
-        return 'bank_transfer';
-      case PaymentMode.cheque:
-        return 'cheque';
-    }
   }
 }
 
@@ -158,41 +169,11 @@ class CreatePaymentDTO {
   Map<String, dynamic> toJson() {
     return {
       'order_id': orderId,
-      'payment_type': _paymentTypeToString(paymentType),
+      'payment_type': PaymentHelpers.paymentTypeToString(paymentType),
       'amount': amount,
-      'payment_mode': _paymentModeToString(paymentMode),
+      'payment_mode': PaymentHelpers.paymentModeToString(paymentMode),
       'transaction_id': transactionId,
       'notes': notes,
     };
-  }
-
-  String _paymentTypeToString(PaymentType type) {
-    switch (type) {
-      case PaymentType.deposit:
-        return 'deposit';
-      case PaymentType.advance:
-        return 'advance';
-      case PaymentType.final_:
-        return 'final';
-      case PaymentType.refund:
-        return 'refund';
-      case PaymentType.adjustment:
-        return 'adjustment';
-    }
-  }
-
-  String _paymentModeToString(PaymentMode mode) {
-    switch (mode) {
-      case PaymentMode.cash:
-        return 'cash';
-      case PaymentMode.upi:
-        return 'upi';
-      case PaymentMode.card:
-        return 'card';
-      case PaymentMode.bankTransfer:
-        return 'bank_transfer';
-      case PaymentMode.cheque:
-        return 'cheque';
-    }
   }
 }

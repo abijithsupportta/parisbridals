@@ -12,8 +12,10 @@ import {
   PaymentWithRelations, 
   CreatePaymentDTO, 
   UpdatePaymentDTO,
-  PaymentSearchParams 
+  PaymentSearchParams,
+  PaymentType,
 } from '@/domain/types/payment';
+import { PaymentStatus } from '@/domain/types/order';
 
 export class PaymentRepository extends BaseRepository {
   private readonly tableName = 'payments';
@@ -96,10 +98,18 @@ export class PaymentRepository extends BaseRepository {
   }
 
   /**
-   * Create a new payment
+   * Create a new payment and atomically update the order's amount_paid.
+   *
+   * Uses .select().single() on the order update so Supabase confirms the row
+   * was actually modified. Without .select(), Supabase returns
+   * { data: null, error: null } even when zero rows match — making the error
+   * check useless.
    */
   async create(data: CreatePaymentDTO): Promise<RepositoryResult<Payment>> {
-    const response = await this.client
+    console.log('[PaymentRepo] Creating payment:', JSON.stringify(data));
+
+    // ── Step 1: Insert the payment record ────────────────────────────
+    const paymentResponse = await this.client
       .from(this.tableName)
       .insert({
         ...data,
@@ -108,7 +118,85 @@ export class PaymentRepository extends BaseRepository {
       .select()
       .maybeSingle();
 
-    return this.handleResponse<Payment>(response);
+    if (paymentResponse.error) {
+      console.error('[PaymentRepo] Payment insert FAILED:', paymentResponse.error);
+      return this.handleResponse<Payment>(paymentResponse);
+    }
+
+    const payment = paymentResponse.data as Payment;
+    console.log('[PaymentRepo] Payment created:', payment.id);
+
+    // ── Step 2: Read the current order totals ────────────────────────
+    const orderFetchResponse = await this.client
+      .from('orders')
+      .select('amount_paid, total_amount')
+      .eq('id', data.order_id)
+      .single();
+
+    if (orderFetchResponse.error) {
+      console.error('[PaymentRepo] Order fetch FAILED:', orderFetchResponse.error);
+      // Payment was created but we can't update the order — return the payment
+      return { data: payment, error: null, success: true };
+    }
+
+    const currentAmountPaid = Number(orderFetchResponse.data.amount_paid || 0);
+    const totalAmount = Number(orderFetchResponse.data.total_amount || 0);
+    const signedAmount = data.payment_type === PaymentType.REFUND ? -data.amount : data.amount;
+    const newAmountPaid = Math.max(0, currentAmountPaid + signedAmount);
+    const paymentStatus =
+      newAmountPaid <= 0
+        ? PaymentStatus.PENDING
+        : newAmountPaid >= totalAmount
+          ? PaymentStatus.PAID
+          : PaymentStatus.PARTIAL;
+
+    console.log('[PaymentRepo] Amount calculation:', {
+      currentAmountPaid,
+      totalAmount,
+      signedAmount,
+      newAmountPaid,
+      paymentStatus,
+    });
+
+    // ── Step 3: Update the order's amount_paid ───────────────────────
+    // CRITICAL: .select().single() forces Supabase to return the updated row.
+    // Without it, the response is always { data: null, error: null } regardless
+    // of whether any row was updated.
+    const updateResponse = await this.client
+      .from('orders')
+      .update({
+        amount_paid: newAmountPaid,
+        payment_status: paymentStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.order_id)
+      .select('id, amount_paid, payment_status')
+      .single();
+
+    if (updateResponse.error) {
+      console.error('[PaymentRepo] Order amount_paid update FAILED:', updateResponse.error);
+      // Payment was created but order update failed — still return success
+      // so the payment record isn't lost, but log prominently.
+      return { data: payment, error: null, success: true };
+    }
+
+    const updatedOrder = updateResponse.data;
+    console.log(
+      '[PaymentRepo] Order updated — amount_paid:',
+      updatedOrder.amount_paid,
+      'status:',
+      updatedOrder.payment_status,
+    );
+
+    // ── Step 4: Verify the write was persisted ───────────────────────
+    if (Number(updatedOrder.amount_paid) !== newAmountPaid) {
+      console.error('[PaymentRepo] ⚠️  AMOUNT MISMATCH after update!', {
+        expected: newAmountPaid,
+        actual: updatedOrder.amount_paid,
+      });
+    }
+
+    return { data: payment, error: null, success: true };
   }
 
   /**

@@ -1,78 +1,167 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
-import 'payment_recording_modal.dart';
+import 'order_detail_helpers.dart';
+import 'widgets/order_action_buttons.dart';
+import 'widgets/order_customer_card.dart';
+import 'widgets/order_financial_card.dart';
+import 'widgets/order_hero_banner.dart';
+import 'widgets/order_items_section.dart';
+import 'widgets/order_logistics_bar.dart';
 
-String formatCurrency(double amount) {
-  return '₹${amount.toStringAsFixed(0)}';
-}
-
-/// Comprehensive Order Detail View matching admin functionality
+/// Comprehensive Order Detail View matching admin functionality.
+///
+/// Composes extracted widgets:
+///  - [OrderHeroBanner] — customer name, status badge, due/paid indicator
+///  - [OrderActionButtons] — start rental / cancel buttons
+///  - [OrderLogisticsBar] — OUT / IN dates and item count
+///  - [OrderItemsSection] — product list with return inspection controls
+///  - [OrderCustomerCard] — customer info with tap-to-call
+///  - [OrderFinancialCard] — financial breakdown, payment history, timeline
 class OrderDetailViewNew extends ConsumerStatefulWidget {
-  final Order order;
+  final String orderId;
 
-  const OrderDetailViewNew({super.key, required this.order});
+  const OrderDetailViewNew({super.key, required this.orderId});
 
   @override
   ConsumerState<OrderDetailViewNew> createState() => _OrderDetailViewNewState();
 }
 
 class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
-  static const _primary = Color(0xFF434343);
-  static const _bg = Color(0xFFF8F8F8);
-
   // Return processing state
   final Map<String, ReturnItemState> _returnItems = {};
   double _lateFee = 0;
   double _discount = 0;
+  Order? _cachedOrder;
 
-  @override
-  void initState() {
-    super.initState();
-    _initializeReturnItems();
-  }
-
-  void _initializeReturnItems() {
-    if (_isReturnable && widget.order.items != null) {
-      for (var item in widget.order.items!) {
-        _returnItems[item.id] = ReturnItemState();
-      }
-    }
-  }
-
-  bool get _isReturnable {
-    return widget.order.status == OrderStatus.inUse ||
-        widget.order.status == OrderStatus.ongoing ||
-        widget.order.status == OrderStatus.lateReturn ||
-        widget.order.status == OrderStatus.partial;
-  }
-
-  double get _amountDue {
-    return (widget.order.totalAmount - widget.order.amountPaid).clamp(0, double.infinity);
-  }
+  // Processing flags
+  bool _isProcessing = false;
+  bool _isDepositProcessing = false;
 
   @override
   Widget build(BuildContext context) {
     Responsive.init(context);
     final canManage = ref.watch(canManageProvider);
+    final orderAsync = ref.watch(orderByIdProvider(widget.orderId));
 
+    return orderAsync.when(
+      data: (order) {
+        _cachedOrder = order;
+        if (_returnItems.isEmpty) {
+          _initializeReturnItems(order);
+        }
+        return _buildContent(order, canManage);
+      },
+      loading: () => Scaffold(
+        backgroundColor: kBg,
+        appBar: AppBar(
+          backgroundColor: kPrimary,
+          foregroundColor: Colors.white,
+          title: const Text('Order Details'),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Scaffold(
+        backgroundColor: kBg,
+        appBar: AppBar(
+          backgroundColor: kPrimary,
+          foregroundColor: Colors.white,
+          title: const Text('Order Details'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: Responsive.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline_rounded,
+                    color: const Color(0xFFFF6B8A),
+                    size: Responsive.icon(36)),
+                SizedBox(height: Responsive.h(12)),
+                Text(
+                  'Failed to Load Order',
+                  style: TextStyle(
+                      fontSize: Responsive.sp(15),
+                      fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: Responsive.h(6)),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: Responsive.sp(12),
+                      color: Colors.grey[600]),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: Responsive.h(16)),
+                ElevatedButton.icon(
+                  onPressed: () =>
+                      ref.invalidate(orderByIdProvider(widget.orderId)),
+                  icon: Icon(Icons.refresh_rounded,
+                      size: Responsive.icon(18)),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(Responsive.r(10))),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _initializeReturnItems(Order order) {
+    if (_returnItems.isNotEmpty) return;
+    if (isReturnable(order) && order.items != null) {
+      for (var item in order.items!) {
+        _returnItems[item.id] = ReturnItemState();
+      }
+    }
+  }
+
+  Widget _buildContent(Order order, bool canManage) {
     return Scaffold(
-      backgroundColor: _bg,
-      appBar: _buildAppBar(),
+      backgroundColor: kBg,
+      appBar: _buildAppBar(order),
       body: SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeroBanner(canManage),
-            if (canManage) _buildActionButtons(),
-            _buildLogisticsBar(),
-            _buildOrderItemsSection(),
-            _buildCustomerCard(),
-            _buildFinancialCard(),
+            OrderHeroBanner(order: order),
+            if (canManage)
+              OrderActionButtons(
+                order: order,
+                isProcessing: _isProcessing,
+                onStartRental: _startRental,
+                onCancelOrder: _cancelOrder,
+              ),
+            OrderLogisticsBar(order: order),
+            OrderItemsSection(
+              order: order,
+              returnItems: _returnItems,
+              onReturnSubmit: _submitReturn,
+              lateFee: _lateFee,
+              discount: _discount,
+              onLateFeeChanged: (v) => setState(() => _lateFee = v),
+              onDiscountChanged: (v) => setState(() => _discount = v),
+            ),
+            OrderCustomerCard(order: order),
+            OrderFinancialCard(
+              order: order,
+              orderId: widget.orderId,
+              canManage: canManage,
+              isDepositProcessing: _isDepositProcessing,
+              onMarkDepositReturned: _markDepositReturned,
+            ),
             SizedBox(height: Responsive.h(80)),
           ],
         ),
@@ -80,270 +169,60 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(Order order) {
     return AppBar(
-      backgroundColor: _primary,
+      backgroundColor: kPrimary,
       foregroundColor: Colors.white,
       elevation: 0,
       title: Text(
-        'Order #${widget.order.id.substring(0, 6).toUpperCase()}',
-        style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold),
+        'Order #${order.id.substring(0, 6).toUpperCase()}',
+        style: TextStyle(
+          fontSize: Responsive.sp(16),
+          fontWeight: FontWeight.bold,
+        ),
       ),
       actions: [
         IconButton(
           icon: Icon(Icons.refresh_rounded, size: Responsive.icon(24)),
-          onPressed: () => ref.invalidate(orderByIdProvider(widget.order.id)),
+          onPressed: () => ref.invalidate(orderByIdProvider(widget.orderId)),
         ),
       ],
     );
   }
 
-  String _formatDate(String dateStr) {
-    try {
-      return DateFormat('dd/MM/yyyy').format(DateTime.parse(dateStr));
-    } catch (_) {
-      return dateStr;
-    }
-  }
-
-  Color _getStatusColor(OrderStatus status) {
-    switch (status) {
-      case OrderStatus.confirmed:
-      case OrderStatus.scheduled:
-        return const Color(0xFF4A90D9);
-      case OrderStatus.ongoing:
-      case OrderStatus.inUse:
-        return const Color(0xFF2ECC71);
-      case OrderStatus.lateReturn:
-        return const Color(0xFFFF6B8A);
-      case OrderStatus.partial:
-        return const Color(0xFFF5A623);
-      case OrderStatus.returned:
-      case OrderStatus.completed:
-        return const Color(0xFF95A5A6);
-      case OrderStatus.flagged:
-        return const Color(0xFF9B59B6);
-      case OrderStatus.cancelled:
-        return const Color(0xFF7F8C8D);
-      default:
-        return _primary;
-    }
-  }
-
-  String _getStatusLabel(OrderStatus status) {
-    switch (status) {
-      case OrderStatus.confirmed:
-      case OrderStatus.scheduled:
-        return 'Scheduled';
-      case OrderStatus.ongoing:
-      case OrderStatus.inUse:
-        return 'Ongoing';
-      case OrderStatus.lateReturn:
-        return 'Late';
-      case OrderStatus.partial:
-        return 'Partial';
-      case OrderStatus.returned:
-      case OrderStatus.completed:
-        return 'Returned';
-      case OrderStatus.flagged:
-        return 'Flagged';
-      case OrderStatus.cancelled:
-        return 'Cancelled';
-      default:
-        return status.name;
-    }
-  }
-
-  Widget _buildHeroBanner(bool canManage) {
-    final statusColor = _getStatusColor(widget.order.status);
-    final statusLabel = _getStatusLabel(widget.order.status);
-
-    return Container(
-      margin: Responsive.all(16),
-      padding: Responsive.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: Responsive.r(8),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.order.customer?.name ?? 'Unknown Customer',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(18),
-                        fontWeight: FontWeight.w900,
-                        color: _primary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: Responsive.h(4)),
-                    Text(
-                      widget.order.customer?.phone ?? '',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(13),
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: Responsive.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(Responsive.r(8)),
-                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  statusLabel.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: Responsive.sp(11),
-                    fontWeight: FontWeight.w900,
-                    color: statusColor,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: Responsive.h(12)),
-          if (_amountDue > 0)
-            Container(
-              padding: Responsive.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFEBEE),
-                borderRadius: BorderRadius.circular(Responsive.r(10)),
-                border: Border.all(color: const Color(0xFFFF6B8A)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.warning_rounded, size: Responsive.icon(16), color: const Color(0xFFFF6B8A)),
-                  SizedBox(width: Responsive.w(6)),
-                  Text(
-                    'DUE: ${formatCurrency(_amountDue)}',
-                    style: TextStyle(
-                      fontSize: Responsive.sp(14),
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFFFF6B8A),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Container(
-              padding: Responsive.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(Responsive.r(10)),
-                border: Border.all(color: const Color(0xFF2ECC71)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_rounded, size: Responsive.icon(16), color: const Color(0xFF2ECC71)),
-                  SizedBox(width: Responsive.w(6)),
-                  Text(
-                    'PAID',
-                    style: TextStyle(
-                      fontSize: Responsive.sp(14),
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF2ECC71),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-  Widget _buildActionButtons() {
-    final status = widget.order.status;
-    final isScheduled = status == OrderStatus.scheduled || status == OrderStatus.confirmed || status == OrderStatus.pending;
-    final isCancellable = status == OrderStatus.pending || status == OrderStatus.confirmed || status == OrderStatus.scheduled;
-
-    if (!isScheduled && !isCancellable) return const SizedBox.shrink();
-
-    return Padding(
-      padding: Responsive.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          if (isScheduled)
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: _isProcessing ? null : () => _startRental(),
-                icon: Icon(Icons.play_arrow_rounded, size: Responsive.icon(20)),
-                label: Text('Start Rental', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2ECC71),
-                  foregroundColor: Colors.white,
-                  padding: Responsive.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
-                ),
-              ),
-            ),
-          if (isScheduled && isCancellable) SizedBox(width: Responsive.w(10)),
-          if (isCancellable)
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _isProcessing ? null : () => _cancelOrder(),
-                icon: Icon(Icons.cancel_outlined, size: Responsive.icon(20)),
-                label: Text('Cancel', style: TextStyle(fontSize: Responsive.sp(13), fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.red[700],
-                  side: BorderSide(color: Colors.red[300]!),
-                  padding: Responsive.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  bool _isProcessing = false;
+  // ── Business actions (delegate to server via repository) ─────────────
 
   Future<void> _startRental() async {
-    if (widget.order.items == null || widget.order.items!.isEmpty) {
+    final order = _cachedOrder;
+    if (order == null) return;
+    if (order.items == null || order.items!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No items in this order'), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text('No items in this order'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
     setState(() => _isProcessing = true);
 
-    // Step 1: Check stock availability
     try {
       final repo = ref.read(orderRepositoryProvider);
       final today = DateTime.now().toIso8601String().split('T')[0];
       final availResult = await repo.checkStockAvailability(
-        items: widget.order.items!.map((item) => {
-          'product_id': item.productId,
-          'quantity': item.quantity,
-        }).toList(),
+        items: order.items!
+            .map(
+              (item) => <String, dynamic>{
+                'product_id': item.productId,
+                'quantity': item.quantity,
+              },
+            )
+            .toList(),
         startDate: today,
-        endDate: widget.order.endDate,
-        branchId: widget.order.branchId,
-        excludeOrderId: widget.order.id,
+        endDate: order.endDate,
+        branchId: order.branchId,
+        excludeOrderId: order.id,
       );
 
       if (!mounted) return;
@@ -351,79 +230,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final allAvailable = availResult['allAvailable'] == true;
       final items = (availResult['items'] as List?) ?? [];
 
-      // Step 2: Show stock check results
       final proceed = await showDialog<bool>(
         context: context,
-        builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(16))),
-          title: Row(
-            children: [
-              Icon(
-                allAvailable ? Icons.check_circle_rounded : Icons.warning_rounded,
-                color: allAvailable ? const Color(0xFF2ECC71) : const Color(0xFFFF6B8A),
-                size: Responsive.icon(24),
-              ),
-              SizedBox(width: Responsive.w(8)),
-              Text(
-                allAvailable ? 'Stock Available' : 'Stock Issue',
-                style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ...items.map((item) {
-                final isOk = item['isAvailable'] == true;
-                return Padding(
-                  padding: Responsive.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isOk ? Icons.check_circle : Icons.cancel,
-                        size: Responsive.icon(18),
-                        color: isOk ? const Color(0xFF2ECC71) : const Color(0xFFFF6B8A),
-                      ),
-                      SizedBox(width: Responsive.w(8)),
-                      Expanded(
-                        child: Text(
-                          '${item['product_name'] ?? 'Product'}: ${item['requested']} requested, ${item['available']} available',
-                          style: TextStyle(fontSize: Responsive.sp(13)),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              if (!allAvailable) ...[
-                SizedBox(height: Responsive.h(8)),
-                Text(
-                  'Some items are not available. Starting the rental may cause conflicts.',
-                  style: TextStyle(fontSize: Responsive.sp(12), color: Colors.red[700]),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: allAvailable ? const Color(0xFF2ECC71) : const Color(0xFFF5A623),
-              ),
-              child: Text(
-                allAvailable ? 'Start Rental' : 'Start Anyway',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
+        builder: (_) => _buildAvailabilityDialog(allAvailable, items),
       );
 
       if (proceed != true || !mounted) {
@@ -431,12 +240,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         return;
       }
 
-      // Step 3: Actually start the rental
-      await repo.startRental(widget.order.id);
+      await repo.startRental(order.id);
       if (mounted) {
-        ref.invalidate(ordersProvider);
+                ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Rental started!'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Rental started!'),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pop(context);
       }
@@ -451,18 +262,117 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
   }
 
+  Widget _buildAvailabilityDialog(bool allAvailable, List items) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(Responsive.r(16)),
+      ),
+      title: Row(
+        children: [
+          Icon(
+            allAvailable
+                ? Icons.check_circle_rounded
+                : Icons.warning_rounded,
+            color: allAvailable
+                ? const Color(0xFF2ECC71)
+                : const Color(0xFFFF6B8A),
+            size: Responsive.icon(24),
+          ),
+          SizedBox(width: Responsive.w(8)),
+          Text(
+            allAvailable ? 'Stock Available' : 'Stock Issue',
+            style: TextStyle(
+              fontSize: Responsive.sp(16),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ...items.map((item) {
+            final isOk = item['isAvailable'] == true;
+            return Padding(
+              padding: Responsive.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    isOk ? Icons.check_circle : Icons.cancel,
+                    size: Responsive.icon(18),
+                    color: isOk
+                        ? const Color(0xFF2ECC71)
+                        : const Color(0xFFFF6B8A),
+                  ),
+                  SizedBox(width: Responsive.w(8)),
+                  Expanded(
+                    child: Text(
+                      '${item['product_name'] ?? 'Product'}: ${item['requested']} requested, ${item['available']} available',
+                      style: TextStyle(fontSize: Responsive.sp(13)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          if (!allAvailable) ...[
+            SizedBox(height: Responsive.h(8)),
+            Text(
+              'Some items are not available. Starting the rental may cause conflicts.',
+              style: TextStyle(
+                fontSize: Responsive.sp(12),
+                color: Colors.red[700],
+              ),
+            ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: allAvailable
+                ? const Color(0xFF2ECC71)
+                : const Color(0xFFF5A623),
+          ),
+          child: Text(
+            allAvailable ? 'Start Rental' : 'Start Anyway',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _cancelOrder() async {
+    final order = _cachedOrder;
+    if (order == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Cancel Order'),
-        content: const Text('Are you sure you want to cancel this order? This cannot be undone.'),
+        content: const Text(
+          'Are you sure you want to cancel this order? This cannot be undone.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Cancel Order', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Cancel Order',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -472,11 +382,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     setState(() => _isProcessing = true);
     try {
       final repo = ref.read(orderRepositoryProvider);
-      await repo.cancelOrder(widget.order.id);
+      await repo.cancelOrder(order.id);
       if (mounted) {
-        ref.invalidate(ordersProvider);
+                ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Order cancelled'), backgroundColor: Colors.orange),
+          const SnackBar(
+            content: Text('Order cancelled'),
+            backgroundColor: Colors.orange,
+          ),
         );
         Navigator.pop(context);
       }
@@ -491,428 +404,86 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
   }
 
-  Widget _buildLogisticsBar() {
-    final isLate = widget.order.status == OrderStatus.lateReturn;
+  Future<void> _markDepositReturned() async {
+    final order = _cachedOrder;
+    if (order == null) return;
 
-    return Padding(
-      padding: Responsive.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildLogisticsCard(
-              'OUT',
-              _formatDate(widget.order.startDate),
-              Colors.blue[50]!,
-              Colors.blue[700]!,
-            ),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Return Deposit'),
+        content: const Text(
+          'Mark security deposit as returned for this order?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
           ),
-          SizedBox(width: Responsive.w(12)),
-          Expanded(
-            child: _buildLogisticsCard(
-              'IN',
-              _formatDate(widget.order.endDate),
-              isLate ? Colors.red[50]! : Colors.green[50]!,
-              isLate ? Colors.red[700]! : Colors.green[700]!,
-              isLate: isLate,
-            ),
-          ),
-          SizedBox(width: Responsive.w(12)),
-          Expanded(
-            child: _buildLogisticsCard(
-              'ITEMS',
-              '${widget.order.items?.length ?? 0}',
-              Colors.grey[100]!,
-              _primary,
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text(
+              'Yes, Return',
+              style: TextStyle(color: Colors.white),
             ),
           ),
         ],
       ),
     );
-  }
 
-  Widget _buildLogisticsCard(String label, String value, Color bgColor, Color textColor, {bool isLate = false}) {
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(Responsive.r(12)),
-        border: Border.all(color: isLate ? Colors.red[300]! : Colors.transparent),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: Responsive.sp(10),
-              fontWeight: FontWeight.w800,
-              color: textColor.withValues(alpha: 0.7),
-              letterSpacing: 1,
-            ),
-          ),
-          SizedBox(height: Responsive.h(4)),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: Responsive.sp(14),
-                fontWeight: FontWeight.w900,
-                color: textColor,
-              ),
-              maxLines: 1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    if (confirmed != true || !mounted) return;
 
-  Widget _buildOrderItemsSection() {
-    if (widget.order.items == null || widget.order.items!.isEmpty) {
-      return const SizedBox.shrink();
+    setState(() => _isDepositProcessing = true);
+    try {
+      final repo = ref.read(orderRepositoryProvider);
+      await repo.markDepositReturned(order.id);
+      ref.invalidate(orderByIdProvider(widget.orderId));
+      ref.invalidate(ordersProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Deposit marked as returned'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDepositProcessing = false);
     }
-
-    return Container(
-      margin: Responsive.only(left: 16, right: 16, top: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: Responsive.r(8),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: Responsive.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'ORDER ITEMS',
-                  style: TextStyle(
-                    fontSize: Responsive.sp(12),
-                    fontWeight: FontWeight.w900,
-                    color: _primary,
-                    letterSpacing: 1,
-                  ),
-                ),
-                if (_isReturnable)
-                  TextButton.icon(
-                    onPressed: _markAllExcellent,
-                    icon: Icon(Icons.check_circle_rounded, size: Responsive.icon(16), color: const Color(0xFF2ECC71)),
-                    label: Text(
-                      'Mark All Good',
-                      style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.bold),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF2ECC71),
-                      padding: Responsive.symmetric(horizontal: 8, vertical: 4),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: Colors.grey[200]),
-          ...widget.order.items!.map((item) => _buildOrderItem(item)),
-          if (_isReturnable) _buildSettlementFooter(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderItem(OrderItem item) {
-    final returnState = _returnItems[item.id];
-    final isExcellent = returnState?.status == 'excellent';
-    final isDamaged = returnState?.status == 'damaged';
-
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: isExcellent
-            ? const Color(0xFFE8F5E9)
-            : isDamaged
-                ? const Color(0xFFFFF3E0)
-                : Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: Responsive.w(60),
-                height: Responsive.w(60),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(Responsive.r(10)),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: Icon(Icons.image_outlined, size: Responsive.icon(24), color: Colors.grey[400]),
-              ),
-              SizedBox(width: Responsive.w(12)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Product #${item.productId.substring(0, 8)}',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(14),
-                        fontWeight: FontWeight.w700,
-                        color: _primary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    SizedBox(height: Responsive.h(4)),
-                    Text(
-                      'Qty: ${item.quantity} • ${formatCurrency(item.pricePerDay)}/day',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(12),
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (_isReturnable) ...[
-            SizedBox(height: Responsive.h(12)),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _updateItemStatus(item.id, 'excellent'),
-                    icon: Icon(Icons.check_circle_rounded, size: Responsive.icon(18)),
-                    label: Text('Good', style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isExcellent ? const Color(0xFF2ECC71) : Colors.white,
-                      foregroundColor: isExcellent ? Colors.white : const Color(0xFF2ECC71),
-                      side: BorderSide(color: const Color(0xFF2ECC71)),
-                      padding: Responsive.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
-                    ),
-                  ),
-                ),
-                SizedBox(width: Responsive.w(8)),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _updateItemStatus(item.id, 'damaged'),
-                    icon: Icon(Icons.warning_rounded, size: Responsive.icon(18)),
-                    label: Text('Damaged', style: TextStyle(fontSize: Responsive.sp(12), fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDamaged ? const Color(0xFFF5A623) : Colors.white,
-                      foregroundColor: isDamaged ? Colors.white : const Color(0xFFF5A623),
-                      side: BorderSide(color: const Color(0xFFF5A623)),
-                      padding: Responsive.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(10))),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (isDamaged) ...[
-              SizedBox(height: Responsive.h(12)),
-              Container(
-                padding: Responsive.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(Responsive.r(10)),
-                  border: Border.all(color: const Color(0xFFF5A623)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'DAMAGE NOTES',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(10),
-                        fontWeight: FontWeight.w800,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: Responsive.h(6)),
-                    TextField(
-                      onChanged: (val) => setState(() => returnState?.notes = val),
-                      decoration: InputDecoration(
-                        hintText: 'Describe damage...',
-                        hintStyle: TextStyle(fontSize: Responsive.sp(12)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(8))),
-                        contentPadding: Responsive.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                      style: TextStyle(fontSize: Responsive.sp(13)),
-                      maxLines: 2,
-                    ),
-                    SizedBox(height: Responsive.h(8)),
-                    Text(
-                      'DAMAGE FEE (₹)',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(10),
-                        fontWeight: FontWeight.w800,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: Responsive.h(6)),
-                    TextField(
-                      onChanged: (val) => setState(() => returnState?.damageFee = double.tryParse(val) ?? 0),
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: '0',
-                        hintStyle: TextStyle(fontSize: Responsive.sp(14)),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(8))),
-                        contentPadding: Responsive.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                      style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettlementFooter() {
-    return Container(
-      padding: Responsive.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        border: Border(top: BorderSide(color: Colors.grey[200]!)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'LATE FEE',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(10),
-                        fontWeight: FontWeight.w800,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: Responsive.h(6)),
-                    TextField(
-                      onChanged: (val) => setState(() => _lateFee = double.tryParse(val) ?? 0),
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: '0',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(8))),
-                        contentPadding: Responsive.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                      style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: Responsive.w(12)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'DISCOUNT',
-                      style: TextStyle(
-                        fontSize: Responsive.sp(10),
-                        fontWeight: FontWeight.w800,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: Responsive.h(6)),
-                    TextField(
-                      onChanged: (val) => setState(() => _discount = double.tryParse(val) ?? 0),
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: '0',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Responsive.r(8))),
-                        contentPadding: Responsive.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                      style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: Responsive.h(16)),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _submitReturn,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primary,
-                foregroundColor: Colors.white,
-                padding: Responsive.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
-              ),
-              child: Text(
-                'Complete Return Process',
-                style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _markAllExcellent() {
-    setState(() {
-      for (var key in _returnItems.keys) {
-        _returnItems[key]?.status = 'excellent';
-        _returnItems[key]?.damageFee = 0;
-        _returnItems[key]?.notes = '';
-      }
-    });
-  }
-
-  void _updateItemStatus(String itemId, String status) {
-    setState(() {
-      _returnItems[itemId]?.status = status;
-      if (status == 'excellent') {
-        _returnItems[itemId]?.damageFee = 0;
-        _returnItems[itemId]?.notes = '';
-      }
-    });
   }
 
   Future<void> _submitReturn() async {
     // Validate all items have been inspected
-    final uninspected = _returnItems.entries.where((e) => e.value.status == null).toList();
+    final uninspected = _returnItems.entries
+        .where((e) => e.value.status == null)
+        .toList();
     if (uninspected.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please inspect all items before completing return'), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text('Please inspect all items before completing return'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
     // Build items payload matching ReturnOrderDTO from the admin API
-    final orderItems = widget.order.items!;
+    final orderItems = _cachedOrder!.items!;
     final returnItemsList = _returnItems.entries.map((e) {
-      // Find the corresponding OrderItem to get the quantity
       final orderItem = orderItems.firstWhere((oi) => oi.id == e.key);
       return {
         'item_id': e.key,
         'returned_quantity': orderItem.quantity,
-        'condition_rating': e.value.status == 'excellent' ? 'excellent' : (e.value.status == 'damaged' ? 'damaged' : 'good'),
+        'condition_rating': e.value.status == 'excellent'
+            ? 'excellent'
+            : (e.value.status == 'damaged' ? 'damaged' : 'good'),
         if (e.value.notes.isNotEmpty) 'damage_description': e.value.notes,
         if (e.value.damageFee > 0) 'damage_charges': e.value.damageFee,
       };
@@ -920,16 +491,19 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     try {
       final repo = ref.read(orderRepositoryProvider);
-      await repo.processReturn(widget.order.id, {
-        'order_id': widget.order.id,
+      await repo.processReturn(_cachedOrder!.id, {
+        'order_id': _cachedOrder!.id,
         'items': returnItemsList,
         if (_lateFee > 0) 'late_fee': _lateFee,
         if (_discount > 0) 'discount': _discount,
       });
       if (mounted) {
-        ref.invalidate(ordersProvider);
+                ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Return processed successfully'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Return processed successfully'),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pop(context);
       }
@@ -941,232 +515,4 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       }
     }
   }
-
-  Widget _buildCustomerCard() {
-    return Container(
-      margin: Responsive.only(left: 16, right: 16, top: 16),
-      padding: Responsive.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: Responsive.r(8),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'CUSTOMER',
-            style: TextStyle(
-              fontSize: Responsive.sp(10),
-              fontWeight: FontWeight.w900,
-              color: Colors.grey[600],
-              letterSpacing: 1,
-            ),
-          ),
-          SizedBox(height: Responsive.h(12)),
-          Text(
-            widget.order.customer?.name ?? 'Unknown',
-            style: TextStyle(
-              fontSize: Responsive.sp(20),
-              fontWeight: FontWeight.w900,
-              color: _primary,
-            ),
-          ),
-          SizedBox(height: Responsive.h(12)),
-          InkWell(
-            onTap: () async {
-              final phone = widget.order.customer?.phone;
-              if (phone != null && phone.isNotEmpty) {
-                final uri = Uri(scheme: 'tel', path: phone);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri);
-                }
-              }
-            },
-            child: Container(
-              padding: Responsive.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(Responsive.r(12)),
-                border: Border.all(color: const Color(0xFF2ECC71)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.phone_rounded, size: Responsive.icon(20), color: const Color(0xFF2ECC71)),
-                  SizedBox(width: Responsive.w(8)),
-                  Text(
-                    widget.order.customer?.phone ?? 'N/A',
-                    style: TextStyle(
-                      fontSize: Responsive.sp(16),
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF2ECC71),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFinancialCard() {
-    return Container(
-      margin: Responsive.only(left: 16, right: 16, top: 16),
-      padding: Responsive.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(Responsive.r(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: Responsive.r(8),
-            offset: Offset(0, Responsive.h(2)),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'FINANCIAL RECEIPT',
-            style: TextStyle(
-              fontSize: Responsive.sp(10),
-              fontWeight: FontWeight.w900,
-              color: Colors.grey[600],
-              letterSpacing: 1,
-            ),
-          ),
-          SizedBox(height: Responsive.h(16)),
-          _buildFinancialRow('Subtotal', formatCurrency(widget.order.subtotal)),
-          if (widget.order.gstAmount > 0) ...[
-            SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('GST', formatCurrency(widget.order.gstAmount)),
-          ],
-          SizedBox(height: Responsive.h(8)),
-          _buildFinancialRow('Security Deposit', formatCurrency(widget.order.securityDeposit)),
-          if (widget.order.lateFee > 0) ...[
-            SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('Late Fee', '+ ${formatCurrency(widget.order.lateFee)}', color: Colors.red[700]),
-          ],
-          if (widget.order.damageChargesTotal > 0) ...[
-            SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('Damage Charges', '+ ${formatCurrency(widget.order.damageChargesTotal)}', color: Colors.orange[700]),
-          ],
-          if (widget.order.discount > 0) ...[
-            SizedBox(height: Responsive.h(8)),
-            _buildFinancialRow('Discount', '- ${formatCurrency(widget.order.discount)}', color: Colors.green[700]),
-          ],
-          Divider(height: Responsive.h(24), thickness: 2),
-          _buildFinancialRow(
-            'Grand Total',
-            formatCurrency(widget.order.totalAmount),
-            isBold: true,
-          ),
-          SizedBox(height: Responsive.h(8)),
-          _buildFinancialRow('Total Paid', formatCurrency(widget.order.amountPaid)),
-          Divider(height: Responsive.h(24), thickness: 2),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Remaining Due',
-                style: TextStyle(
-                  fontSize: Responsive.sp(16),
-                  fontWeight: FontWeight.w900,
-                  color: _primary,
-                ),
-              ),
-              Text(
-                formatCurrency(_amountDue),
-                style: TextStyle(
-                  fontSize: Responsive.sp(20),
-                  fontWeight: FontWeight.w900,
-                  color: _amountDue > 0 ? Colors.red[700] : Colors.green[700],
-                ),
-              ),
-            ],
-          ),
-          if (_amountDue > 0) ...[
-            SizedBox(height: Responsive.h(16)),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  // TODO: Implement payment recording
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    backgroundColor: Colors.transparent,
-                    builder: (_) => PaymentRecordingModal(
-                      orderId: widget.order.id,
-                      amountDue: _amountDue,
-                      onSuccess: () {
-                        ref.invalidate(orderByIdProvider(widget.order.id));
-                        ref.invalidate(ordersProvider);
-                      },
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _primary,
-                  foregroundColor: Colors.white,
-                  padding: Responsive.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(12))),
-                ),
-                child: Text(
-                  'Record Payment',
-                  style: TextStyle(fontSize: Responsive.sp(14), fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFinancialRow(String label, String value, {bool isBold = false, Color? color}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: Responsive.sp(isBold ? 14 : 13),
-            fontWeight: isBold ? FontWeight.w900 : FontWeight.w600,
-            color: color ?? Colors.grey[700],
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: Responsive.sp(isBold ? 14 : 13),
-            fontWeight: isBold ? FontWeight.w900 : FontWeight.w600,
-            color: color ?? _primary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class ReturnItemState {
-  String? status; // 'excellent', 'damaged', 'missing'
-  double damageFee;
-  String notes;
-
-  ReturnItemState({
-    this.status,
-    this.damageFee = 0,
-    this.notes = '',
-  });
 }

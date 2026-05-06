@@ -1,3 +1,14 @@
+/// Order domain models for Paris Bridals mobile app.
+///
+/// Contains Order, OrderItem, CustomerInfo, BranchInfo classes and related enums
+/// for managing jewellery rental orders. Includes order status tracking, payment
+/// status, delivery methods, and condition ratings for returned items.
+///
+/// @module features/orders/models/order
+library;
+
+import '../../../core/enums.dart';
+
 enum OrderStatus {
   pending,
   confirmed,
@@ -19,14 +30,6 @@ enum PaymentStatus {
   paid,
 }
 
-enum PaymentMethod {
-  cash,
-  upi,
-  bankTransfer,
-  card,
-  other,
-}
-
 enum ConditionRating {
   excellent,
   good,
@@ -43,8 +46,10 @@ class OrderItem {
   final String id;
   final String orderId;
   final String productId;
+  final String? productName;
+  final String? productImageUrl;
   final int quantity;
-  final double pricePerDay;
+  final double rentalPrice;
   final double totalPrice;
   final double subtotal;
   final ConditionRating? conditionRating;
@@ -59,8 +64,10 @@ class OrderItem {
     required this.id,
     required this.orderId,
     required this.productId,
+    this.productName,
+    this.productImageUrl,
     required this.quantity,
-    required this.pricePerDay,
+    required this.rentalPrice,
     required this.totalPrice,
     required this.subtotal,
     this.conditionRating,
@@ -74,11 +81,14 @@ class OrderItem {
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? '',
       orderId: json['order_id'] as String,
       productId: json['product_id'] as String,
+      productName: json['product_name'] as String?,
+      productImageUrl: (json['product_image_url'] as String?) ??
+          (json['primary_image_url'] as String?),
       quantity: json['quantity'] as int,
-      pricePerDay: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
+      rentalPrice: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
       subtotal: (json['subtotal'] as num?)?.toDouble() ?? 0.0,
       conditionRating: json['condition_rating'] != null
@@ -129,7 +139,7 @@ class OrderItem {
       'order_id': orderId,
       'product_id': productId,
       'quantity': quantity,
-      'price_per_day': pricePerDay,
+      'price_per_day': rentalPrice,
       'total_price': totalPrice,
       'subtotal': subtotal,
       'condition_rating': _conditionRatingToString(),
@@ -172,9 +182,16 @@ class Order {
   final double damageChargesTotal;
   final String createdAt;
   final String? updatedAt;
+  // Advance payment fields
+  final double advanceAmount;
+  final bool? advanceCollected;
+  final String? advanceCollectedAt;
+  final PaymentMethod? advancePaymentMethod;
+  // Relations
   final CustomerInfo? customer;
   final List<OrderItem>? items;
   final BranchInfo? branch;
+  final StoreInfo? store;
 
   Order({
     required this.id,
@@ -205,14 +222,19 @@ class Order {
     required this.damageChargesTotal,
     required this.createdAt,
     this.updatedAt,
+    this.advanceAmount = 0,
+    this.advanceCollected,
+    this.advanceCollectedAt,
+    this.advancePaymentMethod,
     this.customer,
     this.items,
     this.branch,
+    this.store,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
-      id: json['id'] as String,
+      id: json['id'] as String? ?? '',
       storeId: json['store_id'] as String,
       customerId: json['customer_id'] as String,
       branchId: json['branch_id'] as String,
@@ -244,11 +266,20 @@ class Order {
       damageChargesTotal: (json['damage_charges_total'] as num?)?.toDouble() ?? 0.0,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String?,
+      // Advance payment fields
+      advanceAmount: (json['advance_amount'] as num?)?.toDouble() ?? 0.0,
+      advanceCollected: json['advance_collected'] as bool?,
+      advanceCollectedAt: json['advance_collected_at'] as String?,
+      advancePaymentMethod: json['advance_payment_method'] != null
+          ? _parsePaymentMethod(json['advance_payment_method'] as String)
+          : null,
+      // Relations
       customer: json['customer'] != null ? CustomerInfo.fromJson(json['customer']) : null,
       items: (json['items'] as List<dynamic>?)
           ?.map((e) => OrderItem.fromJson(e))
           .toList(),
       branch: json['branch'] != null ? BranchInfo.fromJson(json['branch']) : null,
+      store: json['store'] != null ? StoreInfo.fromJson(json['store']) : null,
     );
   }
 
@@ -405,9 +436,9 @@ class CustomerInfo {
 
   factory CustomerInfo.fromJson(Map<String, dynamic> json) {
     return CustomerInfo(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      phone: json['phone'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
       email: json['email'] as String?,
     );
   }
@@ -433,8 +464,8 @@ class BranchInfo {
 
   factory BranchInfo.fromJson(Map<String, dynamic> json) {
     return BranchInfo(
-      id: json['id'] as String,
-      name: json['name'] as String,
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
     );
   }
 
@@ -442,6 +473,46 @@ class BranchInfo {
     return {
       'id': id,
       'name': name,
+    };
+  }
+}
+
+class StoreInfo {
+  final String id;
+  final String name;
+  final String? address;
+  final String? phone;
+  final String? email;
+  final String? gstin;
+
+  StoreInfo({
+    required this.id,
+    required this.name,
+    this.address,
+    this.phone,
+    this.email,
+    this.gstin,
+  });
+
+  factory StoreInfo.fromJson(Map<String, dynamic> json) {
+    return StoreInfo(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      address: json['address'] as String?,
+      phone: json['phone'] as String?,
+      email: json['email'] as String?,
+      gstin: json['gstin'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'address': address,
+      'phone': phone,
+      'email': email,
+      'gstin': gstin,
     };
   }
 }

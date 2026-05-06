@@ -1,6 +1,15 @@
+/// Order providers — state management for order lists and single-order views.
+///
+/// Uses Riverpod's built-in caching via `ref.keepAlive()` and
+/// `ref.invalidateSelf()` for cache control. No manual cache layer.
+///
+/// @module features/orders/providers/order_provider
+library;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../branches/providers/branch_provider.dart';
 import '../models/order.dart';
+import '../models/paginated_orders.dart';
 import '../repositories/order_repository.dart';
 
 // Repository provider
@@ -9,6 +18,10 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
 });
 
 /// Main orders provider with pagination, search, status filter, and branch.
+///
+/// Riverpod's `ref.keepAlive()` handles caching. When data must be refreshed
+/// (e.g. after create/update/delete), `ref.invalidateSelf()` clears the cache
+/// and triggers a fresh build. No manual `OrdersCache` needed.
 class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   int _currentPage = 1;
   bool _isLoadingMore = false;
@@ -16,19 +29,30 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   String? _currentStatus;
   String? _currentBranchId;
 
+  // Get counts from the current state
+  Map<String, int> get counts {
+    if (state.hasValue) {
+      return state.value!.counts;
+    }
+    return {};
+  }
+
   @override
   Future<PaginatedOrders> build() async {
     ref.keepAlive();
     _currentPage = 1;
     _currentBranchId = ref.watch(effectiveBranchIdProvider);
     final repo = ref.watch(orderRepositoryProvider);
-    return repo.getOrders(
+    final query = _currentSearch.isNotEmpty ? _currentSearch : null;
+
+    final data = await repo.getOrders(
       page: _currentPage,
       limit: 50,
-      query: _currentSearch.isNotEmpty ? _currentSearch : null,
+      query: query,
       status: _currentStatus,
       branchId: _currentBranchId,
     );
+    return data;
   }
 
   Future<void> search(String query) async {
@@ -37,13 +61,15 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(orderRepositoryProvider);
-      return repo.getOrders(
+      final normalizedQuery = _currentSearch.isNotEmpty ? _currentSearch : null;
+      final data = await repo.getOrders(
         page: _currentPage,
         limit: 50,
-        query: _currentSearch.isNotEmpty ? _currentSearch : null,
+        query: normalizedQuery,
         status: _currentStatus,
         branchId: _currentBranchId,
       );
+      return data;
     });
   }
 
@@ -53,13 +79,15 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final repo = ref.read(orderRepositoryProvider);
-      return repo.getOrders(
+      final query = _currentSearch.isNotEmpty ? _currentSearch : null;
+      final data = await repo.getOrders(
         page: _currentPage,
         limit: 50,
-        query: _currentSearch.isNotEmpty ? _currentSearch : null,
+        query: query,
         status: _currentStatus,
         branchId: _currentBranchId,
       );
+      return data;
     });
   }
 
@@ -71,15 +99,16 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
     _isLoadingMore = true;
     try {
       final repo = ref.read(orderRepositoryProvider);
+      final query = _currentSearch.isNotEmpty ? _currentSearch : null;
       final next = await repo.getOrders(
         page: _currentPage + 1,
         limit: 50,
-        query: _currentSearch.isNotEmpty ? _currentSearch : null,
+        query: query,
         status: _currentStatus,
         branchId: _currentBranchId,
       );
       _currentPage++;
-      state = AsyncValue.data(PaginatedOrders(
+      final merged = PaginatedOrders(
         orders: [...current.orders, ...next.orders],
         total: next.total,
         page: next.page,
@@ -87,7 +116,9 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
         totalPages: next.totalPages,
         hasNext: next.hasNext,
         hasPrev: next.hasPrev,
-      ));
+        counts: next.counts,
+      );
+      state = AsyncValue.data(merged);
     } finally {
       _isLoadingMore = false;
     }
@@ -110,27 +141,36 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
     await repo.deleteOrder(id);
     if (state.hasValue) {
       final current = state.value!;
-      state = AsyncValue.data(PaginatedOrders(
-        orders: current.orders.where((o) => o.id != id).toList(),
-        total: current.total - 1,
-        page: current.page,
-        limit: current.limit,
-        totalPages: current.totalPages,
-        hasNext: current.hasNext,
-        hasPrev: current.hasPrev,
-      ));
+      state = AsyncValue.data(
+        PaginatedOrders(
+          orders: current.orders.where((o) => o.id != id).toList(),
+          total: current.total - 1,
+          page: current.page,
+          limit: current.limit,
+          totalPages: current.totalPages,
+          hasNext: current.hasNext,
+          hasPrev: current.hasPrev,
+          counts: current.counts,
+        ),
+      );
     }
   }
 }
 
-final ordersProvider =
-    AsyncNotifierProvider<OrdersNotifier, PaginatedOrders>(() {
-  return OrdersNotifier();
-});
+final ordersProvider = AsyncNotifierProvider<OrdersNotifier, PaginatedOrders>(
+  () {
+    return OrdersNotifier();
+  },
+);
 
 // Single order provider
-final orderByIdProvider =
-    FutureProvider.family<Order, String>((ref, id) async {
+final orderByIdProvider = FutureProvider.family<Order, String>((ref, id) async {
   final repository = ref.watch(orderRepositoryProvider);
   return repository.getOrderById(id);
 });
+
+final orderHistoryProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, id) async {
+      final repository = ref.watch(orderRepositoryProvider);
+      return repository.getOrderHistory(id);
+    });

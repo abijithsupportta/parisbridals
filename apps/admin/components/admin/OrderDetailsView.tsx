@@ -16,7 +16,7 @@ import Modal from "@/components/admin/Modal";
 import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments, useLookupProductByBarcode } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
-import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
+import { OrderStatus, ConditionRating } from "@/domain/types/order";
 import { PaymentType, PaymentMode } from "@/domain/types/payment";
 import { startOfDay } from "date-fns";
 import dynamic from 'next/dynamic';
@@ -95,7 +95,13 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     }
   }, [order, isReturnable]);
 
-  const amount_due = order ? Math.max(0, order.total_amount - (order.amount_paid || 0)) : 0;
+  // Compute collected amount from actual payment records (source of truth).
+  // order.amount_paid can be stale if the backend update failed silently.
+  const computed_amount_paid = payments.reduce((sum: number, p: any) => {
+    return p.payment_type === PaymentType.REFUND ? sum - p.amount : sum + p.amount;
+  }, 0);
+  const amount_paid_display = Math.max(0, computed_amount_paid);
+  const amount_due = order ? Math.max(0, order.total_amount - amount_paid_display) : 0;
   const calculatedDamage = Object.values(returnItems).reduce((sum, item) => sum + (item.damage_fee || 0), 0);
   const totalDeductions = calculatedDamage + lateFee - discount;
 
@@ -233,6 +239,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
+            // If deposit type, flag the order as deposit-collected
             if (paymentForm.paymentType === PaymentType.DEPOSIT) {
               updateOrder({
                 id: order.id,
@@ -242,17 +249,9 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                   deposit_collected_at: new Date().toISOString(),
                 },
               });
-            } else {
-              const newAmountPaid = (order.amount_paid || 0) + amountVal;
-              const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
-              updateOrder({
-                id: order.id,
-                data: {
-                  amount_paid: newAmountPaid,
-                  payment_status: newStatus,
-                },
-              });
             }
+            // amount_paid is updated atomically by paymentRepository.create()
+            // and the UI computes from payment records — no manual update needed.
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
             showSuccess("Payment Recorded", "Payment was successfully processed.");
@@ -730,7 +729,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               </div>
               <div className="flex justify-between text-slate-600 font-bold text-sm">
                 <span>Total Paid</span>
-                <span>{formatCurrency(order.amount_paid || 0)}</span>
+                <span>{formatCurrency(amount_paid_display)}</span>
               </div>
               <div className="flex justify-between items-center pt-2">
                 {order.status === OrderStatus.CANCELLED ? (
@@ -1097,7 +1096,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 const newLateFee = adjustmentForm.type === 'late_fee' ? (order.late_fee || 0) + val : (order.late_fee || 0);
                 const newDiscount = adjustmentForm.type === 'discount' ? (order.discount || 0) + val : (order.discount || 0);
                 const newDamage = adjustmentForm.type === 'damage_fee' ? (order.damage_charges_total || 0) + val : (order.damage_charges_total || 0);
-                const newAmountPaid = order.amount_paid || 0;
+                const newAmountPaid = amount_paid_display;
                 const newPaymentStatus = newAmountPaid >= newTotal ? 'paid' : newAmountPaid > 0 ? 'partial' : 'pending';
 
                 // Record as adjustment payment

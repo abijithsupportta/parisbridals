@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../models/payment.dart';
-import '../repositories/payment_repository.dart';
-
-String formatCurrency(double amount) => '₹${amount.toStringAsFixed(0)}';
+import '../providers/payment_provider.dart';
+import 'order_detail_helpers.dart';
 
 class PaymentRecordingModal extends ConsumerStatefulWidget {
   final String orderId;
@@ -26,10 +25,8 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
   PaymentMode _selectedMode = PaymentMode.cash;
-  PaymentType _selectedType = PaymentType.final_;
+  final PaymentType _selectedType = PaymentType.final_;
   bool _isSubmitting = false;
-
-  static const _primary = Color(0xFF434343);
 
   @override
   void dispose() {
@@ -54,7 +51,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
     setState(() => _isSubmitting = true);
 
     try {
-      final repository = PaymentRepository();
+      final repository = ref.read(paymentRepositoryProvider);
       await repository.createPayment(CreatePaymentDTO(
         orderId: widget.orderId,
         paymentType: _selectedType,
@@ -64,9 +61,23 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
       ));
 
       if (mounted) {
-        Navigator.pop(context);
+        // Capture the messenger *before* popping so the snackbar
+        // attaches to the parent scaffold (OrderDetailView), not
+        // to the now-detached modal context.
+        final messenger = ScaffoldMessenger.of(context);
+
+        Navigator.pop(context); // close the modal
+
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Payment recorded successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Let parent refresh data (with a small delay for DB consistency)
         widget.onSuccess();
-        _showSuccess('Payment recorded successfully');
       }
     } catch (e) {
       if (mounted) {
@@ -79,17 +90,13 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
     }
   }
 
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red[700]),
     );
   }
 
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green[700]),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +125,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                   style: TextStyle(
                     fontSize: Responsive.sp(18),
                     fontWeight: FontWeight.w900,
-                    color: _primary,
+                    color: kPrimary,
                   ),
                 ),
                 IconButton(
@@ -158,7 +165,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                         style: TextStyle(
                           fontSize: Responsive.sp(20),
                           fontWeight: FontWeight.w900,
-                          color: _primary,
+                          color: kPrimary,
                         ),
                       ),
                     ],
@@ -247,7 +254,18 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
             TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
-              onChanged: (_) => setState(() {}),
+              onChanged: (value) {
+                // Validate input and limit to due amount
+                final amount = double.tryParse(value) ?? 0;
+                if (amount > widget.amountDue) {
+                  // Truncate to due amount
+                  _amountController.text = widget.amountDue.toStringAsFixed(0);
+                  _amountController.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _amountController.text.length),
+                  );
+                }
+                setState(() {});
+              },
               style: TextStyle(fontSize: Responsive.sp(20), fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: '0',
@@ -263,7 +281,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Responsive.r(12)),
-                  borderSide: BorderSide(color: _primary, width: 2),
+                  borderSide: BorderSide(color: kPrimary, width: 2),
                 ),
                 contentPadding: Responsive.symmetric(horizontal: 16, vertical: 14),
               ),
@@ -298,7 +316,7 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Responsive.r(12)),
-                  borderSide: BorderSide(color: _primary, width: 2),
+                  borderSide: BorderSide(color: kPrimary, width: 2),
                 ),
                 contentPadding: Responsive.symmetric(horizontal: 16, vertical: 14),
               ),
@@ -366,9 +384,9 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
         width: Responsive.w(75),
         padding: Responsive.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? _primary : Colors.white,
+          color: isSelected ? kPrimary : Colors.white,
           borderRadius: BorderRadius.circular(Responsive.r(12)),
-          border: Border.all(color: isSelected ? _primary : Colors.grey[300]!),
+          border: Border.all(color: isSelected ? kPrimary : Colors.grey[300]!),
         ),
         child: Column(
           children: [

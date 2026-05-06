@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/constants.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/responsive.dart';
@@ -19,8 +20,8 @@ class ProductDetailView extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
-  static const _primary = Color(0xFF434343);
-  static const _accent = Color(0xFFF7C873);
+  static const _primary = AppColors.primary;
+  static const _accent = AppColors.accent;
 
   int _currentImageIndex = 0;
   final PageController _pageController = PageController();
@@ -113,14 +114,14 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
                     onPageChanged: (i) =>
                         setState(() => _currentImageIndex = i),
                     itemCount: product.images.length,
-                    itemBuilder: (_, i) {
-                      final img = product.images[i];
+                    itemBuilder: (context, index) {
+                      final img = product.images[index];
                       return CachedNetworkImage(
                         imageUrl: img.url,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
+                        placeholder: (context, url) => Container(
                             color: _primary.withValues(alpha: 0.1)),
-                        errorWidget: (_, __, ___) =>
+                        errorWidget: (context, url, error) =>
                             _buildPlaceholderImage(),
                       );
                     },
@@ -210,7 +211,7 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
                         Expanded(
                           child: _buildPriceItem(
                               'Rent / Day',
-                              '₹${product.pricePerDay.toStringAsFixed(0)}',
+                              '₹${product.rentalPrice.toStringAsFixed(0)}',
                               _accent),
                         ),
                         SizedBox(width: Responsive.w(12)),
@@ -689,22 +690,31 @@ class _ProductDetailViewState extends ConsumerState<ProductDetailView> {
     );
 
     if (confirmed == true && mounted) {
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
       try {
         await ref
             .read(productsProvider.notifier)
             .deleteProduct(product.id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${product.name} deleted'),
-              backgroundColor: const Color(0xFF2ECC71),
-            ),
-          );
-          Navigator.of(context).pop();
+          if (mounted) {
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text('${product.name} deleted'),
+                backgroundColor: const Color(0xFF2ECC71),
+              ),
+            );
+          }
+          if (mounted) {
+            navigator.pop();
+          }
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          if (!mounted) return;
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.showSnackBar(
             SnackBar(
               content: Text(e.toString().replaceFirst('Exception: ', '')),
               backgroundColor: Colors.red[400],
