@@ -7,6 +7,7 @@ import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
 import '../providers/order_provider.dart';
+import '../providers/order_counts_provider.dart';
 import 'order_detail_view_new.dart';
 import 'create_order/create_order_view.dart';
 
@@ -206,82 +207,167 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
   }
 
   Widget _buildFilterChips() {
-    final ordersAsync = ref.watch(ordersProvider);
-    final allOrders = ordersAsync.value?.orders ?? [];
+    final countsAsync = ref.watch(orderCountsProvider);
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: Responsive.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        children: _statusFilters.entries.map((entry) {
-          final isActive = entry.value == _selectedChip;
-          // Count orders matching this status
-          final count = entry.value == null
-              ? allOrders.length
-              : allOrders
-                    .where((o) => _statusToString(o.status) == entry.value)
-                    .length;
-          return Padding(
-            padding: Responsive.only(right: 8),
-            child: GestureDetector(
-              onTap: () {
-                setState(() => _selectedChip = entry.value);
-                ref.read(ordersProvider.notifier).filterByStatus(entry.value);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: Responsive.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isActive ? _primary : Colors.white,
-                  borderRadius: BorderRadius.circular(Responsive.r(20)),
-                  border: Border.all(
-                    color: isActive ? _primary : Colors.grey.shade300,
-                  ),
-                  boxShadow: isActive
-                      ? [
-                          BoxShadow(
-                            color: _primary.withValues(alpha: 0.15),
-                            blurRadius: Responsive.r(8),
-                            offset: Offset(0, Responsive.h(2)),
-                          ),
-                        ]
-                      : [],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      entry.key,
-                      style: TextStyle(
-                        fontSize: Responsive.sp(12),
-                        fontWeight: FontWeight.w600,
-                        color: isActive ? Colors.white : _primary,
-                      ),
+    return countsAsync.when(
+      data: (counts) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: Responsive.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: _statusFilters.entries.map((entry) {
+            final isActive = entry.value == _selectedChip;
+            // Use accurate server-side counts from mobile-only provider
+            final count = counts[entry.key.toLowerCase()] ?? 0;
+            return Padding(
+              padding: Responsive.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _selectedChip = entry.value);
+                  ref.read(ordersProvider.notifier).filterByStatus(entry.value);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: Responsive.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isActive ? _primary : Colors.white,
+                    borderRadius: BorderRadius.circular(Responsive.r(20)),
+                    border: Border.all(
+                      color: isActive ? _primary : Colors.grey.shade300,
                     ),
-                    SizedBox(width: Responsive.w(4)),
-                    Container(
-                      padding: Responsive.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: isActive
-                            ? Colors.white.withValues(alpha: 0.25)
-                            : _primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(Responsive.r(10)),
-                      ),
-                      child: Text(
-                        '$count',
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                              color: _primary.withValues(alpha: 0.15),
+                              blurRadius: Responsive.r(8),
+                              offset: Offset(0, Responsive.h(2)),
+                            ),
+                          ]
+                        : [],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        entry.key,
                         style: TextStyle(
-                          fontSize: Responsive.sp(10),
-                          fontWeight: FontWeight.w700,
+                          fontSize: Responsive.sp(12),
+                          fontWeight: FontWeight.w600,
                           color: isActive ? Colors.white : _primary,
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(width: Responsive.w(4)),
+                      Container(
+                        padding: Responsive.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? Colors.white.withValues(alpha: 0.25)
+                              : _primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(Responsive.r(10)),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: TextStyle(
+                            fontSize: Responsive.sp(10),
+                            fontWeight: FontWeight.w700,
+                            color: isActive ? Colors.white : _primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        }).toList(),
+            );
+          }).toList(),
+        ),
+      ),
+      loading: () => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: Responsive.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: _statusFilters.entries.map((entry) {
+            final isActive = entry.value == _selectedChip;
+            return Padding(
+              padding: Responsive.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _selectedChip = entry.value);
+                  ref.read(ordersProvider.notifier).filterByStatus(entry.value);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: Responsive.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isActive ? _primary : Colors.white,
+                    borderRadius: BorderRadius.circular(Responsive.r(20)),
+                    border: Border.all(
+                      color: isActive ? _primary : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        entry.key,
+                        style: TextStyle(
+                          fontSize: Responsive.sp(12),
+                          fontWeight: FontWeight.w600,
+                          color: isActive ? Colors.white : _primary,
+                        ),
+                      ),
+                      SizedBox(width: Responsive.w(4)),
+                      SizedBox(
+                        width: Responsive.w(16),
+                        height: Responsive.h(16),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: isActive ? Colors.white : _primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+      error: (_, __) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: Responsive.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: _statusFilters.entries.map((entry) {
+            final isActive = entry.value == _selectedChip;
+            return Padding(
+              padding: Responsive.only(right: 8),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _selectedChip = entry.value);
+                  ref.read(ordersProvider.notifier).filterByStatus(entry.value);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: Responsive.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isActive ? _primary : Colors.white,
+                    borderRadius: BorderRadius.circular(Responsive.r(20)),
+                    border: Border.all(
+                      color: isActive ? _primary : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Text(
+                    entry.key,
+                    style: TextStyle(
+                      fontSize: Responsive.sp(12),
+                      fontWeight: FontWeight.w600,
+                      color: isActive ? Colors.white : _primary,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
       ),
     );
   }
