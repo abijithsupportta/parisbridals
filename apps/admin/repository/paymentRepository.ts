@@ -136,7 +136,13 @@ export class PaymentRepository extends BaseRepository {
     const currentAmountPaid = Number(orderUpdateResponse.data.amount_paid || 0);
     const totalAmount = Number(orderUpdateResponse.data.total_amount || 0);
     const signedAmount = data.payment_type === PaymentType.REFUND ? -data.amount : data.amount;
-    const newAmountPaid = currentAmountPaid + signedAmount;
+    const newAmountPaid = Math.max(0, currentAmountPaid + signedAmount);
+    const paymentStatus =
+      newAmountPaid <= 0
+        ? PaymentStatus.PENDING
+        : newAmountPaid >= totalAmount
+          ? PaymentStatus.PAID
+          : PaymentStatus.PARTIAL;
     
     console.log('Payment calculation:', {
       currentAmountPaid,
@@ -149,6 +155,7 @@ export class PaymentRepository extends BaseRepository {
       .from('orders')
       .update({
         amount_paid: newAmountPaid,
+        payment_status: paymentStatus,
         updated_at: new Date().toISOString(),
       })
       .eq('id', data.order_id);

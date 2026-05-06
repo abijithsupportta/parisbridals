@@ -29,6 +29,14 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   String? _currentStatus;
   String? _currentBranchId;
 
+  // Get counts from the current state
+  Map<String, int> get counts {
+    if (state.hasValue) {
+      return state.value!.counts;
+    }
+    return {};
+  }
+
   @override
   Future<PaginatedOrders> build() async {
     ref.keepAlive();
@@ -108,6 +116,7 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
         totalPages: next.totalPages,
         hasNext: next.hasNext,
         hasPrev: next.hasPrev,
+        counts: next.counts,
       );
       state = AsyncValue.data(merged);
     } finally {
@@ -141,6 +150,7 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
           totalPages: current.totalPages,
           hasNext: current.hasNext,
           hasPrev: current.hasPrev,
+          counts: current.counts,
         ),
       );
     }

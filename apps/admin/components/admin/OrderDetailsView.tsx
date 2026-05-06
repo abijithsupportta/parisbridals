@@ -16,7 +16,7 @@ import Modal from "@/components/admin/Modal";
 import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments, useLookupProductByBarcode } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
-import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
+import { OrderStatus, ConditionRating } from "@/domain/types/order";
 import { PaymentType, PaymentMode } from "@/domain/types/payment";
 import { startOfDay } from "date-fns";
 import dynamic from 'next/dynamic';
@@ -230,15 +230,6 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
-            const newAmountPaid = (order.amount_paid || 0) + amountVal;
-            const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
-            updateOrder({
-              id: order.id,
-              data: {
-                amount_paid: newAmountPaid,
-                payment_status: newStatus,
-              },
-            });
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
             showSuccess("Payment Recorded", "Payment was successfully processed.");

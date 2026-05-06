@@ -51,17 +51,8 @@ class OrderRepository {
     if (response.statusCode == 200) {
       final data = response.data;
       if (data['success'] == true && data['data'] != null) {
-        final ordersData = data['data'] as List;
-        final meta = data['meta'] as Map<String, dynamic>?;
-        return PaginatedOrders(
-          orders: ordersData.map((e) => Order.fromJson(e)).toList(),
-          total: meta?['total'] ?? 0,
-          page: meta?['page'] ?? 1,
-          limit: meta?['limit'] ?? 25,
-          totalPages: meta?['totalPages'] ?? 1,
-          hasNext: meta?['hasNext'] ?? false,
-          hasPrev: meta?['hasPrev'] ?? false,
-        );
+        // Use the fromJson factory that handles counts
+        return PaginatedOrders.fromJson(data);
       }
     }
     throw Exception('Failed to load orders');
