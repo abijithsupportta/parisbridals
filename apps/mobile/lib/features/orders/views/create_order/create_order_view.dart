@@ -6,8 +6,8 @@ import '../../../../core/responsive.dart';
 import '../../../branches/providers/branch_provider.dart';
 import '../../../customers/models/customer.dart';
 import '../../../products/models/product.dart';
-import '../../models/order.dart';
 import '../../providers/order_provider.dart';
+import '../../providers/order_counts_provider.dart';
 
 import 'step_customer.dart';
 import 'step_rental_period.dart';
@@ -52,8 +52,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   // Step 2
   DateTime? _startDate;
   DateTime? _endDate;
-  DeliveryMethod _deliveryMethod = DeliveryMethod.pickup;
-  final _deliveryAddressController = TextEditingController();
 
   // Step 3
   final List<CartItem> _cart = [];
@@ -205,17 +203,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
       return;
     }
 
-    if (_deliveryMethod == DeliveryMethod.delivery &&
-        _deliveryAddressController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Delivery address is required'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      setState(() => _isSubmitting = false);
-      return;
-    }
+
 
     final body = <String, dynamic>{
       'customer_id': _selectedCustomer!.id,
@@ -231,9 +219,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
             },
           )
           .toList(),
-      'delivery_method': _deliveryMethod.name,
-      if (_deliveryMethod == DeliveryMethod.delivery)
-        'delivery_address': _deliveryAddressController.text.trim(),
+      'delivery_method': 'pickup',
     };
 
     if (_collectDeposit && _securityDeposit > 0) {
@@ -253,14 +239,22 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
     try {
       await ref.read(ordersProvider.notifier).createOrder(body);
       if (mounted) {
-        ref.invalidate(ordersProvider);
+        // 1. Close the creation screen immediately so the user isn't stuck waiting
         Navigator.pop(context);
+        
+        // 2. Show success message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Order created successfully!'),
             backgroundColor: Colors.green[700],
           ),
         );
+
+        // 3. Wait briefly for the DB/cache to catch up, then refresh both list & counts
+        Future.delayed(const Duration(milliseconds: 600), () {
+          ref.invalidate(ordersProvider);
+          ref.invalidate(orderCountsProvider);
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -280,7 +274,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   void dispose() {
     _pageController.dispose();
     _notesController.dispose();
-    _deliveryAddressController.dispose();
     super.dispose();
   }
 
@@ -325,8 +318,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                 StepRentalPeriod(
                   startDate: _startDate,
                   endDate: _endDate,
-                  deliveryMethod: _deliveryMethod,
-                  deliveryAddressController: _deliveryAddressController,
                   onStartChanged: (d) {
                     setState(() {
                       _startDate = d;
@@ -340,8 +331,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                     setState(() => _endDate = d);
                     _checkAvailability();
                   },
-                  onDeliveryMethodChanged: (m) =>
-                      setState(() => _deliveryMethod = m),
                 ),
                 StepProducts(
                   branchId: branchId,

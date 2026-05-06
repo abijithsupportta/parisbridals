@@ -1,27 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/responsive.dart';
-import '../../models/order.dart';
 
 /// Step 2: Rental period selection with auto-defaults.
 class StepRentalPeriod extends StatelessWidget {
   final DateTime? startDate;
   final DateTime? endDate;
-  final DeliveryMethod deliveryMethod;
-  final TextEditingController deliveryAddressController;
   final ValueChanged<DateTime> onStartChanged;
   final ValueChanged<DateTime> onEndChanged;
-  final ValueChanged<DeliveryMethod> onDeliveryMethodChanged;
 
   const StepRentalPeriod({
     super.key,
     this.startDate,
     this.endDate,
-    required this.deliveryMethod,
-    required this.deliveryAddressController,
     required this.onStartChanged,
     required this.onEndChanged,
-    required this.onDeliveryMethodChanged,
   });
 
   static const _primary = Color(0xFF434343);
@@ -53,11 +46,18 @@ class StepRentalPeriod extends StatelessWidget {
     ValueChanged<DateTime> onPicked, {
     DateTime? firstDate,
   }) async {
+    final effectiveFirstDate = firstDate ?? DateTime.now().subtract(const Duration(days: 7));
+    final effectiveLastDate = DateTime.now().add(const Duration(days: 365));
+    // Ensure initialDate is never before firstDate (causes picker to silently fail)
+    var effectiveInitial = initial ?? DateTime.now();
+    if (effectiveInitial.isBefore(effectiveFirstDate)) {
+      effectiveInitial = effectiveFirstDate;
+    }
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial ?? DateTime.now(),
-      firstDate: firstDate ?? DateTime.now().subtract(const Duration(days: 7)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: effectiveInitial,
+      firstDate: effectiveFirstDate,
+      lastDate: effectiveLastDate,
       helpText: label,
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
@@ -190,84 +190,27 @@ class StepRentalPeriod extends StatelessWidget {
 
           SizedBox(height: Responsive.h(16)),
           Container(
-            padding: Responsive.all(16),
+            padding: Responsive.all(14),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(Responsive.r(16)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              color: const Color(0xFFFFF8E1),
+              borderRadius: BorderRadius.circular(Responsive.r(12)),
+              border: Border.all(
+                  color: const Color(0xFFF7C873).withValues(alpha: 0.5)),
             ),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'DELIVERY METHOD',
-                  style: TextStyle(
-                    fontSize: Responsive.sp(10),
-                    fontWeight: FontWeight.w900,
-                    color: _primary,
-                    letterSpacing: 1,
+                Icon(Icons.info_outline_rounded,
+                    size: Responsive.icon(18),
+                    color: const Color(0xFFF5A623)),
+                SizedBox(width: Responsive.w(10)),
+                Expanded(
+                  child: Text(
+                    'Products are automatically blocked 1 day before pickup and 1 day after return for cleaning & preparation.',
+                    style: TextStyle(
+                        fontSize: Responsive.sp(11), color: Colors.grey[800]),
                   ),
                 ),
-                SizedBox(height: Responsive.h(10)),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMethodChip(
-                        label: 'Pickup',
-                        active: deliveryMethod == DeliveryMethod.pickup,
-                        onTap: () =>
-                            onDeliveryMethodChanged(DeliveryMethod.pickup),
-                      ),
-                    ),
-                    SizedBox(width: Responsive.w(8)),
-                    Expanded(
-                      child: _buildMethodChip(
-                        label: 'Delivery',
-                        active: deliveryMethod == DeliveryMethod.delivery,
-                        onTap: () =>
-                            onDeliveryMethodChanged(DeliveryMethod.delivery),
-                      ),
-                    ),
-                  ],
-                ),
-                if (deliveryMethod == DeliveryMethod.delivery) ...[
-                  SizedBox(height: Responsive.h(12)),
-                  TextField(
-                    controller: deliveryAddressController,
-                    maxLines: 2,
-                    style: TextStyle(fontSize: Responsive.sp(13)),
-                    decoration: InputDecoration(
-                      hintText: 'Enter delivery address',
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(Responsive.r(12)),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(Responsive.r(12)),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(Responsive.r(12)),
-                        borderSide: const BorderSide(
-                          color: _primary,
-                          width: 1.5,
-                        ),
-                      ),
-                      contentPadding: Responsive.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -359,34 +302,7 @@ class StepRentalPeriod extends StatelessWidget {
     );
   }
 
-  Widget _buildMethodChip({
-    required String label,
-    required bool active,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(Responsive.r(10)),
-      child: Container(
-        padding: Responsive.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? _primary : Colors.white,
-          borderRadius: BorderRadius.circular(Responsive.r(10)),
-          border: Border.all(color: active ? _primary : Colors.grey[300]!),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: Responsive.sp(12),
-              fontWeight: FontWeight.w700,
-              color: active ? Colors.white : Colors.grey[700],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildDateCard(
     BuildContext context,

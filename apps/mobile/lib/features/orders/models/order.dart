@@ -84,9 +84,11 @@ class OrderItem {
       id: json['id'] as String? ?? '',
       orderId: json['order_id'] as String,
       productId: json['product_id'] as String,
-      productName: json['product_name'] as String?,
+      productName: json['product_name'] as String? ?? 
+          (json['product'] != null ? json['product']['name'] as String? : null),
       productImageUrl: (json['product_image_url'] as String?) ??
-          (json['primary_image_url'] as String?),
+          (json['primary_image_url'] as String?) ??
+          _extractImageUrl(json['product']),
       quantity: json['quantity'] as int,
       rentalPrice: (json['price_per_day'] as num?)?.toDouble() ?? 0.0,
       totalPrice: (json['total_price'] as num?)?.toDouble() ?? 0.0,
@@ -101,6 +103,17 @@ class OrderItem {
       returnedQuantity: json['returned_quantity'] as int?,
       createdAt: json['created_at'] as String? ?? '',
     );
+  }
+
+  static String? _extractImageUrl(dynamic productJson) {
+    if (productJson is! Map<String, dynamic> || productJson['images'] == null) return null;
+    final images = productJson['images'] as List;
+    if (images.isEmpty) return null;
+    
+    final firstImage = images.first;
+    if (firstImage is String) return firstImage;
+    if (firstImage is Map) return firstImage['url'] as String?;
+    return null;
   }
 
   static ConditionRating _parseConditionRating(String value) {

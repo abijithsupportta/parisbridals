@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -14,6 +15,10 @@ class ApiClient {
   // Cached token to avoid repeated secure storage reads
   String? _cachedToken;
   bool _tokenLoaded = false;
+
+  // Completer to queue requests while a token refresh is in progress.
+  // All concurrent 401s wait on this instead of failing immediately.
+  Completer<bool>? _refreshCompleter;
 
   factory ApiClient() {
     return _instance;
@@ -50,8 +55,8 @@ class ApiClient {
         },
         onError: (DioException e, handler) async {
           // Handle 401 unauthorized errors — try to refresh the token
-          if (e.response?.statusCode == 401 && !_isRefreshing) {
-            final refreshed = await _tryRefreshToken();
+          if (e.response?.statusCode == 401) {
+            final refreshed = await _waitForOrTriggerRefresh();
             if (refreshed) {
               // Retry the original request with the new token
               try {
@@ -62,7 +67,10 @@ class ApiClient {
                 final response = await dio.fetch(opts);
                 return handler.resolve(response);
               } catch (retryError) {
-                // Retry also failed, give up
+                // Retry also failed — propagate retry error instead of stale 401
+                if (retryError is DioException) {
+                  return handler.next(retryError);
+                }
               }
             }
             // Refresh failed — clear auth state (forces re-login)
@@ -91,10 +99,36 @@ class ApiClient {
     _tokenLoaded = false;
   }
 
+  /// If a refresh is already in progress, wait for it to finish.
+  /// Otherwise, trigger a new refresh. Returns true if the token
+  /// was successfully refreshed (either by us or by a concurrent caller).
+  Future<bool> _waitForOrTriggerRefresh() async {
+    // Another request already started the refresh — just wait for its result
+    if (_isRefreshing && _refreshCompleter != null) {
+      debugPrint('[ApiClient] Refresh already in progress, waiting...');
+      return _refreshCompleter!.future;
+    }
+
+    // We are the first — start the refresh
+    _isRefreshing = true;
+    _refreshCompleter = Completer<bool>();
+
+    try {
+      final success = await _tryRefreshToken();
+      _refreshCompleter!.complete(success);
+      return success;
+    } catch (e) {
+      _refreshCompleter!.complete(false);
+      return false;
+    } finally {
+      _isRefreshing = false;
+      _refreshCompleter = null;
+    }
+  }
+
   /// Try to refresh the access token using the stored refresh token.
   /// Returns true if successful, false otherwise.
   Future<bool> _tryRefreshToken() async {
-    _isRefreshing = true;
     try {
       final refreshToken = await _storage.read(key: _refreshKey);
       if (refreshToken == null || refreshToken.isEmpty) return false;
@@ -127,8 +161,6 @@ class ApiClient {
     } catch (e) {
       debugPrint('[ApiClient] Token refresh failed: $e');
       return false;
-    } finally {
-      _isRefreshing = false;
     }
   }
 }
