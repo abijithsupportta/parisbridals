@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/responsive.dart';
 import '../../models/order.dart';
+import '../../models/payment.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/payment_provider.dart';
 import '../order_detail_helpers.dart';
@@ -28,6 +29,30 @@ class OrderFinancialCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Use payment records as the authoritative source of truth for
+    // collected amount. order.amountPaid can be stale if the backend
+    // update failed silently or the cache hasn't refreshed yet.
+    final paymentsAsync = ref.watch(orderPaymentsProvider(orderId));
+    final double collected = paymentsAsync.when(
+      data: (payments) {
+        // Sum all non-refund payments, subtract refunds
+        double total = 0;
+        for (final p in payments) {
+          if (p.paymentType == PaymentType.refund) {
+            total -= p.amount;
+          } else {
+            total += p.amount;
+          }
+        }
+        return total.clamp(0, double.infinity).toDouble();
+      },
+      loading: () => collectedAmount(order), // fallback while loading
+      error: (_, __) => collectedAmount(order), // fallback on error
+    );
+    final double due = (order.totalAmount - collected)
+        .clamp(0, double.infinity)
+        .toDouble();
+
     return Container(
       margin: Responsive.only(left: 16, right: 16, top: 16),
       padding: Responsive.all(16),
@@ -98,18 +123,18 @@ class OrderFinancialCard extends ConsumerWidget {
           SizedBox(height: Responsive.h(8)),
           _buildFinancialRow(
             'Payment Collected',
-            formatCurrency(collectedAmount(order)),
+            formatCurrency(collected),
             color: Colors.green[700],
           ),
           Divider(height: Responsive.h(24), thickness: 2),
-          _buildPaymentCollectionCard(),
+          _buildPaymentCollectionCardFromValues(collected, due),
           if (order.securityDeposit > 0) ...[
             SizedBox(height: Responsive.h(14)),
             _buildDepositStatusCard(),
           ],
-          if (amountDue(order) > 0) ...[
+          if (due > 0) ...[
             SizedBox(height: Responsive.h(16)),
-            _buildRecordPaymentButton(context, ref),
+            _buildRecordPaymentButton(context, ref, due),
           ],
           SizedBox(height: Responsive.h(16)),
           _buildPaymentHistory(context, ref),
@@ -119,6 +144,7 @@ class OrderFinancialCard extends ConsumerWidget {
       ),
     );
   }
+
 
   Widget _buildFinancialRow(
     String label,
@@ -149,10 +175,19 @@ class OrderFinancialCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildPaymentCollectionCard() {
-    final due = amountDue(order);
-    final collected = collectedAmount(order);
-    final statusColor = paymentCollectionColor(order);
+  Widget _buildPaymentCollectionCardFromValues(double collected, double due) {
+    final Color statusColor;
+    final String label;
+    if (due <= 0) {
+      statusColor = const Color(0xFF2ECC71);
+      label = 'Payment Collected';
+    } else if (collected > 0) {
+      statusColor = const Color(0xFFF5A623);
+      label = 'Partially Collected';
+    } else {
+      statusColor = const Color(0xFFFF6B8A);
+      label = 'Payment Pending';
+    }
 
     return Container(
       padding: Responsive.all(12),
@@ -176,7 +211,7 @@ class OrderFinancialCard extends ConsumerWidget {
               SizedBox(width: Responsive.w(8)),
               Expanded(
                 child: Text(
-                  paymentCollectionLabel(order),
+                  label,
                   style: TextStyle(
                     fontSize: Responsive.sp(13),
                     fontWeight: FontWeight.w900,
@@ -212,6 +247,7 @@ class OrderFinancialCard extends ConsumerWidget {
       ),
     );
   }
+
 
   Widget _buildAmountTile(String label, String amount, Color color) {
     return Container(
@@ -333,7 +369,7 @@ class OrderFinancialCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecordPaymentButton(BuildContext context, WidgetRef ref) {
+  Widget _buildRecordPaymentButton(BuildContext context, WidgetRef ref, double due) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
@@ -344,7 +380,8 @@ class OrderFinancialCard extends ConsumerWidget {
             backgroundColor: Colors.transparent,
             builder: (_) => PaymentRecordingModal(
               orderId: orderId,
-              amountDue: amountDue(order),
+              amountDue: due,
+
               onSuccess: () async {
                 // Small delay so the backend amount_paid update propagates
                 // before we re-fetch. Without this the GET returns stale data.
