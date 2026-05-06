@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/responsive.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/order.dart';
+import '../models/payment.dart';
 import '../providers/order_provider.dart';
+import '../providers/payment_provider.dart';
 import 'order_detail_helpers.dart';
 import 'widgets/order_action_buttons.dart';
 import 'widgets/order_customer_card.dart';
@@ -160,7 +162,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
               orderId: widget.orderId,
               canManage: canManage,
               isDepositProcessing: _isDepositProcessing,
-              onMarkDepositReturned: _markDepositReturned,
+              onMarkDepositReturned: _refundSecurityDeposit,
             ),
             SizedBox(height: Responsive.h(80)),
           ],
@@ -241,22 +243,23 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       }
 
       // Fire the API call — don't await it for instant feel
-      repo.startRental(order.id).then((_) {
-        // Refresh data in background after server confirms
-        ref.invalidate(orderByIdProvider(widget.orderId));
-        ref.invalidate(ordersProvider);
-      }).catchError((e) {
-        // If server fails, refresh to show real state and alert user
-        ref.invalidate(orderByIdProvider(widget.orderId));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Server error: $e. Refreshing...'),
-              backgroundColor: Colors.red,
-            ),
-          );
+      () async {
+        try {
+          await repo.startRental(order.id);
+          ref.invalidate(orderByIdProvider(widget.orderId));
+          ref.invalidate(ordersProvider);
+        } catch (e) {
+          ref.invalidate(orderByIdProvider(widget.orderId));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Server error: $e. Refreshing...'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
-      });
+      }();
 
       // Show success immediately (optimistic)
       if (mounted) {
@@ -423,27 +426,37 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     }
   }
 
-  Future<void> _markDepositReturned() async {
+  Future<void> _refundSecurityDeposit() async {
     final order = _cachedOrder;
-    if (order == null) return;
+    if (order == null || _isDepositProcessing) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Return Deposit'),
-        content: const Text(
-          'Mark security deposit as returned for this order?',
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Responsive.r(16)),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.account_balance_wallet_rounded,
+                color: Colors.orange[700], size: Responsive.icon(24)),
+            SizedBox(width: Responsive.w(8)),
+            const Text('Refund Security Deposit'),
+          ],
+        ),
+        content: Text(
+          'Refund ${formatCurrency(order.securityDeposit)} security deposit to the customer?\n\nThis will be recorded in the payment history.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('No'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[700]),
             child: const Text(
-              'Yes, Return',
+              'Refund Deposit',
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -455,14 +468,27 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     setState(() => _isDepositProcessing = true);
     try {
+      // Create refund payment record (matching admin behavior)
+      final paymentRepo = ref.read(paymentRepositoryProvider);
+      await paymentRepo.createPayment(CreatePaymentDTO(
+        orderId: order.id,
+        paymentType: PaymentType.refund,
+        amount: order.securityDeposit,
+        paymentMode: PaymentMode.cash,
+        notes: 'Security Deposit Refund',
+      ));
+
+      // Also mark deposit as returned on the order (fire-and-forget)
       final repo = ref.read(orderRepositoryProvider);
-      await repo.markDepositReturned(order.id);
-      ref.invalidate(orderByIdProvider(widget.orderId));
-      ref.invalidate(ordersProvider);
+      () async { try { await repo.markDepositReturned(order.id); } catch (_) {} }();
+
       if (mounted) {
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        ref.invalidate(orderPaymentsProvider(widget.orderId));
+        ref.invalidate(ordersProvider);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Deposit marked as returned'),
+          SnackBar(
+            content: Text('Security deposit of ${formatCurrency(order.securityDeposit)} refunded'),
             backgroundColor: Colors.green,
           ),
         );
@@ -479,6 +505,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   }
 
   Future<void> _submitReturn() async {
+    // Prevent double-taps
+    if (_isProcessing) return;
+
     // Validate all items have been inspected
     final uninspected = _returnItems.entries
         .where((e) => e.value.status == null)
@@ -492,6 +521,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       );
       return;
     }
+
+    setState(() => _isProcessing = true);
 
     // Build items payload matching ReturnOrderDTO from the admin API
     final orderItems = _cachedOrder!.items!;
@@ -510,12 +541,33 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     try {
       final repo = ref.read(orderRepositoryProvider);
-      await repo.processReturn(_cachedOrder!.id, {
+
+      // Fire-and-forget for instant feel
+      final returnData = {
         'order_id': _cachedOrder!.id,
         'items': returnItemsList,
         if (_lateFee > 0) 'late_fee': _lateFee,
         if (_discount > 0) 'discount': _discount,
-      });
+      };
+      () async {
+        try {
+          await repo.processReturn(_cachedOrder!.id, returnData);
+          ref.invalidate(orderByIdProvider(widget.orderId));
+          ref.invalidate(ordersProvider);
+        } catch (e) {
+          ref.invalidate(orderByIdProvider(widget.orderId));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Server error: $e. Refreshing...'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }();
+
+      // Show success immediately
       if (mounted) {
         ref.invalidate(orderByIdProvider(widget.orderId));
         ref.invalidate(ordersProvider);
@@ -532,6 +584,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
           SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 }

@@ -292,81 +292,74 @@ class OrderFinancialCard extends ConsumerWidget {
     final isEligibleStatus =
         order.status == OrderStatus.returned ||
         order.status == OrderStatus.completed ||
+        order.status == OrderStatus.partial ||
+        order.status == OrderStatus.flagged ||
         order.status == OrderStatus.lateReturn;
 
-    final statusText = isReturned
-        ? 'Returned'
-        : (order.depositCollected == true ? 'Collected' : 'Not collected');
-
-    final statusColor = isReturned
-        ? Colors.green
-        : (order.depositCollected == true ? Colors.orange : Colors.grey);
-
-    return Container(
-      padding: Responsive.all(12),
-      decoration: BoxDecoration(
-        color: statusColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(Responsive.r(10)),
-        border: Border.all(color: statusColor.withValues(alpha: 0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isReturned
-                    ? Icons.check_circle_rounded
-                    : Icons.account_balance_wallet_rounded,
-                size: Responsive.icon(18),
-                color: statusColor,
-              ),
-              SizedBox(width: Responsive.w(8)),
-              Expanded(
-                child: Text(
-                  'Deposit: $statusText',
-                  style: TextStyle(
-                    fontSize: Responsive.sp(12),
-                    fontWeight: FontWeight.w700,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (canManage && !isReturned && order.depositCollected == true) ...[
-            SizedBox(height: Responsive.h(8)),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: (isDepositProcessing || !isEligibleStatus)
-                    ? null
-                    : onMarkDepositReturned,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: statusColor,
-                  side: BorderSide(color: statusColor.withValues(alpha: 0.45)),
-                  padding: Responsive.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(Responsive.r(8)),
-                  ),
-                ),
-                child: Text(
-                  isDepositProcessing
-                      ? 'Processing...'
-                      : (isEligibleStatus
-                            ? 'Mark Deposit Returned'
-                            : 'Return available after completion'),
-                  style: TextStyle(
-                    fontSize: Responsive.sp(11),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+    // Already refunded — show badge
+    if (isReturned) {
+      return Container(
+        padding: Responsive.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(Responsive.r(10)),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_rounded,
+                size: Responsive.icon(18), color: Colors.grey[600]),
+            SizedBox(width: Responsive.w(8)),
+            Text(
+              'Security Deposit Refunded',
+              style: TextStyle(
+                fontSize: Responsive.sp(12),
+                fontWeight: FontWeight.w700,
+                color: Colors.grey[600],
               ),
             ),
           ],
-        ],
-      ),
-    );
+        ),
+      );
+    }
+
+    // Show refund button for eligible orders
+    if (canManage && isEligibleStatus && order.securityDeposit > 0) {
+      return SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: isDepositProcessing ? null : onMarkDepositReturned,
+          icon: Icon(
+            isDepositProcessing
+                ? Icons.hourglass_top_rounded
+                : Icons.account_balance_wallet_rounded,
+            size: Responsive.icon(18),
+          ),
+          label: Text(
+            isDepositProcessing
+                ? 'Processing...'
+                : 'Refund Security Deposit (${formatCurrency(order.securityDeposit)})',
+            style: TextStyle(
+              fontSize: Responsive.sp(13),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange[100],
+            foregroundColor: Colors.orange[800],
+            elevation: 0,
+            padding: Responsive.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(Responsive.r(12)),
+              side: BorderSide(color: Colors.orange[300]!),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildRecordPaymentButton(BuildContext context, WidgetRef ref, double due) {
