@@ -240,16 +240,35 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         return;
       }
 
-      await repo.startRental(order.id);
-      if (mounted) {
+      // Fire the API call — don't await it for instant feel
+      repo.startRental(order.id).then((_) {
+        // Refresh data in background after server confirms
         ref.invalidate(orderByIdProvider(widget.orderId));
         ref.invalidate(ordersProvider);
+      }).catchError((e) {
+        // If server fails, refresh to show real state and alert user
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Server error: $e. Refreshing...'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      });
+
+      // Show success immediately (optimistic)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Rental started!'),
             backgroundColor: Colors.green,
           ),
         );
+        // Immediately invalidate to start fetching the new state
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        ref.invalidate(ordersProvider);
       }
     } catch (e) {
       if (mounted) {
