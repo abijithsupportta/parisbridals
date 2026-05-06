@@ -1,20 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/responsive.dart';
 import '../../models/order.dart';
+import '../../models/payment.dart';
+import '../../providers/payment_provider.dart';
 import '../order_detail_helpers.dart';
 
 /// Hero banner at the top of order detail showing customer name,
 /// status badge, and payment due/paid indicator.
-class OrderHeroBanner extends StatelessWidget {
+///
+/// Computes the due amount from actual payment records (via
+/// [orderPaymentsProvider]) instead of [order.amountPaid], which can
+/// be stale if the backend failed to update the orders table.
+class OrderHeroBanner extends ConsumerWidget {
   final Order order;
 
   const OrderHeroBanner({super.key, required this.order});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final statusColor = getStatusColor(order.status);
     final statusLabel = getStatusLabel(order.status);
-    final due = amountDue(order);
+
+    // Compute due from actual payment records (source of truth)
+    final paymentsAsync = ref.watch(orderPaymentsProvider(order.id));
+    final double due = paymentsAsync.when(
+      data: (payments) {
+        double collected = 0;
+        for (final p in payments) {
+          if (p.paymentType == PaymentType.refund) {
+            collected -= p.amount;
+          } else {
+            collected += p.amount;
+          }
+        }
+        return (order.totalAmount - collected)
+            .clamp(0, double.infinity)
+            .toDouble();
+      },
+      loading: () => amountDue(order),
+      error: (_, __) => amountDue(order),
+    );
 
     return Container(
       margin: Responsive.all(16),
