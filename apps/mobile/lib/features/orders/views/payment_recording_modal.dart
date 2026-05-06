@@ -61,9 +61,23 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
       ));
 
       if (mounted) {
-        Navigator.pop(context);
+        // Capture the messenger *before* popping so the snackbar
+        // attaches to the parent scaffold (OrderDetailView), not
+        // to the now-detached modal context.
+        final messenger = ScaffoldMessenger.of(context);
+
+        Navigator.pop(context); // close the modal
+
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Payment recorded successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Let parent refresh data (with a small delay for DB consistency)
         widget.onSuccess();
-        _showSuccess('Payment recorded successfully');
       }
     } catch (e) {
       if (mounted) {
@@ -76,17 +90,13 @@ class _PaymentRecordingModalState extends ConsumerState<PaymentRecordingModal> {
     }
   }
 
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), backgroundColor: Colors.red[700]),
     );
   }
 
-  void _showSuccess(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green[700]),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

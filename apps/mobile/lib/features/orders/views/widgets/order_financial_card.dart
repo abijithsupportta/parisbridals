@@ -345,18 +345,16 @@ class OrderFinancialCard extends ConsumerWidget {
             builder: (_) => PaymentRecordingModal(
               orderId: orderId,
               amountDue: amountDue(order),
-              onSuccess: () {
-                Navigator.pop(context);
-                ref.invalidate(ordersProvider);
+              onSuccess: () async {
+                // Small delay so the backend amount_paid update propagates
+                // before we re-fetch. Without this the GET returns stale data.
+                await Future.delayed(const Duration(milliseconds: 500));
+
+                // Refresh order + payments data to reflect the new amount_paid
                 ref.invalidate(orderByIdProvider(orderId));
                 ref.invalidate(orderPaymentsProvider(orderId));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Payment recorded successfully!'),
-                    backgroundColor: Colors.green,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
+                // Background-refresh the list so it's fresh when user goes back
+                ref.invalidate(ordersProvider);
               },
             ),
           );
