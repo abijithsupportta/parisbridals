@@ -433,19 +433,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Responsive.r(16)),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.account_balance_wallet_rounded,
-                color: Colors.orange[700], size: Responsive.icon(24)),
-            SizedBox(width: Responsive.w(8)),
-            const Text('Refund Security Deposit'),
-          ],
-        ),
+        title: const Text('Refund Security Deposit'),
         content: Text(
-          'Refund ${formatCurrency(order.securityDeposit)} security deposit to the customer?\n\nThis will be recorded in the payment history.',
+          'Refund ${formatCurrency(order.securityDeposit)} to the customer?\n\nThis will be recorded in payment history.',
         ),
         actions: [
           TextButton(
@@ -456,7 +446,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[700]),
             child: const Text(
-              'Refund Deposit',
+              'Refund',
               style: TextStyle(color: Colors.white),
             ),
           ),

@@ -296,27 +296,26 @@ class OrderFinancialCard extends ConsumerWidget {
         order.status == OrderStatus.flagged ||
         order.status == OrderStatus.lateReturn;
 
-    // Already refunded — show badge
     if (isReturned) {
       return Container(
-        padding: Responsive.all(12),
+        padding: Responsive.all(10),
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: Colors.green[50],
           borderRadius: BorderRadius.circular(Responsive.r(10)),
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(color: Colors.green[200]!),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.check_circle_rounded,
-                size: Responsive.icon(18), color: Colors.grey[600]),
-            SizedBox(width: Responsive.w(8)),
+                size: Responsive.icon(16), color: Colors.green[700]),
+            SizedBox(width: Responsive.w(6)),
             Text(
-              'Security Deposit Refunded',
+              'Deposit Refunded',
               style: TextStyle(
                 fontSize: Responsive.sp(12),
                 fontWeight: FontWeight.w700,
-                color: Colors.grey[600],
+                color: Colors.green[700],
               ),
             ),
           ],
@@ -324,35 +323,26 @@ class OrderFinancialCard extends ConsumerWidget {
       );
     }
 
-    // Show refund button for eligible orders
     if (canManage && isEligibleStatus && order.securityDeposit > 0) {
       return SizedBox(
         width: double.infinity,
-        child: ElevatedButton.icon(
+        child: ElevatedButton(
           onPressed: isDepositProcessing ? null : onMarkDepositReturned,
-          icon: Icon(
-            isDepositProcessing
-                ? Icons.hourglass_top_rounded
-                : Icons.account_balance_wallet_rounded,
-            size: Responsive.icon(18),
-          ),
-          label: Text(
-            isDepositProcessing
-                ? 'Processing...'
-                : 'Refund Security Deposit (${formatCurrency(order.securityDeposit)})',
-            style: TextStyle(
-              fontSize: Responsive.sp(13),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange[100],
-            foregroundColor: Colors.orange[800],
-            elevation: 0,
+            backgroundColor: Colors.orange[700],
+            foregroundColor: Colors.white,
             padding: Responsive.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(Responsive.r(12)),
-              side: BorderSide(color: Colors.orange[300]!),
+            ),
+          ),
+          child: Text(
+            isDepositProcessing
+                ? 'Processing...'
+                : 'Refund Deposit  •  ${formatCurrency(order.securityDeposit)}',
+            style: TextStyle(
+              fontSize: Responsive.sp(14),
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
