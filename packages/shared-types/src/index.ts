@@ -96,6 +96,7 @@ export interface Customer {
   name: string;
   email: string | null;
   phone: string;
+  alt_phone?: string | null;
   address: string | null;
   gstin: string | null;
   created_at: string;

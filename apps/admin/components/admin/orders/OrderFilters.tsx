@@ -36,6 +36,8 @@ const FILTER_CHIPS = [
   { label: "Late", value: OrderStatus.LATE_RETURN },
   { label: "Partial", value: OrderStatus.PARTIAL },
   { label: "Returned", value: OrderStatus.RETURNED },
+  { label: "Completed", value: OrderStatus.COMPLETED },
+  { label: "Cancelled", value: OrderStatus.CANCELLED },
   { label: "Flagged", value: OrderStatus.FLAGGED },
 ] as const;
 

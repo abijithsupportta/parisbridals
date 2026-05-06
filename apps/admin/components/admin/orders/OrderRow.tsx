@@ -29,8 +29,9 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/shared-utils";
-import { type OrderWithRelations } from "@/domain";
+import { type OrderWithRelations, OrderStatus } from "@/domain";
 import OrderStatusBadge from "./OrderStatusBadge";
 
 interface OrderRowProps {
@@ -140,7 +141,35 @@ function OrderRowInner({
 
       {/* Status */}
       <td className="px-4 py-4">
-        <OrderStatusBadge status={order.status} />
+        <div className="flex flex-col items-start gap-1">
+          <OrderStatusBadge status={order.status} />
+          
+          {/* Show payment badge for active (non-terminal) orders */}
+          {order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && (
+            (() => {
+              const ps = order.payment_status;
+              if (ps === 'paid') return <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200 text-[10px] py-0 px-1.5">Paid</Badge>;
+              if (ps === 'partial') return <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-[10px] py-0 px-1.5">Partial</Badge>;
+              return <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-[10px] py-0 px-1.5">Unpaid</Badge>;
+            })()
+          )}
+
+          {/* Show refund-due indicator for cancelled orders with payments */}
+          {order.status === OrderStatus.CANCELLED && order.amount_paid > 0 && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200 text-[10px] py-0 px-1.5">Refund Due</Badge>
+          )}
+
+          {/* Action Needed Indicator for today's scheduled orders */}
+          {order.status === OrderStatus.SCHEDULED && new Date(order.start_date) <= new Date(new Date().toDateString()) && (
+            <div className="flex items-center gap-1 mt-1">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Action Needed</span>
+            </div>
+          )}
+        </div>
       </td>
 
       {/* Actions */}
@@ -177,30 +206,63 @@ function OrderRowInner({
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-8 h-8 text-slate-400 hover:text-slate-900"
-            asChild
-          >
-            <Link href={`/dashboard/orders/${order.id}/edit`}>
-              <Edit className="w-4 h-4" />
-            </Link>
-          </Button>
+          {(() => {
+            const isEditDisabled = [
+              OrderStatus.CANCELLED,
+              OrderStatus.COMPLETED,
+              OrderStatus.RETURNED,
+              OrderStatus.ONGOING,
+              OrderStatus.IN_USE,
+            ].includes(order.status);
 
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="w-8 h-8 text-red-400 hover:text-red-700 hover:bg-red-50"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(order);
-              }}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
+            return (
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`w-8 h-8 ${
+                  isEditDisabled
+                    ? "text-slate-200 cursor-not-allowed"
+                    : "text-slate-400 hover:text-slate-900"
+                }`}
+                disabled={isEditDisabled}
+                asChild={!isEditDisabled}
+                onClick={(e) => {
+                  if (isEditDisabled) e.stopPropagation();
+                }}
+                title={isEditDisabled ? "Cannot edit in current status" : "Edit Order"}
+              >
+                {!isEditDisabled ? (
+                  <Link href={`/dashboard/orders/${order.id}/edit`}>
+                    <Edit className="w-4 h-4" />
+                  </Link>
+                ) : (
+                  <span>
+                    <Edit className="w-4 h-4" />
+                  </span>
+                )}
+              </Button>
+            );
+          })()}
+
+          {canDelete &&
+            [
+              OrderStatus.PENDING,
+              OrderStatus.CONFIRMED,
+              OrderStatus.SCHEDULED,
+              OrderStatus.CANCELLED,
+            ].includes(order.status) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-8 h-8 text-red-400 hover:text-red-700 hover:bg-red-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(order);
+                }}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
         </div>
       </td>
     </tr>

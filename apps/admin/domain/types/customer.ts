@@ -13,6 +13,7 @@ export interface IdDocument {
 export interface Customer extends BaseEntity {
   name: string;
   phone: string;
+  alt_phone?: string | null;
   email?: string | null;
   address?: string | null;
   gstin?: string | null;
@@ -34,6 +35,7 @@ export interface Customer extends BaseEntity {
 export interface CreateCustomerDTO {
   name: string;
   phone: string;
+  alt_phone?: string | null;
   email?: string | null;
   address?: string | null;
   gstin?: string | null;

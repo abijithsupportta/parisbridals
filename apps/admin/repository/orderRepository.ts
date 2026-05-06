@@ -35,7 +35,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .select(`
         *,
-        customer:customer_id(id, name, phone, email),
+        customer:customer_id(id, name, phone, alt_phone, email),
         items:order_items(*, product:product_id(id, name, images)),
         branch:branch_id(id, name)
       `)
@@ -110,7 +110,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .select(`
         *,
-        customer:customer_id(id, name, phone, email),
+        customer:customer_id(id, name, phone, alt_phone, email),
         items:order_items(*, product:product_id(id, name, images)),
         branch:branch_id(id, name)
       `)
@@ -397,7 +397,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .select(`
         *,
-        customer:customer_id(id, name, phone, email),
+        customer:customer_id(id, name, phone, alt_phone, email),
         items:order_items(*, product:product_id(id, name, images)),
         branch:branch_id(id, name)
       `)
@@ -471,8 +471,10 @@ export class OrderRepository extends BaseRepository {
         deposit_collected: (data as any).deposit_collected || false,
         deposit_payment_method: (data as any).deposit_payment_method || null,
         deposit_collected_at: (data as any).deposit_collected_at || null,
-        amount_paid: data.advance_collected && data.advance_amount ? (data.advance_amount + ((data as any).amount_paid || 0)) : ((data as any).amount_paid || 0),
-        payment_status: data.advance_collected && data.advance_amount ? 'partial' : ((data as any).payment_status || 'pending'),
+        amount_paid: data.advance_collected && data.advance_amount ? data.advance_amount : 0,
+        payment_status: data.advance_collected && data.advance_amount
+          ? (data.advance_amount >= totalAmount ? 'paid' : 'partial')
+          : 'pending',
         notes: data.notes || null,
       })
       .select()
@@ -507,6 +509,36 @@ export class OrderRepository extends BaseRepository {
     // NOTE: Inventory is NOT deducted at creation time.
     // Stock deduction happens only when the user manually starts the rental
     // (transitions to ongoing/in_use) via the order details page.
+
+    // Create advance payment record if advance was collected
+    if (data.advance_collected && data.advance_amount && data.advance_amount > 0) {
+      await this.client
+        .from('payments')
+        .insert({
+          order_id: order.id,
+          payment_type: 'advance',
+          amount: data.advance_amount,
+          payment_mode: data.advance_payment_method || 'cash',
+          notes: 'Advance payment collected at order creation',
+          payment_date: new Date().toISOString(),
+          ...this.getCreateAuditFields(),
+        });
+    }
+
+    // Create deposit payment record if deposit was collected
+    if ((data as any).deposit_collected && (data as any).security_deposit && (data as any).security_deposit > 0) {
+      await this.client
+        .from('payments')
+        .insert({
+          order_id: order.id,
+          payment_type: 'deposit',
+          amount: (data as any).security_deposit,
+          payment_mode: (data as any).deposit_payment_method || 'cash',
+          notes: 'Security deposit collected at order creation',
+          payment_date: new Date().toISOString(),
+          ...this.getCreateAuditFields(),
+        });
+    }
 
     // Create initial status history
     await this.client
@@ -922,6 +954,20 @@ export class OrderRepository extends BaseRepository {
     }
 
     return this.findById(orderId);
+  }
+
+  /**
+   * Add a status history entry for an order
+   */
+  async addStatusHistory(orderId: string, status: string, notes?: string): Promise<void> {
+    await this.client
+      .from(this.orderStatusHistoryTable)
+      .insert({
+        order_id: orderId,
+        status,
+        notes: notes || null,
+        changed_by: null,
+      });
   }
 }
 
