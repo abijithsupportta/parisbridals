@@ -474,6 +474,96 @@ export class OrderService {
       await orderRepository.addStatusHistory(orderId, OrderStatus.COMPLETED, 'Auto-completed: items returned + payment settled');
     }
   }
+
+  /**
+   * Auto-cancel scheduled orders that were not collected.
+   *
+   * Business rule: If an order has status 'scheduled' and its rental_start_date
+   * has already passed (i.e. the customer didn't pick up by end of day),
+   * the order is automatically cancelled the next day.
+   *
+   * This should be called daily via a cron job (Vercel cron or manual trigger).
+   *
+   * @returns List of cancelled order IDs and the count
+   */
+  async autoCancelExpiredScheduledOrders(): Promise<RepositoryResult<{ cancelledIds: string[]; count: number }>> {
+    try {
+      // Use IST (India Standard Time) since this is a single-location Indian business
+      const now = new Date();
+      // Get today's date in IST (UTC+5:30)
+      const istOffset = 5.5 * 60 * 60 * 1000;
+      const istNow = new Date(now.getTime() + istOffset);
+      const todayIST = istNow.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      console.log(`[OrderService] Auto-cancel check: today (IST) = ${todayIST}`);
+
+      // Find all scheduled orders where rental_start_date < today
+      // This means: the pickup day has passed and the customer never showed up
+      const result = await orderRepository.findExpiredScheduledOrders(todayIST);
+
+      if (!result.success) {
+        console.error('[OrderService] Failed to fetch expired scheduled orders:', result.error);
+        return {
+          data: null,
+          error: { message: result.error?.message || 'Query failed', code: 'QUERY_FAILED' } as any,
+          success: false,
+        };
+      }
+
+      const expiredOrders = result.data || [];
+
+      if (expiredOrders.length === 0) {
+        console.log('[OrderService] No expired scheduled orders found');
+        return { data: { cancelledIds: [], count: 0 }, error: null, success: true };
+      }
+
+      console.log(`[OrderService] Found ${expiredOrders.length} expired scheduled orders to cancel`);
+
+      const cancelledIds: string[] = [];
+
+      for (const order of expiredOrders) {
+        try {
+          // Cancel the order
+          await orderRepository.update(order.id, {
+            status: OrderStatus.CANCELLED,
+            updated_at: new Date().toISOString(),
+          } as any);
+
+          // Log to status history
+          await orderRepository.addStatusHistory(
+            order.id,
+            OrderStatus.CANCELLED,
+            `Auto-cancelled: scheduled for ${order.rental_start_date} but not collected`
+          );
+
+          // Restore reserved inventory (release the reserved stock)
+          await orderRepository.restoreOrderStock(order.id);
+
+          cancelledIds.push(order.id);
+          console.log(`[OrderService] Auto-cancelled order ${order.id} (was scheduled for ${order.rental_start_date})`);
+        } catch (orderErr) {
+          console.error(`[OrderService] Failed to auto-cancel order ${order.id}:`, orderErr);
+          // Continue with next order — don't let one failure block others
+        }
+      }
+
+      console.log(`[OrderService] Auto-cancel complete: ${cancelledIds.length}/${expiredOrders.length} orders cancelled`);
+
+      return {
+        data: { cancelledIds, count: cancelledIds.length },
+        error: null,
+        success: true,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[OrderService] autoCancelExpiredScheduledOrders error:', message);
+      return {
+        data: null,
+        error: { message, code: 'AUTO_CANCEL_FAILED' } as any,
+        success: false,
+      };
+    }
+  }
 }
 
 // Singleton instance
