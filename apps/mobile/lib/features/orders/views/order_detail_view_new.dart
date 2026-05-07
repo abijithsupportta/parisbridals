@@ -568,9 +568,19 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       };
 
       await repo.processReturn(previousOrder!.id, returnData);
-      if (mounted) _invalidateAll();
+
+      // API succeeded — refresh detail data (order + payments + history).
+      // Refresh the list separately so a list API failure doesn't affect
+      // the detail view or roll back the return status.
+      if (mounted) {
+        ref.invalidate(orderByIdProvider(widget.orderId));
+        ref.invalidate(orderPaymentsProvider(widget.orderId));
+        ref.invalidate(orderHistoryProvider(widget.orderId));
+        // Best-effort list refresh — errors are silently ignored
+        ref.invalidate(ordersProvider);
+      }
     } catch (e) {
-      // Rollback on failure
+      // Rollback on failure — only if the API call itself failed
       if (mounted) {
         setState(() => _cachedOrder = previousOrder);
         _showSnack('Return failed: $e', Colors.red);
