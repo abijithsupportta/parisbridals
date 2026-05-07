@@ -20,16 +20,16 @@
 
 import { NextRequest } from "next/server";
 import { orderService } from "@/services/orderService";
-import { paymentService } from "@/services/paymentService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
 import { CreateOrderSchema } from "@/domain";
-import { PaymentType } from "@/domain/types/payment";
 import { apiSuccess, apiRepositoryError, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
-// In-memory flag — auto-cancel check runs once per server instance (cold start).
-// This is a lightweight fallback in case the Vercel cron misses.
-let _autoCancelChecked = false;
+// Auto-cancel: runs at most once per 24 hours (not once per cold start).
+// On Railway (always-on), the server can stay up for weeks — a one-time flag
+// would never re-run. This time-based approach ensures daily execution.
+let _lastAutoCancelRun = 0;
+const AUTO_CANCEL_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /** GET /api/orders — fetch all orders */
 export async function GET(request: NextRequest) {
@@ -37,9 +37,10 @@ export async function GET(request: NextRequest) {
     const guard = await apiGuard(request, 'orders');
     if (guard.error) return guard.error;
 
-    // Fire-and-forget: auto-cancel expired scheduled orders (once per instance)
-    if (!_autoCancelChecked) {
-      _autoCancelChecked = true;
+    // Fire-and-forget: auto-cancel expired scheduled orders (once per 24h)
+    const now = Date.now();
+    if (now - _lastAutoCancelRun > AUTO_CANCEL_INTERVAL_MS) {
+      _lastAutoCancelRun = now;
       orderService.autoCancelExpiredScheduledOrders().catch((err) =>
         console.error('[orders/GET] Background auto-cancel failed:', err)
       );
@@ -110,17 +111,9 @@ export async function POST(request: NextRequest) {
       return apiRepositoryError(result.error, 'Failed to create order');
     }
 
-    // Create advance payment record if advance was collected
-    if (result.data && validatedData.data.advance_collected && (validatedData.data.advance_amount || 0) > 0) {
-      paymentService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
-      await paymentService.createPayment({
-        order_id: result.data.id,
-        payment_type: PaymentType.ADVANCE,
-        amount: validatedData.data.advance_amount!,
-        payment_mode: (validatedData.data.advance_payment_method as any) || 'cash',
-        notes: 'Advance payment collected at order creation',
-      });
-    }
+    // NOTE: Advance and deposit payment records are already created by
+    // orderRepository.create(). Do NOT create them again here — doing so
+    // would double-count amount_paid and break the financial card.
 
     return apiSuccess(result.data, { status: 201, message: 'Order created successfully' });
   } catch (err) {

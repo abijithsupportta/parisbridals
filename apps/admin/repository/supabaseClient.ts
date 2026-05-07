@@ -8,7 +8,6 @@
  */
 
 import { createClient, createAdminClient } from '@/lib/supabase/server';
-import { createClient as createClientComponent } from '@/lib/supabase/client';
 import { PostgrestError } from '@supabase/supabase-js';
 
 // Repository response type
@@ -51,7 +50,6 @@ export class RepositoryError extends Error implements PostgrestError {
 // Clients are lazily initialized on first use, not at import time.
 export abstract class BaseRepository {
   private _client: ReturnType<typeof createAdminClient> | null = null;
-  private _clientComponent: ReturnType<typeof createClientComponent> | null = null;
 
   // Current user context for audit fields
   protected currentUserId: string | null = null;
@@ -63,11 +61,6 @@ export abstract class BaseRepository {
   protected get client() {
     if (!this._client) this._client = createAdminClient();
     return this._client;
-  }
-
-  protected get clientComponent() {
-    if (!this._clientComponent) this._clientComponent = createClientComponent();
-    return this._clientComponent;
   }
 
   /**
@@ -263,55 +256,6 @@ export abstract class BaseRepository {
     return query;
   }
 
-  /**
-   * @deprecated — This method runs operations sequentially in JavaScript and
-   * provides NO true database-level atomicity. If operation 1 succeeds and
-   * operation 2 fails, operation 1 is **already committed** — there is no
-   * rollback. Do NOT use for multi-table writes.
-   *
-   * Instead, use `rpc()` to call a Supabase PostgreSQL function that wraps
-   * the operations in a real `BEGIN / COMMIT / ROLLBACK` block.
-   *
-   * Kept for backwards compatibility — will be removed in a future release.
-   */
-  protected async transaction<T>(
-    operations: (() => Promise<RepositoryResult<any>>)[]
-  ): Promise<RepositoryResult<T[]>> {
-    console.warn(
-      '[BaseRepository.transaction] ⚠️  This method is non-atomic. ' +
-      'Use rpc() with a PostgreSQL function for true transactional safety.'
-    );
-
-    const results: T[] = [];
-    const errors: PostgrestError[] = [];
-
-    for (const operation of operations) {
-      try {
-        const result = await operation();
-        if (result.success && result.data) {
-          results.push(result.data);
-        } else if (result.error) {
-          errors.push(result.error);
-        }
-      } catch (error) {
-        errors.push(error as PostgrestError);
-      }
-    }
-
-    if (errors.length > 0) {
-      return {
-        data: null,
-        error: errors[0], // Return first error
-        success: false,
-      };
-    }
-
-    return {
-      data: results,
-      error: null,
-      success: true,
-    };
-  }
 
   /**
    * Execute a Supabase RPC (PostgreSQL function) for truly atomic operations.
