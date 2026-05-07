@@ -241,7 +241,8 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   }
 
   Future<void> _submit() async {
-    setState(() => _isSubmitting = true);
+    if (_isSubmitting) return;
+    _isSubmitting = true;
     final branchId = ref.read(effectiveBranchIdProvider);
 
     // Validate required fields
@@ -252,7 +253,6 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
           backgroundColor: Colors.red,
         ),
       );
-      setState(() => _isSubmitting = false);
       return;
     }
 
@@ -263,11 +263,8 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
           backgroundColor: Colors.red,
         ),
       );
-      setState(() => _isSubmitting = false);
       return;
     }
-
-
 
     final body = <String, dynamic>{
       'customer_id': _selectedCustomer!.id,
@@ -300,53 +297,46 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
       body['advance_payment_method'] = _advancePaymentMethod.name;
     }
 
+    // ── OPTIMISTIC: Navigate back INSTANTLY, fire API in background ──
+    final isEdit = _isEditMode;
+    final existingId = widget.existingOrder?.id;
+    final messenger = ScaffoldMessenger.of(context);
+
+    // 1. Navigate back immediately (0ms perceived)
+    Navigator.pop(context);
+
+    // 2. Show success snackbar instantly
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(isEdit ? 'Order updated successfully!' : 'Order created successfully!'),
+        backgroundColor: Colors.green[700],
+      ),
+    );
+
+    // 3. Fire API in background — user doesn't wait
     try {
-      if (_isEditMode) {
-        // ── Edit mode: PATCH the existing order ──
+      if (isEdit) {
         final repo = ref.read(orderRepositoryProvider);
-        await repo.updateOrder(widget.existingOrder!.id, body);
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Order updated successfully!'),
-              backgroundColor: Colors.green[700],
-            ),
-          );
-          Future.delayed(const Duration(milliseconds: 600), () {
-            ref.invalidate(ordersProvider);
-            ref.invalidate(orderCountsProvider);
-            ref.invalidate(orderByIdProvider(widget.existingOrder!.id));
-          });
-        }
+        await repo.updateOrder(existingId!, body);
       } else {
-        // ── Create mode: POST a new order ──
         await ref.read(ordersProvider.notifier).createOrder(body);
-        if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Order created successfully!'),
-              backgroundColor: Colors.green[700],
-            ),
-          );
-          Future.delayed(const Duration(milliseconds: 600), () {
-            ref.invalidate(ordersProvider);
-            ref.invalidate(orderCountsProvider);
-          });
-        }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: $e'),
-            backgroundColor: Colors.red[700],
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      // Show error — user already navigated back so use root messenger
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${isEdit ? 'Update' : 'Create'} failed: $e — please retry'),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+
+    // 4. Refresh lists in background
+    ref.invalidate(ordersProvider);
+    ref.invalidate(orderCountsProvider);
+    if (isEdit && existingId != null) {
+      ref.invalidate(orderByIdProvider(existingId));
     }
   }
 
