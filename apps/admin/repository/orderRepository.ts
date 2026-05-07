@@ -969,6 +969,65 @@ export class OrderRepository extends BaseRepository {
         changed_by: null,
       });
   }
+
+  /**
+   * Find all scheduled orders whose rental_start_date is before the given date.
+   * Used by auto-cancel to find orders that were never collected.
+   */
+  async findExpiredScheduledOrders(beforeDate: string): Promise<RepositoryResult<{ id: string; rental_start_date: string }[]>> {
+    const response = await this.client
+      .from(this.tableName)
+      .select('id, rental_start_date')
+      .eq('status', 'scheduled')
+      .lt('rental_start_date', beforeDate);
+
+    if (response.error) {
+      return { data: null, error: response.error, success: false };
+    }
+    return { data: response.data || [], error: null, success: true };
+  }
+
+  /**
+   * Restore reserved stock for all items in a cancelled order.
+   * Fetches the order's items and calls the DB function to release inventory.
+   */
+  async restoreOrderStock(orderId: string): Promise<void> {
+    const { data: orderItems } = await this.client
+      .from(this.orderItemsTable)
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    if (!orderItems) return;
+
+    for (const item of orderItems) {
+      // Try the dedicated RPC function first; fall back to manual update
+      const { error: rpcError } = await this.client.rpc('restore_cancelled_order_stock', {
+        p_product_id: item.product_id,
+        p_quantity: item.quantity,
+      });
+
+      if (rpcError) {
+        // Fallback: manually update if RPC doesn't exist
+        console.warn(`[OrderRepo] RPC fallback — manual stock restore for product ${item.product_id}`);
+        const { data: product } = await this.client
+          .from('products')
+          .select('reserved_quantity, available_quantity')
+          .eq('id', item.product_id)
+          .single();
+
+        if (product) {
+          await this.client
+            .from('products')
+            .update({
+              reserved_quantity: Math.max(0, (product.reserved_quantity || 0) - item.quantity),
+              available_quantity: (product.available_quantity || 0) + item.quantity,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', item.product_id);
+        }
+      }
+    }
+  }
 }
 
 // Singleton instance
