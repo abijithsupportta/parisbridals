@@ -52,11 +52,16 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     return orderAsync.when(
       data: (order) {
-        _cachedOrder = order;
+        // Update cache from server — but only if we're NOT in the middle
+        // of an optimistic update (detected by _isDepositProcessing flag).
+        if (!_isDepositProcessing) {
+          _cachedOrder = order;
+        }
         if (_returnItems.isEmpty) {
           _initializeReturnItems(order);
         }
-        return _buildContent(order, canManage);
+        // Always render from _cachedOrder so optimistic updates are visible
+        return _buildContent(_cachedOrder ?? order, canManage);
       },
       loading: () => Scaffold(
         backgroundColor: kBg,
@@ -459,11 +464,28 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isDepositProcessing = true);
+    // ── OPTIMISTIC UI UPDATE ──────────────────────────────────────────
+    // Instead of waiting 2-3s for the server, update the UI INSTANTLY.
+    // If the server fails, we roll back.
+    final previousOrder = _cachedOrder;
+
+    // 1. Immediately update local state → UI re-renders with deposit shown as refunded
+    setState(() {
+      _isDepositProcessing = true;
+      _cachedOrder = order.copyWith(
+        depositReturned: true,
+        depositReturnedAt: DateTime.now().toIso8601String(),
+      );
+    });
+
+    // 2. Show success snackbar INSTANTLY (user perceives 0ms)
+    _showSnack(
+      'Security deposit of ${formatCurrency(order.securityDeposit)} refunded',
+      Colors.green,
+    );
+
+    // 3. Fire the API call in the BACKGROUND
     try {
-      // Create deposit_refund payment record (matching admin behavior).
-      // The backend automatically sets deposit_returned=true on the order
-      // when it receives a deposit_refund payment — no separate API call needed.
       final paymentRepo = ref.read(paymentRepositoryProvider);
       await paymentRepo.createPayment(CreatePaymentDTO(
         orderId: order.id,
@@ -473,17 +495,13 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         notes: 'Security Deposit Refund',
       ));
 
-      if (mounted) {
-        _showSnack(
-          'Security deposit of ${formatCurrency(order.securityDeposit)} refunded',
-          Colors.green,
-        );
-        // Non-blocking refresh — UI updates in background
-        _invalidateAll();
-      }
+      // Server confirmed — sync with actual server state
+      if (mounted) _invalidateAll();
     } catch (e) {
+      // ── ROLLBACK: Server failed — revert optimistic update ──
       if (mounted) {
-        _showSnack('Failed: $e', Colors.red);
+        setState(() => _cachedOrder = previousOrder);
+        _showSnack('Refund failed: $e', Colors.red);
       }
     } finally {
       if (mounted) setState(() => _isDepositProcessing = false);
