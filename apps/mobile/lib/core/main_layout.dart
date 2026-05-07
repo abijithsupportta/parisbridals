@@ -11,9 +11,6 @@ import '../features/calendar/views/calendar_view.dart';
 import '../features/products/views/products_view.dart';
 import '../features/branches/models/branch.dart';
 import '../features/branches/providers/branch_provider.dart';
-import '../features/branches/views/branches_view.dart';
-import '../features/categories/views/categories_view.dart';
-import '../features/customers/views/customers_view.dart';
 import 'responsive.dart';
 
 class MainLayout extends StatefulWidget {
@@ -113,7 +110,6 @@ class _MainLayoutState extends State<MainLayout> {
 
   // ── Drawer / Sidebar ──
   Widget _buildDrawer(BuildContext context, AuthUser? user, WidgetRef ref) {
-    final canManage = user?.canManage ?? false;
 
     return Drawer(
       width: Responsive.w(300),
@@ -174,67 +170,8 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ),
 
-            // Menu items
-            Expanded(
-              child: ListView(
-                padding: Responsive.symmetric(vertical: 12),
-                children: [
-                  if (canManage) ...[
-                    _buildDrawerItem(
-                      context,
-                      icon: Icons.category_rounded,
-                      label: 'Categories',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const _LazyView(module: _DrawerModule.categories),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildDrawerItem(
-                      context,
-                      icon: Icons.people_rounded,
-                      label: 'Customers',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const _LazyView(module: _DrawerModule.customers),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildDrawerItem(
-                      context,
-                      icon: Icons.store_rounded,
-                      label: 'Branches',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const _LazyView(module: _DrawerModule.branches),
-                          ),
-                        );
-                      },
-                    ),
-                  ] else ...[
-                    Padding(
-                      padding: Responsive.symmetric(horizontal: 24, vertical: 16),
-                      child: Text(
-                        'Management options are available for admin and manager roles.',
-                        style: TextStyle(
-                          fontSize: Responsive.sp(12),
-                          color: Colors.grey[500],
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+            // Spacer — pushes logout to bottom
+            const Expanded(child: SizedBox()),
 
             // Logout at bottom
             Padding(
@@ -467,31 +404,6 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // ── Drawer Item ──
-  Widget _buildDrawerItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      leading: Icon(icon, size: Responsive.icon(22), color: _primary),
-      title: Text(
-        label,
-        style: TextStyle(
-          fontSize: Responsive.sp(14),
-          fontWeight: FontWeight.w500,
-          color: _primary,
-        ),
-      ),
-      trailing: Icon(Icons.chevron_right_rounded,
-          size: Responsive.icon(20), color: Colors.grey[400]),
-      onTap: onTap,
-      contentPadding: Responsive.symmetric(horizontal: 24),
-      dense: true,
-    );
-  }
-
   // ── Body ──
   Widget _buildBody() {
     switch (_selectedIndex) {
@@ -501,37 +413,5 @@ class _MainLayoutState extends State<MainLayout> {
       case 3: return const ProductsView();
       default: return const DashboardView();
     }
-  }
-}
-
-/// Module identifier for drawer navigation.
-enum _DrawerModule { categories, customers, branches }
-
-/// Lazy view that loads the appropriate feature screen.
-class _LazyView extends StatelessWidget {
-  final _DrawerModule module;
-  const _LazyView({required this.module});
-
-  @override
-  Widget build(BuildContext context) {
-    Responsive.init(context);
-    final title = switch (module) {
-      _DrawerModule.categories => 'Categories',
-      _DrawerModule.customers => 'Customers',
-      _DrawerModule.branches => 'Branches',
-    };
-    final body = switch (module) {
-      _DrawerModule.categories => const CategoriesView(),
-      _DrawerModule.customers => const CustomersView(),
-      _DrawerModule.branches => const BranchesView(),
-    };
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: Text(title, style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700)),
-      ),
-      body: body,
-    );
   }
 }
