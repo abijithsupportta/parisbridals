@@ -476,6 +476,28 @@ class _OrdersViewState extends ConsumerState<OrdersView> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    if (ref.watch(canManageProvider) && [
+                      OrderStatus.pending,
+                      OrderStatus.confirmed,
+                      OrderStatus.scheduled,
+                    ].contains(order.status))
+                      GestureDetector(
+                        onTap: () => Navigator.of(context)
+                            .push(
+                              MaterialPageRoute(
+                                builder: (_) => CreateOrderView(existingOrder: order),
+                              ),
+                            )
+                            .then((_) => ref.invalidate(ordersProvider)),
+                        child: Padding(
+                          padding: Responsive.only(left: 6),
+                          child: Icon(
+                            Icons.edit_rounded,
+                            size: Responsive.icon(18),
+                            color: _primary.withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 SizedBox(height: Responsive.h(10)),
