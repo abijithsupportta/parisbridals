@@ -126,9 +126,10 @@ export class InvoiceService {
       amount: item.total_price || (item.price_per_day || 0) * (item.quantity || 0),
     }));
 
-    // Payment calculations
+    // Payment calculations — only count rental payments (exclude deposit,
+    // deposit_refund, and refund)
     const totalPaid = payments
-      .filter((p) => p.payment_type !== 'refund')
+      .filter((p) => !['refund', 'deposit', 'deposit_refund'].includes(p.payment_type))
       .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
     const balanceDue = Math.max(0, Number(order.total_amount || 0) - totalPaid);
 

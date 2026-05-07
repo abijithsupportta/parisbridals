@@ -458,11 +458,11 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     setState(() => _isDepositProcessing = true);
     try {
-      // Create refund payment record (matching admin behavior)
+      // Create deposit_refund payment record (matching admin behavior)
       final paymentRepo = ref.read(paymentRepositoryProvider);
       await paymentRepo.createPayment(CreatePaymentDTO(
         orderId: order.id,
-        paymentType: PaymentType.refund,
+        paymentType: PaymentType.depositRefund,
         amount: order.securityDeposit,
         paymentMode: PaymentMode.cash,
         notes: 'Security Deposit Refund',

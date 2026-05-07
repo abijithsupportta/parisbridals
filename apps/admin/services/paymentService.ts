@@ -137,28 +137,17 @@ export class PaymentService {
 
     // After successfully creating a refund, atomically update the order's state
     if (result.success && result.data && data.payment_type === PaymentType.REFUND) {
-      const { orderRepository } = await import('@/repository');
-      const orderResult = await orderRepository.findById(data.order_id);
-      if (orderResult.success && orderResult.data) {
-        const order = orderResult.data;
-        const isDepositRefund = data.notes?.toLowerCase().includes('deposit');
+      // Rental refund: amount_paid is already updated by paymentRepository.create().
+      // No extra work needed here — the repository handles it correctly.
+    }
 
-        if (isDepositRefund) {
-          // If it's a deposit refund, update the deposit status but don't touch amount_paid
-          await orderRepository.update(data.order_id, {
-            deposit_returned: true,
-            deposit_returned_at: new Date().toISOString(),
-          } as any);
-        } else {
-          // If it's a rental refund, update amount_paid
-          const newAmountPaid = Math.max(0, (order.amount_paid || 0) - data.amount);
-          const newPaymentStatus = newAmountPaid >= order.total_amount ? 'paid' : newAmountPaid > 0 ? 'partial' : 'pending';
-          await orderRepository.update(data.order_id, {
-            amount_paid: newAmountPaid,
-            payment_status: newPaymentStatus,
-          } as any);
-        }
-      }
+    // After a deposit_refund, mark the order's deposit as returned
+    if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      const { orderRepository } = await import('@/repository');
+      await orderRepository.update(data.order_id, {
+        deposit_returned: true,
+        deposit_returned_at: new Date().toISOString(),
+      } as any);
     }
 
     // After any non-refund, non-adjustment payment, check auto-complete

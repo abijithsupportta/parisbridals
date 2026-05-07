@@ -35,9 +35,15 @@ class OrderFinancialCard extends ConsumerWidget {
     final paymentsAsync = ref.watch(orderPaymentsProvider(orderId));
     final double collected = paymentsAsync.when(
       data: (payments) {
-        // Sum all non-refund payments, subtract refunds
+        // Sum RENTAL payments only. Exclude deposit and deposit_refund —
+        // they are a separate financial track managed via
+        // order.depositCollected / depositReturned flags.
         double total = 0;
         for (final p in payments) {
+          if (p.paymentType == PaymentType.deposit ||
+              p.paymentType == PaymentType.depositRefund) {
+            continue; // skip deposit-related payments
+          }
           if (p.paymentType == PaymentType.refund) {
             total -= p.amount;
           } else {
@@ -452,70 +458,91 @@ class OrderFinancialCard extends ConsumerWidget {
                   return Column(
                     children: payments
                         .map(
-                          (payment) => Container(
-                            margin: Responsive.only(bottom: 8),
-                            padding: Responsive.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.green[50],
-                              borderRadius: BorderRadius.circular(
-                                Responsive.r(8),
-                              ),
-                              border: Border.all(color: Colors.green[200]!),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.check_circle_rounded,
-                                  size: Responsive.icon(20),
-                                  color: Colors.green[700],
+                          (payment) {
+                            final isRefundType =
+                                payment.paymentType == PaymentType.refund ||
+                                payment.paymentType == PaymentType.depositRefund;
+                            final bgColor = isRefundType
+                                ? Colors.orange[50]
+                                : Colors.green[50];
+                            final borderColor = isRefundType
+                                ? Colors.orange[200]!
+                                : Colors.green[200]!;
+                            final iconColor = isRefundType
+                                ? Colors.orange[700]
+                                : Colors.green[700];
+                            final amountColor = isRefundType
+                                ? Colors.orange[700]
+                                : Colors.green[700];
+                            final icon = isRefundType
+                                ? Icons.reply_rounded
+                                : Icons.check_circle_rounded;
+
+                            return Container(
+                              margin: Responsive.only(bottom: 8),
+                              padding: Responsive.all(12),
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                borderRadius: BorderRadius.circular(
+                                  Responsive.r(8),
                                 ),
-                                SizedBox(width: Responsive.w(12)),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        formatCurrency(payment.amount),
-                                        style: TextStyle(
-                                          fontSize: Responsive.sp(14),
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.green[700],
-                                        ),
-                                      ),
-                                      SizedBox(height: Responsive.h(2)),
-                                      Text(
-                                        '${payment.paymentType.name.toUpperCase()} • ${payment.paymentMode.name.toUpperCase()}',
-                                        style: TextStyle(
-                                          fontSize: Responsive.sp(10),
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      if (payment.notes != null) ...[
-                                        SizedBox(height: Responsive.h(2)),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    icon,
+                                    size: Responsive.icon(20),
+                                    color: iconColor,
+                                  ),
+                                  SizedBox(width: Responsive.w(12)),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
                                         Text(
-                                          payment.notes!,
+                                          '${isRefundType ? "-" : "+"}${formatCurrency(payment.amount)}',
                                           style: TextStyle(
-                                            fontSize: Responsive.sp(10),
-                                            color: Colors.grey[500],
+                                            fontSize: Responsive.sp(14),
+                                            fontWeight: FontWeight.w700,
+                                            color: amountColor,
                                           ),
                                         ),
+                                        SizedBox(height: Responsive.h(2)),
+                                        Text(
+                                          '${payment.paymentType == PaymentType.depositRefund ? "DEPOSIT REFUND" : payment.paymentType.name.toUpperCase()} • ${payment.paymentMode.name.toUpperCase()}',
+                                          style: TextStyle(
+                                            fontSize: Responsive.sp(10),
+                                            color: Colors.grey[600],
+                                          ),
+                                        ),
+                                        if (payment.notes != null) ...[
+                                          SizedBox(height: Responsive.h(2)),
+                                          Text(
+                                            payment.notes!,
+                                            style: TextStyle(
+                                              fontSize: Responsive.sp(10),
+                                              color: Colors.grey[500],
+                                            ),
+                                          ),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  DateFormat(
-                                    'dd MMM',
-                                  ).format(DateTime.parse(payment.paymentDate)),
-                                  style: TextStyle(
-                                    fontSize: Responsive.sp(10),
-                                    color: Colors.grey[600],
+                                  Text(
+                                    DateFormat(
+                                      'dd MMM',
+                                    ).format(DateTime.parse(payment.paymentDate)),
+                                    style: TextStyle(
+                                      fontSize: Responsive.sp(10),
+                                      color: Colors.grey[600],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
+                                ],
+                              ),
+                            );
+                          },
                         )
                         .toList(),
                   );

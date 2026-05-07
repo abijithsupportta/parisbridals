@@ -8,7 +8,7 @@
 
 import { z } from 'zod';
 
-const PaymentTypeEnum = z.enum(['deposit', 'advance', 'final', 'refund', 'adjustment']);
+const PaymentTypeEnum = z.enum(['deposit', 'advance', 'final', 'refund', 'adjustment', 'deposit_refund']);
 const PaymentModeEnum = z.enum(['cash', 'upi', 'card', 'bank_transfer', 'cheque']);
 
 /**
