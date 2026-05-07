@@ -42,9 +42,18 @@ class OrderActionButtons extends StatelessWidget {
             Expanded(
               child: ElevatedButton.icon(
                 onPressed: isProcessing ? null : onStartRental,
-                icon: Icon(Icons.play_arrow_rounded, size: Responsive.icon(20)),
+                icon: isProcessing
+                    ? SizedBox(
+                        width: Responsive.w(18),
+                        height: Responsive.w(18),
+                        child: const CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Icon(Icons.play_arrow_rounded, size: Responsive.icon(20)),
                 label: Text(
-                  'Start Rental',
+                  isProcessing ? 'Processing...' : 'Start Rental',
                   style: TextStyle(
                     fontSize: Responsive.sp(13),
                     fontWeight: FontWeight.bold,
@@ -53,6 +62,8 @@ class OrderActionButtons extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2ECC71),
                   foregroundColor: Colors.white,
+                  disabledBackgroundColor: const Color(0xFF2ECC71).withValues(alpha: 0.6),
+                  disabledForegroundColor: Colors.white70,
                   padding: Responsive.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(Responsive.r(12)),

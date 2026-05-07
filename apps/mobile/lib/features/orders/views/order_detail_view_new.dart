@@ -151,6 +151,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
               order: order,
               returnItems: _returnItems,
               onReturnSubmit: _submitReturn,
+              isProcessing: _isProcessing,
               lateFee: _lateFee,
               discount: _discount,
               onLateFeeChanged: (v) => setState(() => _lateFee = v),
@@ -186,24 +187,27 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       actions: [
         IconButton(
           icon: Icon(Icons.refresh_rounded, size: Responsive.icon(24)),
-          onPressed: () => ref.invalidate(orderByIdProvider(widget.orderId)),
+          onPressed: () => _invalidateAll(),
         ),
       ],
     );
+  }
+
+  /// Centralized invalidation — refreshes order, payments, and history together.
+  void _invalidateAll() {
+    ref.invalidate(orderByIdProvider(widget.orderId));
+    ref.invalidate(orderPaymentsProvider(widget.orderId));
+    ref.invalidate(orderHistoryProvider(widget.orderId));
+    ref.invalidate(ordersProvider);
   }
 
   // ── Business actions (delegate to server via repository) ─────────────
 
   Future<void> _startRental() async {
     final order = _cachedOrder;
-    if (order == null) return;
+    if (order == null || _isProcessing) return;
     if (order.items == null || order.items!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No items in this order'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _showSnack('No items in this order', Colors.orange);
       return;
     }
 
@@ -212,12 +216,15 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     try {
       final repo = ref.read(orderRepositoryProvider);
       final today = DateTime.now().toIso8601String().split('T')[0];
+
+      // Include product_name in the availability check payload
       final availResult = await repo.checkStockAvailability(
         items: order.items!
             .map(
               (item) => <String, dynamic>{
                 'product_id': item.productId,
                 'quantity': item.quantity,
+                'product_name': item.productName ?? 'Product',
               },
             )
             .toList(),
@@ -242,42 +249,22 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         return;
       }
 
-      // Fire the API call — don't await it for instant feel
-      () async {
-        try {
-          await repo.startRental(order.id);
-          ref.invalidate(orderByIdProvider(widget.orderId));
-          ref.invalidate(ordersProvider);
-        } catch (e) {
-          ref.invalidate(orderByIdProvider(widget.orderId));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Server error: $e. Refreshing...'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
+      // Await the API call properly — no fire-and-forget
+      try {
+        await repo.startRental(order.id);
+        if (mounted) {
+          _showSnack('Rental started!', Colors.green);
+          _invalidateAll();
         }
-      }();
-
-      // Show success immediately (optimistic)
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Rental started!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        // Immediately invalidate to start fetching the new state
-        ref.invalidate(orderByIdProvider(widget.orderId));
-        ref.invalidate(ordersProvider);
+      } catch (e) {
+        if (mounted) {
+          _showSnack('Server error: $e', Colors.red);
+          _invalidateAll();
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
-        );
+        _showSnack('Failed: $e', Colors.red);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -301,11 +288,13 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
             size: Responsive.icon(24),
           ),
           SizedBox(width: Responsive.w(8)),
-          Text(
-            allAvailable ? 'Stock Available' : 'Stock Issue',
-            style: TextStyle(
-              fontSize: Responsive.sp(16),
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: Text(
+              allAvailable ? 'Stock Available' : 'Stock Issue',
+              style: TextStyle(
+                fontSize: Responsive.sp(16),
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ],
@@ -316,6 +305,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         children: [
           ...items.map((item) {
             final isOk = item['isAvailable'] == true;
+            final name = (item['product_name'] ?? 'Product').toString();
             return Padding(
               padding: Responsive.only(bottom: 8),
               child: Row(
@@ -330,7 +320,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
                   SizedBox(width: Responsive.w(8)),
                   Expanded(
                     child: Text(
-                      '${item['product_name'] ?? 'Product'}: ${item['requested']} requested, ${item['available']} available',
+                      '$name: ${item['requested']} requested, ${item['available']} available',
                       style: TextStyle(fontSize: Responsive.sp(13)),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -375,7 +365,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
   Future<void> _cancelOrder() async {
     final order = _cachedOrder;
-    if (order == null) return;
+    if (order == null || _isProcessing) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -406,20 +396,12 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       final repo = ref.read(orderRepositoryProvider);
       await repo.cancelOrder(order.id);
       if (mounted) {
-        ref.invalidate(orderByIdProvider(widget.orderId));
-        ref.invalidate(ordersProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Order cancelled'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        _showSnack('Order cancelled', Colors.orange);
+        _invalidateAll();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
-        );
+        _showSnack('Failed: $e', Colors.red);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -468,26 +450,24 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         notes: 'Security Deposit Refund',
       ));
 
-      // Also mark deposit as returned on the order (fire-and-forget)
-      final repo = ref.read(orderRepositoryProvider);
-      () async { try { await repo.markDepositReturned(order.id); } catch (_) {} }();
+      // Also mark deposit as returned on the order
+      try {
+        final repo = ref.read(orderRepositoryProvider);
+        await repo.markDepositReturned(order.id);
+      } catch (_) {
+        // Best-effort — deposit flag update is secondary
+      }
 
       if (mounted) {
-        ref.invalidate(orderByIdProvider(widget.orderId));
-        ref.invalidate(orderPaymentsProvider(widget.orderId));
-        ref.invalidate(ordersProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Security deposit of ${formatCurrency(order.securityDeposit)} refunded'),
-            backgroundColor: Colors.green,
-          ),
+        _showSnack(
+          'Security deposit of ${formatCurrency(order.securityDeposit)} refunded',
+          Colors.green,
         );
+        _invalidateAll();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
-        );
+        _showSnack('Failed: $e', Colors.red);
       }
     } finally {
       if (mounted) setState(() => _isDepositProcessing = false);
@@ -503,12 +483,7 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         .where((e) => e.value.status == null)
         .toList();
     if (uninspected.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please inspect all items before completing return'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _showSnack('Please inspect all items before completing return', Colors.orange);
       return;
     }
 
@@ -531,51 +506,34 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     try {
       final repo = ref.read(orderRepositoryProvider);
-
-      // Fire-and-forget for instant feel
       final returnData = {
         'order_id': _cachedOrder!.id,
         'items': returnItemsList,
         if (_lateFee > 0) 'late_fee': _lateFee,
         if (_discount > 0) 'discount': _discount,
       };
-      () async {
-        try {
-          await repo.processReturn(_cachedOrder!.id, returnData);
-          ref.invalidate(orderByIdProvider(widget.orderId));
-          ref.invalidate(ordersProvider);
-        } catch (e) {
-          ref.invalidate(orderByIdProvider(widget.orderId));
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Server error: $e. Refreshing...'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-        }
-      }();
 
-      // Show success immediately
+      // Await the API call properly — no fire-and-forget
+      await repo.processReturn(_cachedOrder!.id, returnData);
+
       if (mounted) {
-        ref.invalidate(orderByIdProvider(widget.orderId));
-        ref.invalidate(ordersProvider);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Return processed successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showSnack('Return processed successfully', Colors.green);
+        _invalidateAll();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
-        );
+        _showSnack('Failed: $e', Colors.red);
+        _invalidateAll();
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
+  }
+
+  /// Convenience helper for showing a snackbar.
+  void _showSnack(String message, Color bg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: bg),
+    );
   }
 }
