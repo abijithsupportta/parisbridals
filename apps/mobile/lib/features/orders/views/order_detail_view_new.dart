@@ -53,8 +53,8 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     return orderAsync.when(
       data: (order) {
         // Update cache from server — but only if we're NOT in the middle
-        // of an optimistic update (detected by _isDepositProcessing flag).
-        if (!_isDepositProcessing) {
+        // of an optimistic update (detected by processing flags).
+        if (!_isDepositProcessing && !_isProcessing) {
           _cachedOrder = order;
         }
         if (_returnItems.isEmpty) {
@@ -275,17 +275,22 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         return;
       }
 
-      // Await the API call properly — no fire-and-forget
+      // ── OPTIMISTIC UI: show 'ongoing' instantly ──
+      final previousOrder = _cachedOrder;
+      setState(() {
+        _cachedOrder = order.copyWith(status: OrderStatus.ongoing);
+      });
+      _showSnack('Rental started!', Colors.green);
+
+      // Background: fire API call
       try {
         await repo.startRental(order.id);
-        if (mounted) {
-          _showSnack('Rental started!', Colors.green);
-          _invalidateAll();
-        }
+        if (mounted) _invalidateAll();
       } catch (e) {
+        // Rollback on failure
         if (mounted) {
-          _showSnack('Server error: $e', Colors.red);
-          _invalidateAll();
+          setState(() => _cachedOrder = previousOrder);
+          _showSnack('Start rental failed: $e', Colors.red);
         }
       }
     } catch (e) {
@@ -417,17 +422,24 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
     );
     if (confirmed != true || !mounted) return;
 
-    setState(() => _isProcessing = true);
+    // ── OPTIMISTIC UI: show 'cancelled' instantly ──
+    final previousOrder = _cachedOrder;
+    setState(() {
+      _isProcessing = true;
+      _cachedOrder = order.copyWith(status: OrderStatus.cancelled);
+    });
+    _showSnack('Order cancelled', Colors.orange);
+
+    // Background: fire API call
     try {
       final repo = ref.read(orderRepositoryProvider);
       await repo.cancelOrder(order.id);
-      if (mounted) {
-        _showSnack('Order cancelled', Colors.orange);
-        _invalidateAll();
-      }
+      if (mounted) _invalidateAll();
     } catch (e) {
+      // Rollback on failure
       if (mounted) {
-        _showSnack('Failed: $e', Colors.red);
+        setState(() => _cachedOrder = previousOrder);
+        _showSnack('Cancel failed: $e', Colors.red);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
@@ -538,6 +550,14 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
       };
     }).toList();
 
+    // ── OPTIMISTIC UI: show 'returned' instantly ──
+    final previousOrder = _cachedOrder;
+    setState(() {
+      _cachedOrder = _cachedOrder!.copyWith(status: OrderStatus.returned);
+    });
+    _showSnack('Return processed successfully', Colors.green);
+
+    // Background: fire API call
     try {
       final repo = ref.read(orderRepositoryProvider);
       final returnData = {
@@ -547,17 +567,13 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         if (_discount > 0) 'discount': _discount,
       };
 
-      // Await the API call properly — no fire-and-forget
-      await repo.processReturn(_cachedOrder!.id, returnData);
-
-      if (mounted) {
-        _showSnack('Return processed successfully', Colors.green);
-        _invalidateAll();
-      }
+      await repo.processReturn(previousOrder!.id, returnData);
+      if (mounted) _invalidateAll();
     } catch (e) {
+      // Rollback on failure
       if (mounted) {
-        _showSnack('Failed: $e', Colors.red);
-        _invalidateAll();
+        setState(() => _cachedOrder = previousOrder);
+        _showSnack('Return failed: $e', Colors.red);
       }
     } finally {
       if (mounted) setState(() => _isProcessing = false);
