@@ -245,6 +245,57 @@ class Order {
     this.store,
   });
 
+  /// Creates a copy of this Order with the given fields replaced.
+  /// Used for optimistic UI updates — update local state instantly
+  /// before the server confirms.
+  Order copyWith({
+    OrderStatus? status,
+    bool? depositReturned,
+    String? depositReturnedAt,
+    double? amountPaid,
+    PaymentStatus? paymentStatus,
+    String? notes,
+  }) {
+    return Order(
+      id: id,
+      storeId: storeId,
+      customerId: customerId,
+      branchId: branchId,
+      status: status ?? this.status,
+      startDate: startDate,
+      endDate: endDate,
+      eventDate: eventDate,
+      totalAmount: totalAmount,
+      subtotal: subtotal,
+      gstAmount: gstAmount,
+      securityDeposit: securityDeposit,
+      amountPaid: amountPaid ?? this.amountPaid,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
+      notes: notes ?? this.notes,
+      depositCollected: depositCollected,
+      depositCollectedAt: depositCollectedAt,
+      depositPaymentMethod: depositPaymentMethod,
+      depositReturned: depositReturned ?? this.depositReturned,
+      depositReturnedAt: depositReturnedAt ?? this.depositReturnedAt,
+      deliveryMethod: deliveryMethod,
+      deliveryAddress: deliveryAddress,
+      pickupAddress: pickupAddress,
+      lateFee: lateFee,
+      discount: discount,
+      damageChargesTotal: damageChargesTotal,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      advanceAmount: advanceAmount,
+      advanceCollected: advanceCollected,
+      advanceCollectedAt: advanceCollectedAt,
+      advancePaymentMethod: advancePaymentMethod,
+      customer: customer,
+      items: items,
+      branch: branch,
+      store: store,
+    );
+  }
+
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
       id: json['id'] as String? ?? '',
