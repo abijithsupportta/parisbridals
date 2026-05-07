@@ -13,6 +13,7 @@ import 'widgets/order_financial_card.dart';
 import 'widgets/order_hero_banner.dart';
 import 'widgets/order_items_section.dart';
 import 'widgets/order_logistics_bar.dart';
+import 'create_order/create_order_view.dart';
 
 /// Comprehensive Order Detail View matching admin functionality.
 ///
@@ -173,6 +174,13 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
   }
 
   PreferredSizeWidget _buildAppBar(Order order) {
+    final canManage = ref.watch(canManageProvider);
+    final isEditable = [
+      OrderStatus.pending,
+      OrderStatus.confirmed,
+      OrderStatus.scheduled,
+    ].contains(order.status);
+
     return AppBar(
       backgroundColor: kPrimary,
       foregroundColor: Colors.white,
@@ -185,6 +193,19 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         ),
       ),
       actions: [
+        if (canManage && isEditable)
+          IconButton(
+            icon: Icon(Icons.edit_rounded, size: Responsive.icon(22)),
+            tooltip: 'Edit Order',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreateOrderView(existingOrder: order),
+                ),
+              ).then((_) => _invalidateAll());
+            },
+          ),
         IconButton(
           icon: Icon(Icons.refresh_rounded, size: Responsive.icon(24)),
           onPressed: () => _invalidateAll(),
