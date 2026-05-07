@@ -90,19 +90,20 @@ export class PaymentService {
       };
     }
 
-    // Block non-refund payments for cancelled/completed orders.
-    // Both REFUND (rental refund) and DEPOSIT_REFUND are allowed — you need
-    // to be able to return money after a rental is complete.
+    // Block non-refund payments for CANCELLED orders only.
+    // Completed orders can still have an outstanding balance (e.g., ₹500
+    // advance on a ₹750 order — items returned but ₹250 still owed).
+    // Both REFUND (rental refund) and DEPOSIT_REFUND are always allowed.
     const isRefundType = data.payment_type === PaymentType.REFUND || data.payment_type === PaymentType.DEPOSIT_REFUND;
     if (!isRefundType) {
       const { orderRepository } = await import('@/repository');
       const orderCheck = await orderRepository.findById(data.order_id);
       if (orderCheck.success && orderCheck.data) {
         const orderStatus = orderCheck.data.status;
-        if (orderStatus === 'completed' || orderStatus === 'cancelled') {
+        if (orderStatus === 'cancelled') {
           return {
             data: null,
-            error: { message: `Cannot collect payment for a ${orderStatus} order`, code: 'ORDER_FINALIZED' } as any,
+            error: { message: `Cannot collect payment for a cancelled order`, code: 'ORDER_FINALIZED' } as any,
             success: false,
           };
         }
