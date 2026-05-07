@@ -36,7 +36,7 @@ export class OrderRepository extends BaseRepository {
       .select(`
         *,
         customer:customer_id(id, name, phone, alt_phone, email),
-        items:order_items(id, order_id, product_id, quantity, price_per_day, rental_days, subtotal, total_price, created_at, product:product_id(id, name)),
+        items:order_items(id, order_id, product_id, quantity, price_per_day, subtotal, created_at, product:product_id(id, name)),
         branch:branch_id(id, name)
       `)
       .order('created_at', { ascending: false });
