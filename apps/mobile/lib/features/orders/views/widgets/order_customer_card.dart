@@ -86,6 +86,53 @@ class OrderCustomerCard extends StatelessWidget {
               ),
             ),
           ),
+          if ((order.deliveryAddress != null && order.deliveryAddress!.isNotEmpty) || 
+              (order.pickupAddress != null && order.pickupAddress!.isNotEmpty)) ...[
+            SizedBox(height: Responsive.h(16)),
+            Container(
+              padding: Responsive.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(Responsive.r(12)),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.location_on_rounded,
+                    size: Responsive.icon(18),
+                    color: Colors.grey[400],
+                  ),
+                  SizedBox(width: Responsive.w(8)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.deliveryMethod == DeliveryMethod.delivery ? 'Delivery Address' : 'Address',
+                          style: TextStyle(
+                            fontSize: Responsive.sp(10),
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                        SizedBox(height: Responsive.h(4)),
+                        Text(
+                          (order.deliveryAddress?.isNotEmpty == true ? order.deliveryAddress : order.pickupAddress) ?? 'N/A',
+                          style: TextStyle(
+                            fontSize: Responsive.sp(13),
+                            color: Colors.grey[800],
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

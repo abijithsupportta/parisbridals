@@ -90,8 +90,11 @@ export class PaymentService {
       };
     }
 
-    // Block non-refund payments for cancelled/completed orders
-    if (data.payment_type !== PaymentType.REFUND) {
+    // Block non-refund payments for cancelled/completed orders.
+    // Both REFUND (rental refund) and DEPOSIT_REFUND are allowed — you need
+    // to be able to return money after a rental is complete.
+    const isRefundType = data.payment_type === PaymentType.REFUND || data.payment_type === PaymentType.DEPOSIT_REFUND;
+    if (!isRefundType) {
       const { orderRepository } = await import('@/repository');
       const orderCheck = await orderRepository.findById(data.order_id);
       if (orderCheck.success && orderCheck.data) {
@@ -132,33 +135,50 @@ export class PaymentService {
       }
     }
 
+    // For deposit refunds, validate that the deposit hasn't already been returned
+    if (data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      const { orderRepository } = await import('@/repository');
+      const orderResult = await orderRepository.findById(data.order_id);
+      if (!orderResult.success || !orderResult.data) {
+        return {
+          data: null,
+          error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
+          success: false,
+        };
+      }
+      const order = orderResult.data;
+      if (order.deposit_returned) {
+        return {
+          data: null,
+          error: { message: 'Security deposit has already been refunded', code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+      if (data.amount > (order.security_deposit || 0)) {
+        return {
+          data: null,
+          error: { message: `Deposit refund amount (${data.amount}) exceeds security deposit (${order.security_deposit})`, code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+    }
+
     paymentRepository.setUserContext(this.currentUserId, this.currentBranchId);
     const result = await paymentRepository.create(data);
 
     // After successfully creating a refund, atomically update the order's state
     if (result.success && result.data && data.payment_type === PaymentType.REFUND) {
-      const { orderRepository } = await import('@/repository');
-      const orderResult = await orderRepository.findById(data.order_id);
-      if (orderResult.success && orderResult.data) {
-        const order = orderResult.data;
-        const isDepositRefund = data.notes?.toLowerCase().includes('deposit');
+      // Rental refund: amount_paid is already updated by paymentRepository.create().
+      // No extra work needed here — the repository handles it correctly.
+    }
 
-        if (isDepositRefund) {
-          // If it's a deposit refund, update the deposit status but don't touch amount_paid
-          await orderRepository.update(data.order_id, {
-            deposit_returned: true,
-            deposit_returned_at: new Date().toISOString(),
-          } as any);
-        } else {
-          // If it's a rental refund, update amount_paid
-          const newAmountPaid = Math.max(0, (order.amount_paid || 0) - data.amount);
-          const newPaymentStatus = newAmountPaid >= order.total_amount ? 'paid' : newAmountPaid > 0 ? 'partial' : 'pending';
-          await orderRepository.update(data.order_id, {
-            amount_paid: newAmountPaid,
-            payment_status: newPaymentStatus,
-          } as any);
-        }
-      }
+    // After a deposit_refund, mark the order's deposit as returned
+    if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      const { orderRepository } = await import('@/repository');
+      await orderRepository.update(data.order_id, {
+        deposit_returned: true,
+        deposit_returned_at: new Date().toISOString(),
+      } as any);
     }
 
     // After any non-refund, non-adjustment payment, check auto-complete

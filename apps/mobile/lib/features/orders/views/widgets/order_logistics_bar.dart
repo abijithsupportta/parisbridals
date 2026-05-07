@@ -12,8 +12,10 @@ class OrderLogisticsBar extends StatelessWidget {
 
   String _formatDate(String dateStr) {
     try {
-      return DateFormat('dd/MM/yyyy').format(DateTime.parse(dateStr));
+      return DateFormat('d MMM yyyy').format(DateTime.parse(dateStr));
     } catch (_) {
+      // If parsing fails, try to just return the first 10 chars (YYYY-MM-DD)
+      if (dateStr.length >= 10) return dateStr.substring(0, 10);
       return dateStr;
     }
   }

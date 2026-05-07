@@ -97,7 +97,10 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
   // Compute collected amount from actual payment records (source of truth).
   // order.amount_paid can be stale if the backend update failed silently.
+  // IMPORTANT: Exclude 'deposit' and 'deposit_refund' payments — they are
+  // a separate financial track and must not affect rental due calculations.
   const computed_amount_paid = payments.reduce((sum: number, p: any) => {
+    if (p.payment_type === PaymentType.DEPOSIT || p.payment_type === PaymentType.DEPOSIT_REFUND) return sum;
     return p.payment_type === PaymentType.REFUND ? sum - p.amount : sum + p.amount;
   }, 0);
   const amount_paid_display = Math.max(0, computed_amount_paid);
@@ -270,7 +273,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       createPayment(
         {
           order_id: order.id,
-          payment_type: PaymentType.REFUND,
+          payment_type: PaymentType.DEPOSIT_REFUND,
           amount: order.security_deposit,
           payment_mode: refundForm.paymentMode,
           notes: refundForm.notes || "Security Deposit Refund",
@@ -474,11 +477,11 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md border ${
-                          payment.payment_type === PaymentType.REFUND ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          payment.payment_type === PaymentType.REFUND || payment.payment_type === PaymentType.DEPOSIT_REFUND ? 'bg-orange-50 text-orange-700 border-orange-200' :
                           payment.payment_type === PaymentType.DEPOSIT ? 'bg-blue-50 text-blue-700 border-blue-200' :
                           'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}>
-                          {payment.payment_type}
+                          {payment.payment_type === PaymentType.DEPOSIT_REFUND ? 'deposit refund' : payment.payment_type}
                         </span>
                         <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md uppercase border border-slate-200">
                           {payment.payment_mode}
@@ -487,8 +490,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                       {payment.notes && <div className="text-xs text-slate-500 mt-1.5 truncate max-w-[200px]" title={payment.notes}>{payment.notes}</div>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className={`text-base font-black ${payment.payment_type === PaymentType.REFUND ? 'text-orange-600' : 'text-emerald-600'}`}>
-                        {payment.payment_type === PaymentType.REFUND ? '-' : '+'}{formatCurrency(payment.amount)}
+                      <span className={`text-base font-black ${payment.payment_type === PaymentType.REFUND || payment.payment_type === PaymentType.DEPOSIT_REFUND ? 'text-orange-600' : 'text-emerald-600'}`}>
+                        {payment.payment_type === PaymentType.REFUND || payment.payment_type === PaymentType.DEPOSIT_REFUND ? '-' : '+'}{formatCurrency(payment.amount)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

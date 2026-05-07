@@ -58,26 +58,37 @@ class _CustomerSearchFieldState extends ConsumerState<CustomerSearchField> {
   Future<void> _search(String query) async {
     if (query.isEmpty) return;
     setState(() { _isSearching = true; _searchError = null; });
-    try {
-      final repo = ref.read(customerRepositoryProvider);
-      final result = await repo.getCustomers(query: query, limit: 5);
-      if (mounted) {
-        setState(() {
-          _results = result.customers;
-          _showResults = true;
-        });
+    
+    int retries = 2;
+    while (retries >= 0) {
+      try {
+        final repo = ref.read(customerRepositoryProvider);
+        final result = await repo.getCustomers(query: query, limit: 5);
+        if (mounted) {
+          setState(() {
+            _results = result.customers;
+            _showResults = true;
+          });
+        }
+        break; // Success, break the retry loop
+      } catch (e) {
+        if (retries == 0) {
+          if (mounted) {
+            setState(() {
+              _results = [];
+              _showResults = true;
+              _searchError = e.toString().replaceFirst('Exception: ', '');
+            });
+          }
+        } else {
+          // Wait briefly before retrying
+          await Future.delayed(const Duration(milliseconds: 1000));
+        }
+        retries--;
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _results = [];
-          _showResults = true;
-          _searchError = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _isSearching = false);
     }
+    
+    if (mounted) setState(() => _isSearching = false);
   }
 
   // ── Selection ──

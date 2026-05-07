@@ -127,13 +127,13 @@ class OrdersNotifier extends AsyncNotifier<PaginatedOrders> {
   Future<void> createOrder(Map<String, dynamic> body) async {
     final repo = ref.read(orderRepositoryProvider);
     await repo.createOrder(body);
-    ref.invalidateSelf();
+    // UI handles invalidation after navigation and delay
   }
 
   Future<void> updateOrder(String id, Map<String, dynamic> body) async {
     final repo = ref.read(orderRepositoryProvider);
     await repo.updateOrder(id, body);
-    ref.invalidateSelf();
+    // UI handles invalidation after navigation and delay
   }
 
   Future<void> deleteOrder(String id) async {

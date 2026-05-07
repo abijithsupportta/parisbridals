@@ -19,6 +19,7 @@ class OrderItemsSection extends StatefulWidget {
   final Order order;
   final Map<String, ReturnItemState> returnItems;
   final VoidCallback onReturnSubmit;
+  final bool isProcessing;
   final double lateFee;
   final double discount;
   final ValueChanged<double> onLateFeeChanged;
@@ -29,6 +30,7 @@ class OrderItemsSection extends StatefulWidget {
     required this.order,
     required this.returnItems,
     required this.onReturnSubmit,
+    this.isProcessing = false,
     required this.lateFee,
     required this.discount,
     required this.onLateFeeChanged,
@@ -455,22 +457,45 @@ class _OrderItemsSectionState extends State<OrderItemsSection> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: widget.onReturnSubmit,
+              onPressed: widget.isProcessing ? null : widget.onReturnSubmit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: kPrimary,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey[400],
                 padding: Responsive.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(Responsive.r(12)),
                 ),
               ),
-              child: Text(
-                'Complete Return Process',
-                style: TextStyle(
-                  fontSize: Responsive.sp(14),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: widget.isProcessing
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: Responsive.w(18),
+                          height: Responsive.w(18),
+                          child: const CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        ),
+                        SizedBox(width: Responsive.w(10)),
+                        Text(
+                          'Processing...',
+                          style: TextStyle(
+                            fontSize: Responsive.sp(14),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      'Complete Return Process',
+                      style: TextStyle(
+                        fontSize: Responsive.sp(14),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
           ),
         ],

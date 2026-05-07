@@ -20,6 +20,8 @@ class PaymentHelpers {
         return 'refund';
       case PaymentType.adjustment:
         return 'adjustment';
+      case PaymentType.depositRefund:
+        return 'deposit_refund';
     }
   }
 
@@ -45,6 +47,7 @@ enum PaymentType {
   final_,
   refund,
   adjustment,
+  depositRefund,
 }
 
 enum PaymentMode {
@@ -110,6 +113,8 @@ class Payment {
         return PaymentType.refund;
       case 'adjustment':
         return PaymentType.adjustment;
+      case 'deposit_refund':
+        return PaymentType.depositRefund;
       default:
         return PaymentType.final_;
     }

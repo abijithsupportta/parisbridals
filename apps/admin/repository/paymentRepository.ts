@@ -126,7 +126,16 @@ export class PaymentRepository extends BaseRepository {
     const payment = paymentResponse.data as Payment;
     console.log('[PaymentRepo] Payment created:', payment.id);
 
-    // ── Step 2: Read the current order totals ────────────────────────
+    // ── Step 2: Update order amount_paid (ONLY for rental payments) ───
+    // Deposit and deposit_refund are a separate financial track managed
+    // via order.deposit_collected / deposit_returned flags.  They must
+    // NEVER modify amount_paid / payment_status.
+    if (data.payment_type === PaymentType.DEPOSIT || data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      console.log('[PaymentRepo] Skipping amount_paid update — deposit-related payment');
+      return { data: payment, error: null, success: true };
+    }
+
+    // ── Step 3: Read the current order totals ────────────────────────
     const orderFetchResponse = await this.client
       .from('orders')
       .select('amount_paid, total_amount')
@@ -158,7 +167,7 @@ export class PaymentRepository extends BaseRepository {
       paymentStatus,
     });
 
-    // ── Step 3: Update the order's amount_paid ───────────────────────
+    // ── Step 4: Update the order's amount_paid ───────────────────────
     // CRITICAL: .select().single() forces Supabase to return the updated row.
     // Without it, the response is always { data: null, error: null } regardless
     // of whether any row was updated.
@@ -188,7 +197,7 @@ export class PaymentRepository extends BaseRepository {
       updatedOrder.payment_status,
     );
 
-    // ── Step 4: Verify the write was persisted ───────────────────────
+    // ── Step 5: Verify the write was persisted ───────────────────────
     if (Number(updatedOrder.amount_paid) !== newAmountPaid) {
       console.error('[PaymentRepo] ⚠️  AMOUNT MISMATCH after update!', {
         expected: newAmountPaid,
