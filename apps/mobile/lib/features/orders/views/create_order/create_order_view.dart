@@ -6,6 +6,7 @@ import '../../../../core/responsive.dart';
 import '../../../branches/providers/branch_provider.dart';
 import '../../../customers/models/customer.dart';
 import '../../../products/models/product.dart';
+import '../../models/order.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/order_counts_provider.dart';
 
@@ -31,9 +32,14 @@ class CartItem {
   double get lineTotal => product.rentalPrice * quantity;
 }
 
-/// 4-step Create Order flow.
+/// 4-step Create/Edit Order flow.
+///
+/// When [existingOrder] is provided, the form is pre-filled for editing.
+/// Only orders in pending/confirmed/scheduled status can be edited.
 class CreateOrderView extends ConsumerStatefulWidget {
-  const CreateOrderView({super.key});
+  final Order? existingOrder;
+
+  const CreateOrderView({super.key, this.existingOrder});
 
   @override
   ConsumerState<CreateOrderView> createState() => _CreateOrderViewState();
@@ -45,6 +51,8 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
 
   final _pageController = PageController();
   int _currentStep = 0;
+
+  bool get _isEditMode => widget.existingOrder != null;
 
   // Step 1
   Customer? _selectedCustomer;
@@ -66,6 +74,62 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
   final _notesController = TextEditingController();
 
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFromExistingOrder();
+  }
+
+  /// Pre-fill state from existing order when editing.
+  void _initFromExistingOrder() {
+    final order = widget.existingOrder;
+    if (order == null) return;
+
+    // Step 1: Customer
+    if (order.customer != null) {
+      _selectedCustomer = Customer(
+        id: order.customer!.id,
+        storeId: '',
+        name: order.customer!.name,
+        phone: order.customer!.phone,
+        email: order.customer!.email,
+        createdAt: '',
+        updatedAt: '',
+      );
+    }
+
+    // Step 2: Dates
+    _startDate = DateTime.tryParse(order.startDate);
+    _endDate = DateTime.tryParse(order.endDate);
+
+    // Step 3: Cart items from order items
+    if (order.items != null) {
+      for (final item in order.items!) {
+        _cart.add(CartItem(
+          product: Product(
+            id: item.productId,
+            storeId: '',
+            name: item.productName ?? 'Product',
+            slug: '',
+            rentalPrice: item.rentalPrice,
+            quantity: item.quantity,
+            availableQuantity: 0,
+            images: item.productImageUrl != null
+                ? [ProductImage(url: item.productImageUrl!)]
+                : [],
+            createdAt: '',
+          ),
+          quantity: item.quantity,
+        ));
+      }
+    }
+
+    // Step 4: Payment info
+    _securityDeposit = order.securityDeposit;
+    _collectDeposit = order.depositCollected ?? false;
+    _notesController.text = order.notes ?? '';
+  }
 
   double get _subtotal => _cart.fold(0.0, (s, i) => s + i.lineTotal);
 
@@ -237,24 +301,40 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
     }
 
     try {
-      await ref.read(ordersProvider.notifier).createOrder(body);
-      if (mounted) {
-        // 1. Close the creation screen immediately so the user isn't stuck waiting
-        Navigator.pop(context);
-        
-        // 2. Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Order created successfully!'),
-            backgroundColor: Colors.green[700],
-          ),
-        );
-
-        // 3. Wait briefly for the DB/cache to catch up, then refresh both list & counts
-        Future.delayed(const Duration(milliseconds: 600), () {
-          ref.invalidate(ordersProvider);
-          ref.invalidate(orderCountsProvider);
-        });
+      if (_isEditMode) {
+        // ── Edit mode: PATCH the existing order ──
+        final repo = ref.read(orderRepositoryProvider);
+        await repo.updateOrder(widget.existingOrder!.id, body);
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Order updated successfully!'),
+              backgroundColor: Colors.green[700],
+            ),
+          );
+          Future.delayed(const Duration(milliseconds: 600), () {
+            ref.invalidate(ordersProvider);
+            ref.invalidate(orderCountsProvider);
+            ref.invalidate(orderByIdProvider(widget.existingOrder!.id));
+          });
+        }
+      } else {
+        // ── Create mode: POST a new order ──
+        await ref.read(ordersProvider.notifier).createOrder(body);
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Order created successfully!'),
+              backgroundColor: Colors.green[700],
+            ),
+          );
+          Future.delayed(const Duration(milliseconds: 600), () {
+            ref.invalidate(ordersProvider);
+            ref.invalidate(orderCountsProvider);
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -293,7 +373,7 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
           onPressed: _goBack,
         ),
         title: Text(
-          'New Order',
+          _isEditMode ? 'Edit Order' : 'New Order',
           style: TextStyle(
             fontSize: Responsive.sp(16),
             fontWeight: FontWeight.bold,
@@ -492,7 +572,9 @@ class _CreateOrderViewState extends ConsumerState<CreateOrderView> {
                         ),
                       )
                     : Text(
-                        _currentStep == 3 ? 'Create Order' : 'Continue',
+                        _currentStep == 3
+                            ? (_isEditMode ? 'Save Changes' : 'Create Order')
+                            : 'Continue',
                         style: TextStyle(
                           fontSize: Responsive.sp(15),
                           fontWeight: FontWeight.w900,
