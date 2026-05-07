@@ -159,23 +159,33 @@ export class OrderService {
       }
     }
 
-    // Check availability for ALL items in PARALLEL (not sequentially)
-    // Before: 5 items × 50ms = 250ms serial. Now: max(50ms) = ~50ms parallel.
-    const availChecks = await Promise.all(
-      data.items.map(item =>
-        this.checkAvailability(item.product_id, data.rental_start_date, data.rental_end_date, data.branch_id)
-      )
+    // Check availability for ALL items in a SINGLE BATCH (2 DB queries total)
+    // Before: N items × 2 queries each = 2N DB round-trips
+    // After:  1 batch = 2 DB queries (products + overlapping bookings)
+    const batchResult = await orderRepository.checkBatchAvailability(
+      data.items.map(item => ({ product_id: item.product_id, quantity: item.quantity })),
+      data.rental_start_date,
+      data.rental_end_date,
+      data.branch_id
     );
 
-    for (let i = 0; i < data.items.length; i++) {
-      const availCheck = availChecks[i];
-      if (!availCheck.success) {
-        return { data: null, error: availCheck.error, success: false };
-      }
-      if (availCheck.data!.available < data.items[i].quantity) {
+    if (!batchResult.success || !batchResult.data) {
+      return { data: null, error: batchResult.error, success: false };
+    }
+
+    for (const item of data.items) {
+      const avail = batchResult.data.results.get(item.product_id);
+      if (!avail) {
         return {
           data: null,
-          error: { message: `Insufficient availability for product. Only ${availCheck.data!.available} available.`, code: 'VALIDATION_ERROR' } as any,
+          error: { message: `Product ${item.product_id} not found`, code: 'VALIDATION_ERROR' } as any,
+          success: false
+        };
+      }
+      if (avail.available < item.quantity) {
+        return {
+          data: null,
+          error: { message: `Insufficient availability for product. Only ${avail.available} available.`, code: 'VALIDATION_ERROR' } as any,
           success: false
         };
       }

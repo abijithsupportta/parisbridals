@@ -27,23 +27,12 @@ import { CreateOrderSchema } from "@/domain";
 import { PaymentType } from "@/domain/types/payment";
 import { apiSuccess, apiRepositoryError, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
-// In-memory flag — auto-cancel check runs once per server instance (cold start).
-// This is a lightweight fallback in case the Vercel cron misses.
-let _autoCancelChecked = false;
-
 /** GET /api/orders — fetch all orders */
 export async function GET(request: NextRequest) {
   try {
     const guard = await apiGuard(request, 'orders');
     if (guard.error) return guard.error;
 
-    // Fire-and-forget: auto-cancel expired scheduled orders (once per instance)
-    if (!_autoCancelChecked) {
-      _autoCancelChecked = true;
-      orderService.autoCancelExpiredScheduledOrders().catch((err) =>
-        console.error('[orders/GET] Background auto-cancel failed:', err)
-      );
-    }
 
     const searchParams = request.nextUrl.searchParams;
     const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1;

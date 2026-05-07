@@ -36,7 +36,7 @@ export class OrderRepository extends BaseRepository {
       .select(`
         *,
         customer:customer_id(id, name, phone, alt_phone, email),
-        items:order_items(id, order_id, product_id, quantity, price_per_day, rental_days, subtotal, total_price, created_at, product:product_id(id, name, images)),
+        items:order_items(id, order_id, product_id, quantity, price_per_day, rental_days, subtotal, total_price, created_at, product:product_id(id, name)),
         branch:branch_id(id, name)
       `)
       .order('created_at', { ascending: false });
@@ -155,19 +155,23 @@ export class OrderRepository extends BaseRepository {
 
     const totalQuantity = productResponse.data?.quantity || 0;
 
-    // Fetch all active order items for this product with their order date ranges
+    const reqStart = new Date(startDate).getTime();
+    const reqEnd = new Date(endDate).getTime();
+    const queryStartDate = new Date(reqStart - BUFFER_MS).toISOString();
+    const queryEndDate = new Date(reqEnd + BUFFER_MS).toISOString();
+
+    // Fetch overlapping active order items for this product
     const ordersResponse = await this.client
       .from('order_items')
       .select('quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status, customer_id, customer:customer_id(name))')
       .eq('product_id', productId)
-      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
+      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial'])
+      .lte('orders.start_date', queryEndDate)
+      .gte('orders.end_date', queryStartDate);
 
     if (ordersResponse.error) {
       return this.handleResponse<{ available: number; total: number; peakReserved: number; overlappingOrders: any[] }>(ordersResponse);
     }
-
-    const reqStart = new Date(startDate).getTime();
-    const reqEnd = new Date(endDate).getTime();
 
     // Collect overlapping bookings (filtering out the excluded order if editing)
     const overlappingBookings: { start: number; end: number; quantity: number; orderId: string; customerName: string; startDate: string; endDate: string; status: string }[] = [];
@@ -260,6 +264,137 @@ export class OrderRepository extends BaseRepository {
   }
 
   /**
+   * Check availability for MULTIPLE products in a single batch.
+   *
+   * Instead of N separate checkAvailability calls (2N DB queries),
+   * this method does it in just 2 DB queries total:
+   *   1. Fetch all product quantities in one .in() query
+   *   2. Fetch all overlapping bookings for all products in one .in() query
+   *
+   * Then runs the Sweep Line algorithm per-product in memory.
+   *
+   * @param items - Array of { product_id, quantity } to check
+   * @param startDate - Rental start date
+   * @param endDate - Rental end date
+   * @param branchId - Branch ID (unused currently but kept for future)
+   * @param excludeOrderId - Exclude this order (for edit scenarios)
+   */
+  async checkBatchAvailability(
+    items: { product_id: string; quantity: number }[],
+    startDate: string,
+    endDate: string,
+    branchId?: string,
+    excludeOrderId?: string
+  ): Promise<RepositoryResult<{ results: Map<string, { available: number; total: number; peakReserved: number }> }>> {
+    const productIds = items.map(i => i.product_id);
+
+    const reqStart = new Date(startDate).getTime();
+    const reqEnd = new Date(endDate).getTime();
+    const queryStartDate = new Date(reqStart - BUFFER_MS).toISOString();
+    const queryEndDate = new Date(reqEnd + BUFFER_MS).toISOString();
+
+    // 2 queries total (instead of 2N)
+    const [productsResponse, ordersResponse] = await Promise.all([
+      // Query 1: Get all product quantities in one batch
+      this.client
+        .from('products')
+        .select('id, quantity')
+        .in('id', productIds),
+
+      // Query 2: Get all overlapping bookings for all products in one batch
+      this.client
+        .from('order_items')
+        .select('product_id, quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status)')
+        .in('product_id', productIds)
+        .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial'])
+        .lte('orders.start_date', queryEndDate)
+        .gte('orders.end_date', queryStartDate),
+    ]);
+
+    if (productsResponse.error) {
+      return { data: null, error: productsResponse.error, success: false };
+    }
+    if (ordersResponse.error) {
+      return { data: null, error: ordersResponse.error, success: false };
+    }
+
+    // Build product quantity map
+    const productQuantities = new Map<string, number>();
+    for (const p of productsResponse.data || []) {
+      productQuantities.set(p.id, p.quantity || 0);
+    }
+
+    // Group bookings by product_id
+    const bookingsByProduct = new Map<string, { start: number; end: number; quantity: number }[]>();
+    for (const item of (ordersResponse.data || []) as any[]) {
+      const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
+      if (!order) continue;
+      if (excludeOrderId && order.id === excludeOrderId) continue;
+
+      const unreturned = item.quantity - (item.returned_quantity || 0);
+      if (unreturned <= 0) continue;
+
+      const ordStart = new Date(order.start_date).getTime();
+      const ordEnd = new Date(order.end_date).getTime();
+      const effectiveStart = ordStart - BUFFER_MS;
+      const effectiveEnd = ordEnd + BUFFER_MS;
+
+      if (effectiveStart <= reqEnd && effectiveEnd >= reqStart) {
+        if (!bookingsByProduct.has(item.product_id)) {
+          bookingsByProduct.set(item.product_id, []);
+        }
+        bookingsByProduct.get(item.product_id)!.push({
+          start: ordStart,
+          end: ordEnd,
+          quantity: unreturned,
+        });
+      }
+    }
+
+    // Run Sweep Line per product
+    const results = new Map<string, { available: number; total: number; peakReserved: number }>();
+    for (const productId of productIds) {
+      const totalQuantity = productQuantities.get(productId) || 0;
+      const bookings = bookingsByProduct.get(productId) || [];
+
+      // Sweep Line
+      const events: { time: number; delta: number }[] = [];
+      for (const booking of bookings) {
+        events.push({ time: booking.start - BUFFER_MS, delta: +booking.quantity });
+        events.push({ time: booking.end + BUFFER_MS + 86400000, delta: -booking.quantity });
+      }
+      events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+
+      let currentUsage = 0;
+      let peakUsage = 0;
+      for (const event of events) {
+        if (event.time > reqEnd + BUFFER_MS + 86400000) break;
+        currentUsage += event.delta;
+        if (event.time >= reqStart - BUFFER_MS && event.time <= reqEnd + BUFFER_MS) {
+          peakUsage = Math.max(peakUsage, currentUsage);
+        }
+      }
+
+      // Baseline check
+      let baselineAtStart = 0;
+      for (const booking of bookings) {
+        if (booking.start - BUFFER_MS <= reqStart && booking.end + BUFFER_MS >= reqStart) {
+          baselineAtStart += booking.quantity;
+        }
+      }
+      peakUsage = Math.max(peakUsage, baselineAtStart);
+
+      results.set(productId, {
+        available: Math.max(0, totalQuantity - peakUsage),
+        total: totalQuantity,
+        peakReserved: peakUsage,
+      });
+    }
+
+    return { data: { results }, error: null, success: true };
+  }
+
+  /**
    * Get per-day availability calendar for a product over a date range.
    *
    * Used to render the availability calendar on the product detail page.
@@ -287,19 +422,26 @@ export class OrderRepository extends BaseRepository {
     const totalQuantity = productResponse.data?.quantity || 0;
     const productName = productResponse.data?.name || '';
 
-    // Fetch all active bookings that overlap with the view range
+    const viewStart = new Date(rangeStart);
+    const viewEnd = new Date(rangeEnd);
+
+    // Push date filtering to DB — only fetch bookings that overlap the view range
+    // Before: fetched ALL active bookings for this product, then filtered in JS
+    // After: DB returns only overlapping rows (massively reduces payload + RAM)
+    const queryStartDate = new Date(viewStart.getTime() - BUFFER_MS).toISOString();
+    const queryEndDate = new Date(viewEnd.getTime() + BUFFER_MS).toISOString();
+
     const ordersResponse = await this.client
       .from('order_items')
       .select('quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status, customer_id, customer:customer_id(name))')
       .eq('product_id', productId)
-      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
+      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial'])
+      .lte('orders.start_date', queryEndDate)
+      .gte('orders.end_date', queryStartDate);
 
     if (ordersResponse.error) {
       return this.handleResponse<any>(ordersResponse);
     }
-
-    const viewStart = new Date(rangeStart);
-    const viewEnd = new Date(rangeEnd);
 
     // Parse all bookings
     const bookings: { start: Date; end: Date; quantity: number; orderId: string; customerName: string; startDate: string; endDate: string; status: string }[] = [];
