@@ -90,8 +90,11 @@ export class PaymentService {
       };
     }
 
-    // Block non-refund payments for cancelled/completed orders
-    if (data.payment_type !== PaymentType.REFUND) {
+    // Block non-refund payments for cancelled/completed orders.
+    // Both REFUND (rental refund) and DEPOSIT_REFUND are allowed — you need
+    // to be able to return money after a rental is complete.
+    const isRefundType = data.payment_type === PaymentType.REFUND || data.payment_type === PaymentType.DEPOSIT_REFUND;
+    if (!isRefundType) {
       const { orderRepository } = await import('@/repository');
       const orderCheck = await orderRepository.findById(data.order_id);
       if (orderCheck.success && orderCheck.data) {
@@ -127,6 +130,34 @@ export class PaymentService {
         return {
           data: null,
           error: { message: `Refund amount (${data.amount}) exceeds total refundable (${totalRefundable})`, code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+    }
+
+    // For deposit refunds, validate that the deposit hasn't already been returned
+    if (data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      const { orderRepository } = await import('@/repository');
+      const orderResult = await orderRepository.findById(data.order_id);
+      if (!orderResult.success || !orderResult.data) {
+        return {
+          data: null,
+          error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
+          success: false,
+        };
+      }
+      const order = orderResult.data;
+      if (order.deposit_returned) {
+        return {
+          data: null,
+          error: { message: 'Security deposit has already been refunded', code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+      if (data.amount > (order.security_deposit || 0)) {
+        return {
+          data: null,
+          error: { message: `Deposit refund amount (${data.amount}) exceeds security deposit (${order.security_deposit})`, code: 'VALIDATION_ERROR' } as any,
           success: false,
         };
       }
