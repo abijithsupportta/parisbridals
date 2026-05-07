@@ -440,7 +440,9 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
 
     setState(() => _isDepositProcessing = true);
     try {
-      // Create deposit_refund payment record (matching admin behavior)
+      // Create deposit_refund payment record (matching admin behavior).
+      // The backend automatically sets deposit_returned=true on the order
+      // when it receives a deposit_refund payment — no separate API call needed.
       final paymentRepo = ref.read(paymentRepositoryProvider);
       await paymentRepo.createPayment(CreatePaymentDTO(
         orderId: order.id,
@@ -450,19 +452,12 @@ class _OrderDetailViewNewState extends ConsumerState<OrderDetailViewNew> {
         notes: 'Security Deposit Refund',
       ));
 
-      // Also mark deposit as returned on the order
-      try {
-        final repo = ref.read(orderRepositoryProvider);
-        await repo.markDepositReturned(order.id);
-      } catch (_) {
-        // Best-effort — deposit flag update is secondary
-      }
-
       if (mounted) {
         _showSnack(
           'Security deposit of ${formatCurrency(order.securityDeposit)} refunded',
           Colors.green,
         );
+        // Non-blocking refresh — UI updates in background
         _invalidateAll();
       }
     } catch (e) {
