@@ -125,7 +125,7 @@ export class OrderService {
       };
     }
 
-    // Validate items
+    // Validate item fields (synchronous — no DB calls)
     for (const item of data.items) {
       if (!item.product_id) {
         return {
@@ -157,16 +157,22 @@ export class OrderService {
           success: false,
         };
       }
-      
-      const availCheck = await this.checkAvailability(item.product_id, data.rental_start_date, data.rental_end_date, data.branch_id);
+    }
+
+    // Check availability for ALL items in PARALLEL (not sequentially)
+    // Before: 5 items × 50ms = 250ms serial. Now: max(50ms) = ~50ms parallel.
+    const availChecks = await Promise.all(
+      data.items.map(item =>
+        this.checkAvailability(item.product_id, data.rental_start_date, data.rental_end_date, data.branch_id)
+      )
+    );
+
+    for (let i = 0; i < data.items.length; i++) {
+      const availCheck = availChecks[i];
       if (!availCheck.success) {
-        return {
-          data: null,
-          error: availCheck.error,
-          success: false
-        };
+        return { data: null, error: availCheck.error, success: false };
       }
-      if (availCheck.data!.available < item.quantity) {
+      if (availCheck.data!.available < data.items[i].quantity) {
         return {
           data: null,
           error: { message: `Insufficient availability for product. Only ${availCheck.data!.available} available.`, code: 'VALIDATION_ERROR' } as any,
