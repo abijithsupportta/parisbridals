@@ -20,11 +20,9 @@
 
 import { NextRequest } from "next/server";
 import { orderService } from "@/services/orderService";
-import { paymentService } from "@/services/paymentService";
 import { apiGuard } from "@/lib/apiGuard";
 import { getAuthUser } from "@/lib/auth";
 import { CreateOrderSchema } from "@/domain";
-import { PaymentType } from "@/domain/types/payment";
 import { apiSuccess, apiRepositoryError, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
 // Auto-cancel: runs at most once per 24 hours (not once per cold start).
@@ -113,17 +111,9 @@ export async function POST(request: NextRequest) {
       return apiRepositoryError(result.error, 'Failed to create order');
     }
 
-    // Create advance payment record if advance was collected
-    if (result.data && validatedData.data.advance_collected && (validatedData.data.advance_amount || 0) > 0) {
-      paymentService.setUserContext(authUser?.staff_id || null, authUser?.branch_id || null);
-      await paymentService.createPayment({
-        order_id: result.data.id,
-        payment_type: PaymentType.ADVANCE,
-        amount: validatedData.data.advance_amount!,
-        payment_mode: (validatedData.data.advance_payment_method as any) || 'cash',
-        notes: 'Advance payment collected at order creation',
-      });
-    }
+    // NOTE: Advance and deposit payment records are already created by
+    // orderRepository.create(). Do NOT create them again here — doing so
+    // would double-count amount_paid and break the financial card.
 
     return apiSuccess(result.data, { status: 201, message: 'Order created successfully' });
   } catch (err) {
