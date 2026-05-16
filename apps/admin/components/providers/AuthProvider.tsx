@@ -16,10 +16,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     async function initAuth() {
       try {
         setLoading(true);
-        
+
         // 1. Check current session
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         if (!session) {
           setAuthenticated(false);
           setUser(null);
@@ -30,7 +30,24 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           return;
         }
 
-        // 2. Fetch full user profile from our API (which includes store_id)
+        // 2. If user was just logged in, the profile was cached in sessionStorage
+        // This skips the extra /api/auth.me round-trip on the first mount after login
+        let usedCache = false;
+        const cachedUser = sessionStorage.getItem('pb_auth_user');
+        if (cachedUser) {
+          try {
+            const user = JSON.parse(cachedUser);
+            setUser(user);
+            setAuthenticated(true);
+            sessionStorage.removeItem('pb_auth_user'); // consume it
+            usedCache = true;
+          } catch {
+            sessionStorage.removeItem('pb_auth_user');
+          }
+        }
+
+        // 3. Fallback: fetch full user profile from our API (which includes store_id)
+        if (usedCache) return;
         const response = await fetch('/api/auth/me');
         if (response.ok) {
           const { user } = await response.json();

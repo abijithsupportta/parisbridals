@@ -22,16 +22,37 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // Use server API for auth — does signIn + staff lookup in one shot
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) {
-        setError("Invalid email or password");
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        setError(result.error || "Invalid email or password");
         setIsLoading(false);
         return;
       }
+
+      const { access_token, refresh_token, ...userProfile } = result.data;
+
+      // Set browser session with tokens (stores cookies locally)
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token,
+        refresh_token,
+      });
+
+      if (sessionError) {
+        setError("Session error. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
+      // Cache user profile so AuthProvider skips the /api/auth/me call
+      sessionStorage.setItem('pb_auth_user', JSON.stringify(userProfile));
 
       router.push("/dashboard");
     } catch (err) {
