@@ -10,12 +10,12 @@
  */
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO, OrderStatusHistory } from '@/domain/types/order';
+import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO, OrderStatusHistory, OrderStatus } from '@/domain/types/order';
 import { useAppStore } from '@/stores';
 import type { ApiSuccessResponse, PaginationMeta } from '@/lib/apiResponse';
 
 // Query keys
-const orderKeys = {
+export const orderKeys = {
   all: ['orders'] as const,
   lists: () => [...orderKeys.all, 'list'] as const,
   list: (params?: OrderSearchParams) => [...orderKeys.lists(), params] as const,
@@ -137,7 +137,7 @@ export function useCreateOrder() {
     mutationFn: (data: CreateOrderDTO) =>
       apiFetch<ApiSuccessResponse<OrderWithRelations>>('/api/orders', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
+      await queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       showSuccess('Order created successfully');
     },
     onError: (error) => showError('Failed to create order', error.message),
@@ -158,13 +158,29 @@ export function useUpdateOrder() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateOrderDTO }) => 
+    mutationFn: ({ id, data }: { id: string; data: UpdateOrderDTO }) =>
       apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: orderKeys.detail(id) });
+      const previousOrder = queryClient.getQueryData<any>(orderKeys.detail(id));
+
+      if (previousOrder?.data) {
+        queryClient.setQueryData(orderKeys.detail(id), {
+          ...previousOrder,
+          data: { ...previousOrder.data, ...data },
+        });
+      }
+      return { previousOrder, id };
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.detail(variables.id) });
+      await queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       showSuccess('Order updated successfully');
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.previousOrder) {
+        queryClient.setQueryData(orderKeys.detail(context.id), context.previousOrder);
+      }
       showError('Failed to update order', error.message);
     },
   });
@@ -197,8 +213,9 @@ export function useDeleteOrder() {
       }
       return { previousOrders };
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
+    onSuccess: async (_data, id) => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
+      queryClient.removeQueries({ queryKey: orderKeys.detail(id) });
       showSuccess('Order deleted successfully');
     },
     onError: (error, id, context) => {
@@ -224,13 +241,29 @@ export function useProcessOrderReturn() {
   const { showSuccess, showError } = useAppStore();
 
   const mutation = useMutation({
-    mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) => 
+    mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) =>
       apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
+    onMutate: async ({ orderId }) => {
+      await queryClient.cancelQueries({ queryKey: orderKeys.detail(orderId) });
+      const previousOrder = queryClient.getQueryData<any>(orderKeys.detail(orderId));
+
+      if (previousOrder?.data) {
+        queryClient.setQueryData(orderKeys.detail(orderId), {
+          ...previousOrder,
+          data: { ...previousOrder.data, status: OrderStatus.RETURNED },
+        });
+      }
+      return { previousOrder, orderId };
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.detail(variables.orderId) });
+      await queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       showSuccess('Order return processed successfully');
     },
-    onError: (error) => {
+    onError: (error, _variables, context) => {
+      if (context?.previousOrder) {
+        queryClient.setQueryData(orderKeys.detail(context.orderId), context.previousOrder);
+      }
       showError('Failed to process order return', error.message);
     },
   });
@@ -251,11 +284,27 @@ export function useMarkDepositReturned() {
 
   const mutation = useMutation({
     mutationFn: (orderId: string) => apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/deposit`, { method: 'PATCH' }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all });
+    onMutate: async (orderId) => {
+      await queryClient.cancelQueries({ queryKey: orderKeys.detail(orderId) });
+      const previousOrder = queryClient.getQueryData<any>(orderKeys.detail(orderId));
+
+      if (previousOrder?.data) {
+        queryClient.setQueryData(orderKeys.detail(orderId), {
+          ...previousOrder,
+          data: { ...previousOrder.data, deposit_returned: true },
+        });
+      }
+      return { previousOrder, orderId };
+    },
+    onSuccess: async (_data, orderId) => {
+      await queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
+      await queryClient.invalidateQueries({ queryKey: orderKeys.lists() });
       showSuccess('Deposit marked as returned');
     },
-    onError: (error) => {
+    onError: (error, _orderId, context) => {
+      if (context?.previousOrder) {
+        queryClient.setQueryData(orderKeys.detail(context.orderId), context.previousOrder);
+      }
       showError('Failed to mark deposit as returned', error.message);
     },
   });

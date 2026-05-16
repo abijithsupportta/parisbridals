@@ -44,41 +44,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check all items in PARALLEL (not sequential) for speed
-    const results = await Promise.all(
-      items.map(async (item: any) => {
-        const availResult = await orderService.checkAvailability(
-          item.product_id,
-          start_date,
-          end_date,
-          branch_id,
-          exclude_order_id
-        );
+    // Batch-check all items in a SINGLE DB round-trip (2 queries total)
+    // Before: N items × 2 queries each = 2N DB round-trips
+    // After:  1 batch = 2 DB queries regardless of item count
+    const batchResult = await orderService.checkBatchAvailability(
+      items.map((item: any) => ({ product_id: item.product_id, quantity: item.quantity })),
+      start_date,
+      end_date,
+      branch_id,
+      exclude_order_id
+    );
 
-        if (!availResult.success || !availResult.data) {
-          return {
-            product_id: item.product_id,
-            product_name: item.product_name || 'Unknown',
-            requested: item.quantity,
-            available: 0,
-            isAvailable: false,
-            peakReserved: 0,
-            overlappingOrders: [],
-            error: availResult.error?.message || 'Failed to check availability',
-          };
-        }
+    if (!batchResult.success || !batchResult.data) {
+      return apiInternalError(batchResult.error?.message || 'Failed to check availability');
+    }
 
+    const results = items.map((item: any) => {
+      const result = batchResult.data!.results.get(item.product_id);
+      if (!result) {
         return {
           product_id: item.product_id,
           product_name: item.product_name || 'Unknown',
           requested: item.quantity,
-          available: availResult.data.available,
-          isAvailable: availResult.data.available >= item.quantity,
-          peakReserved: availResult.data.peakReserved,
-          overlappingOrders: availResult.data.overlappingOrders,
+          available: 0,
+          isAvailable: false,
+          peakReserved: 0,
+          overlappingOrders: [],
+          error: 'Product not found',
         };
-      })
-    );
+      }
+
+      return {
+        product_id: item.product_id,
+        product_name: item.product_name || 'Unknown',
+        requested: item.quantity,
+        available: result.available,
+        isAvailable: result.available >= item.quantity,
+        peakReserved: result.peakReserved,
+        overlappingOrders: [],
+      };
+    });
 
     const allAvailable = results.every((r: any) => r.isAvailable);
 

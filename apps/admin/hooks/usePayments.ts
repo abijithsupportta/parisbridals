@@ -16,16 +16,9 @@ import {
   UpdatePaymentDTO,
   PaymentSearchParams 
 } from '@/domain/types/payment';
-import { queryUtils } from '@/lib/query-client';
+import { queryUtils, queryKeys } from '@/lib/query-client';
 import { useAppStore } from '@/stores';
 import type { ApiSuccessResponse } from '@/lib/apiResponse';
-
-// Query keys
-const queryKeys = {
-  payments: ['payments'] as const,
-  payment: (id: string) => ['payments', id] as const,
-  orderPayments: (orderId: string) => ['payments', 'order', orderId] as const,
-};
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -105,6 +98,7 @@ export function useCreatePayment() {
       queryUtils.invalidatePayments();
       if (result.order_id) {
         queryUtils.invalidateOrderPayments(result.order_id);
+        queryUtils.invalidateOrder(result.order_id);
       }
       showSuccess('Payment recorded successfully');
     },

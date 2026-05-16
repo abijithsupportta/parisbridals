@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Package, CheckCircle2, AlertTriangle, Loader2,
   ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2, Edit3, ReceiptText, ScanBarcode
@@ -13,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Modal from "@/components/admin/Modal";
-import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments, useLookupProductByBarcode } from "@/hooks";
+import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments, useLookupProductByBarcode, orderKeys } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
 import { OrderStatus, ConditionRating } from "@/domain/types/order";
@@ -25,6 +26,7 @@ const BarcodeScanner = dynamic(() => import('./BarcodeScanner'), { ssr: false })
 
 export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: orderResponse, isLoading } = useOrder(orderId);
   // We keep history for potential future use but hide it from the 2-second UX glance
   const { data: historyResponse } = useOrderStatusHistory(orderId);
@@ -196,6 +198,14 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       }
 
       // All stock available — proceed
+      // Optimistic update: show "Ongoing" instantly before API responds
+      queryClient.setQueryData(orderKeys.detail(order.id), (old: any) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: { ...old.data, status: OrderStatus.ONGOING, start_date: today },
+        };
+      });
       updateOrder({
         id: order.id,
         data: {
@@ -242,19 +252,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
-            // If deposit type, flag the order as deposit-collected
-            if (paymentForm.paymentType === PaymentType.DEPOSIT) {
-              updateOrder({
-                id: order.id,
-                data: {
-                  deposit_collected: true,
-                  deposit_payment_method: paymentForm.paymentMode as any,
-                  deposit_collected_at: new Date().toISOString(),
-                },
-              });
-            }
-            // amount_paid is updated atomically by paymentRepository.create()
-            // and the UI computes from payment records — no manual update needed.
+            // Backend paymentService.createPayment now handles deposit_collected
+            // atomically for DEPOSIT type — no second API call needed.
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
             showSuccess("Payment Recorded", "Payment was successfully processed.");

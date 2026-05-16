@@ -62,6 +62,20 @@ export class OrderService {
   }
 
   /**
+   * Batch-check availability for multiple items in a single DB round-trip.
+   * Replaces N individual checkAvailability() calls with 2 queries total.
+   */
+  async checkBatchAvailability(
+    items: { product_id: string; quantity: number }[],
+    startDate: string,
+    endDate: string,
+    branchId?: string,
+    excludeOrderId?: string
+  ) {
+    return await orderRepository.checkBatchAvailability(items, startDate, endDate, branchId, excludeOrderId);
+  }
+
+  /**
    * Create a new order
    */
   async createOrder(data: CreateOrderDTO): Promise<RepositoryResult<OrderWithRelations>> {
@@ -290,8 +304,11 @@ export class OrderService {
     const result = await orderRepository.update(id, data);
 
     // After any update that changes payment_status or deposit_returned, check auto-complete
+    // Fire-and-forget: don't block the response for a background status check
     if (result.success && (data.payment_status || data.deposit_returned || data.status)) {
-      await this.checkAndAutoComplete(id);
+      this.checkAndAutoComplete(id).catch(() => {
+        // Auto-complete is best-effort; log but don't fail the request
+      });
     }
 
     return result;
@@ -408,10 +425,13 @@ export class OrderService {
     }
 
     const result = await orderRepository.processReturn(orderId, returnData);
-    
+
     // After return processing, check if both tracks are done for auto-complete
+    // Fire-and-forget: don't block the response for a background status check
     if (result.success) {
-      await this.checkAndAutoComplete(orderId);
+      this.checkAndAutoComplete(orderId).catch(() => {
+        // Auto-complete is best-effort; log but don't fail the request
+      });
     }
 
     return result;
