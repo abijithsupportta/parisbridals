@@ -598,7 +598,173 @@ powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy.ps1
 
 ---
 
-## 24. Known TODOs & Incomplete Areas
+## 24. Performance Optimization Patterns
+
+Patterns established from optimizing the order detail page actions (Start Rental, Record Payment, Process Return, Deposit Refund, Cancellation Refund) from 600ms-1.5s down to 0ms perceived latency.
+
+### 24.1 Optimistic UI Updates (TanStack Query)
+
+**ALWAYS** implement `onMutate` for mutations that update visible data. This makes the UI feel instant.
+
+```typescript
+const mutation = useMutation({
+  mutationFn: ({ id, data }) => apiFetch(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  onMutate: async ({ id, data }) => {
+    await queryClient.cancelQueries({ queryKey: orderKeys.detail(id) });
+    const previousOrder = queryClient.getQueryData<any>(orderKeys.detail(id));
+
+    if (previousOrder?.data) {
+      queryClient.setQueryData(orderKeys.detail(id), {
+        ...previousOrder,
+        data: { ...previousOrder.data, ...data },  // ← Merge changes instantly
+      });
+    }
+    return { previousOrder, id };  // ← Pass to onError for rollback
+  },
+
+  onError: (error, _variables, context) => {
+    if (context?.previousOrder) {
+      queryClient.setQueryData(orderKeys.detail(context.id), context.previousOrder);  // ← Rollback
+    }
+  },
+});
+```
+
+**Rules:**
+1. Cancel outgoing queries for the same key before mutating
+2. Snapshot previous data in `onMutate`
+3. Merge optimistic changes into the cache
+4. Return context from `onMutate` for rollback
+5. Always implement `onError` rollback
+
+### 24.2 Targeted Cache Invalidation
+
+**NEVER** use broad invalidation like `invalidateQueries({ queryKey: orderKeys.all })`. This refetches everything (detail, list, counts, history) and causes visible UI delays.
+
+**✅ Correct:**
+```typescript
+onSuccess: async (_data, variables) => {
+  await queryClient.invalidateQueries({ queryKey: orderKeys.detail(variables.id) });  // Just this order
+  await queryClient.invalidateQueries({ queryKey: orderKeys.lists() });               // Just the list
+}
+```
+
+**❌ Wrong:**
+```typescript
+onSuccess: async () => {
+  await queryClient.invalidateQueries({ queryKey: orderKeys.all });  // Refetches EVERYTHING
+}
+```
+
+**Payment mutations** should also invalidate the parent order:
+```typescript
+onSuccess: (result) => {
+  queryUtils.invalidatePayments();
+  if (result.order_id) {
+    queryUtils.invalidateOrderPayments(result.order_id);
+    queryUtils.invalidateOrder(result.order_id);  // ← Parent order too
+  }
+}
+```
+
+### 24.3 Non-Blocking Background Jobs
+
+**NEVER** `await` non-critical post-mutation work in the API response path.
+
+**Example: Auto-complete check**
+```typescript
+// ❌ Wrong — blocks every mutation response
+if (result.success && data.status) {
+  await this.checkAndAutoComplete(id);  // +1-3 DB round-trips added to response
+}
+
+// ✅ Correct — fire-and-forget
+if (result.success && data.status) {
+  this.checkAndAutoComplete(id).catch(() => {
+    // Best-effort background check; log but don't fail the request
+  });
+}
+```
+
+**When to use fire-and-forget:**
+- Status auto-transitions (e.g., auto-complete when all conditions met)
+- Audit logging
+- Side-effect notifications
+- Cache warming
+
+**When to keep synchronous:**
+- Data consistency requirements (e.g., updating a counter that must be accurate)
+- Financial transactions
+- User-facing validation
+
+### 24.4 Batch Queries (Avoid N+1)
+
+**ALWAYS** use batch methods instead of N individual queries.
+
+**Example: Stock availability check**
+```typescript
+// ❌ Wrong — N+1 queries
+const results = await Promise.all(
+  items.map(item => orderService.checkAvailability(item.product_id, ...))  // 2 queries per item
+);
+
+// ✅ Correct — single batch query
+const batchResult = await orderService.checkBatchAvailability(
+  items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+  startDate, endDate, branchId
+);  // 2 queries total regardless of item count
+```
+
+### 24.5 Cache Data In-Memory During Service Execution
+
+**NEVER** fetch the same entity multiple times within a single service method.
+
+**Example: Payment creation**
+```typescript
+// ❌ Wrong — 3 separate fetches
+async createPayment(data) {
+  const orderCheck = await orderRepository.findById(data.order_id);      // #1
+  if (!isRefundType) {
+    const orderResult = await orderRepository.findById(data.order_id);   // #2
+    // validate refund...
+  }
+  if (data.payment_type === DEPOSIT_REFUND) {
+    const orderResult = await orderRepository.findById(data.order_id);   // #3
+    // validate deposit...
+  }
+}
+
+// ✅ Correct — fetch ONCE, reuse
+async createPayment(data) {
+  const orderResult = await orderRepository.findById(data.order_id);     // #1 only
+  if (!orderResult.success) return orderResult;
+  const order = orderResult.data;  // ← Reuse for ALL validations below
+
+  if (!isRefundType && order.status === 'cancelled') { /* ... */ }
+  if (data.payment_type === REFUND) { /* use order.amount_paid */ }
+  if (data.payment_type === DEPOSIT_REFUND) { /* use order.deposit_returned */ }
+}
+```
+
+### 24.6 Lightweight Count API Calls
+
+For getting counts without full data, use `limit=1` and read `meta.total`.
+
+```typescript
+// Mobile pattern: 7 parallel calls, each returns just 1 item + meta
+const futures = statuses.map(async (status) => {
+  const response = await client.get('/orders', {
+    queryParameters: { page: 1, limit: 1, status }
+  });
+  return response.data.meta.total;  // ← Minimal data transfer
+});
+const counts = await Promise.all(futures);
+```
+
+---
+
+## 25. Known TODOs & Incomplete Areas
 
 - Several service methods have `// TODO: Calculate actual level` — the repository `findById()` already calculates level, but the service overrides it
 - `getCategoryHierarchy()` returns flat list with `// TODO: Build hierarchy tree`
@@ -608,7 +774,7 @@ powershell -ExecutionPolicy Bypass -File scripts/test-categories-hierarchy.ps1
 
 ---
 
-## 25. Environment Variables Reference
+## 26. Environment Variables Reference
 
 ### Admin App (`.env.local`)
 ```env
@@ -639,6 +805,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 - Document new API endpoints, models, and providers
 - Keep `AGENTS.md` updated with new rules as they emerge
 
-## 26. Mandatory Post-Work Verification
+## 27. Mandatory Post-Work Verification
 1. ALWAYS check the build for type issues (pnpm lint or 	sc --noEmit) after every significant change.
 2. If any runtime issues (e.g. React.Children.only Slot errors) or build issues are found, solve them PROPERLY before concluding the task.
