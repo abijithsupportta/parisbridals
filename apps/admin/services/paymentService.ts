@@ -90,38 +90,35 @@ export class PaymentService {
       };
     }
 
+    // Fetch order ONCE and reuse for all validations below
+    // Before: 3 separate findById() calls = 3 DB round-trips
+    // After:  1 findById() call = 1 DB round-trip
+    const { orderRepository } = await import('@/repository');
+    const orderResult = await orderRepository.findById(data.order_id);
+    if (!orderResult.success || !orderResult.data) {
+      return {
+        data: null,
+        error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
+        success: false,
+      };
+    }
+    const order = orderResult.data;
+
     // Block non-refund payments for CANCELLED orders only.
     // Completed orders can still have an outstanding balance (e.g., ₹500
     // advance on a ₹750 order — items returned but ₹250 still owed).
     // Both REFUND (rental refund) and DEPOSIT_REFUND are always allowed.
     const isRefundType = data.payment_type === PaymentType.REFUND || data.payment_type === PaymentType.DEPOSIT_REFUND;
-    if (!isRefundType) {
-      const { orderRepository } = await import('@/repository');
-      const orderCheck = await orderRepository.findById(data.order_id);
-      if (orderCheck.success && orderCheck.data) {
-        const orderStatus = orderCheck.data.status;
-        if (orderStatus === 'cancelled') {
-          return {
-            data: null,
-            error: { message: `Cannot collect payment for a cancelled order`, code: 'ORDER_FINALIZED' } as any,
-            success: false,
-          };
-        }
-      }
+    if (!isRefundType && order.status === 'cancelled') {
+      return {
+        data: null,
+        error: { message: `Cannot collect payment for a cancelled order`, code: 'ORDER_FINALIZED' } as any,
+        success: false,
+      };
     }
 
     // For refund payments, validate amount does not exceed what's refundable
     if (data.payment_type === PaymentType.REFUND) {
-      const { orderRepository } = await import('@/repository');
-      const orderResult = await orderRepository.findById(data.order_id);
-      if (!orderResult.success || !orderResult.data) {
-        return {
-          data: null,
-          error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
-          success: false,
-        };
-      }
-      const order = orderResult.data;
       // Total refundable = rental payments + unreturned deposit
       const refundableDeposit = (order.deposit_collected && !order.deposit_returned && (order.security_deposit || 0) > 0)
         ? order.security_deposit
@@ -138,16 +135,6 @@ export class PaymentService {
 
     // For deposit refunds, validate that the deposit hasn't already been returned
     if (data.payment_type === PaymentType.DEPOSIT_REFUND) {
-      const { orderRepository } = await import('@/repository');
-      const orderResult = await orderRepository.findById(data.order_id);
-      if (!orderResult.success || !orderResult.data) {
-        return {
-          data: null,
-          error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
-          success: false,
-        };
-      }
-      const order = orderResult.data;
       if (order.deposit_returned) {
         return {
           data: null,
@@ -175,7 +162,6 @@ export class PaymentService {
 
     // After a deposit_refund, mark the order's deposit as returned
     if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT_REFUND) {
-      const { orderRepository } = await import('@/repository');
       await orderRepository.update(data.order_id, {
         deposit_returned: true,
         deposit_returned_at: new Date().toISOString(),
@@ -183,10 +169,13 @@ export class PaymentService {
     }
 
     // After any non-refund, non-adjustment payment, check auto-complete
+    // Fire-and-forget: don't block the payment response for a background check
     if (result.success && data.payment_type !== PaymentType.REFUND && data.payment_type !== PaymentType.ADJUSTMENT) {
       try {
         const { orderService } = await import('./orderService');
-        await orderService.checkAndAutoComplete(data.order_id);
+        orderService.checkAndAutoComplete(data.order_id).catch(() => {
+          // Auto-complete is best-effort, don't fail the payment
+        });
       } catch {
         // Auto-complete is best-effort, don't fail the payment
       }
