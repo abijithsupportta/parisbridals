@@ -10,7 +10,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO, OrderStatusHistory, OrderStatus } from '@/domain/types/order';
+import { OrderWithRelations, CreateOrderDTO, UpdateOrderDTO, OrderSearchParams, ReturnOrderDTO, OrderStatusHistory, OrderStatus, ConditionRating } from '@/domain/types/order';
 import { useAppStore } from '@/stores';
 import type { ApiSuccessResponse, PaginationMeta } from '@/lib/apiResponse';
 
@@ -243,14 +243,29 @@ export function useProcessOrderReturn() {
   const mutation = useMutation({
     mutationFn: ({ orderId, returnData }: { orderId: string; returnData: ReturnOrderDTO }) =>
       apiFetch<ApiSuccessResponse<OrderWithRelations>>(`/api/orders/${orderId}/return`, { method: 'PATCH', body: JSON.stringify(returnData) }),
-    onMutate: async ({ orderId }) => {
+    onMutate: async ({ orderId, returnData }) => {
       await queryClient.cancelQueries({ queryKey: orderKeys.detail(orderId) });
       const previousOrder = queryClient.getQueryData<any>(orderKeys.detail(orderId));
 
       if (previousOrder?.data) {
+        // Compute actual status the backend will set (matches repository logic)
+        let hasDamage = false;
+        let hasMissing = false;
+        for (const item of returnData.items) {
+          if (item.damage_charges && item.damage_charges > 0) hasDamage = true;
+          if (item.condition_rating === ConditionRating.DAMAGED) hasDamage = true;
+          if (item.returned_quantity === 0) hasMissing = true;
+        }
+
+        const optimisticStatus = hasDamage
+          ? OrderStatus.FLAGGED
+          : hasMissing
+            ? OrderStatus.PARTIAL
+            : OrderStatus.RETURNED;
+
         queryClient.setQueryData(orderKeys.detail(orderId), {
           ...previousOrder,
-          data: { ...previousOrder.data, status: OrderStatus.RETURNED },
+          data: { ...previousOrder.data, status: optimisticStatus },
         });
       }
       return { previousOrder, orderId };

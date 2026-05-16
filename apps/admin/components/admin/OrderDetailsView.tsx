@@ -279,13 +279,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
-            updateOrder({
-              id: order.id,
-              data: {
-                deposit_returned: true,
-                deposit_returned_at: new Date().toISOString(),
-              },
-            });
+            // Backend already atomically updates deposit_returned via paymentService
             setIsRefundModalOpen(false);
             setIsCancellationRefund(false);
             setRefundForm({ paymentMode: PaymentMode.CASH, notes: "", amount: "0" });
