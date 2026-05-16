@@ -160,6 +160,15 @@ export class PaymentService {
       // No extra work needed here — the repository handles it correctly.
     }
 
+    // After a deposit payment, mark the order's deposit as collected
+    if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT) {
+      await orderRepository.update(data.order_id, {
+        deposit_collected: true,
+        deposit_collected_at: new Date().toISOString(),
+        deposit_payment_method: data.payment_mode,
+      } as any);
+    }
+
     // After a deposit_refund, mark the order's deposit as returned
     if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT_REFUND) {
       await orderRepository.update(data.order_id, {

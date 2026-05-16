@@ -252,19 +252,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
-            // If deposit type, flag the order as deposit-collected
-            if (paymentForm.paymentType === PaymentType.DEPOSIT) {
-              updateOrder({
-                id: order.id,
-                data: {
-                  deposit_collected: true,
-                  deposit_payment_method: paymentForm.paymentMode as any,
-                  deposit_collected_at: new Date().toISOString(),
-                },
-              });
-            }
-            // amount_paid is updated atomically by paymentRepository.create()
-            // and the UI computes from payment records — no manual update needed.
+            // Backend paymentService.createPayment now handles deposit_collected
+            // atomically for DEPOSIT type — no second API call needed.
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
             showSuccess("Payment Recorded", "Payment was successfully processed.");
