@@ -84,6 +84,10 @@ export interface Order {
   subtotal: number;
   gst_amount: number;
   security_deposit: number;
+  advance_amount: number;
+  advance_collected?: boolean;
+  advance_payment_method?: PaymentMethod;
+  advance_collected_at?: string;
   amount_paid: number;
   payment_status: PaymentStatus;
   notes: string | null;
@@ -108,6 +112,7 @@ export interface OrderWithRelations extends Order {
     id: string;
     name: string;
     phone: string;
+    alt_phone?: string | null;
     email: string | null;
   };
   items: OrderItem[];
@@ -152,6 +157,9 @@ export interface CreateOrderDTO {
   delivery_address?: string;
   pickup_address?: string;
   notes?: string;
+  advance_amount?: number;
+  advance_collected?: boolean;
+  advance_payment_method?: string;
 }
 
 // Order Update DTO
@@ -172,6 +180,8 @@ export interface UpdateOrderDTO {
   amount_paid?: number;
   payment_status?: PaymentStatus | string;
   security_deposit?: number;
+  advance_amount?: number;
+  advance_collected?: boolean;
   late_fee?: number;
   discount?: number;
   damage_charges_total?: number;
@@ -216,7 +226,7 @@ export interface OrderValidationResult {
 // ─── Interval-Based Availability Types ──────────────────────────────────────
 
 /** Status of a single calendar day */
-export type DayAvailabilityStatus = 'available' | 'partial' | 'unavailable';
+export type DayAvailabilityStatus = 'available' | 'partial' | 'unavailable' | 'buffer';
 
 /** A booking that occupies a product on a given day */
 export interface DayBookingInfo {
@@ -226,6 +236,7 @@ export interface DayBookingInfo {
   startDate: string;
   endDate: string;
   status: string;
+  isBuffer?: boolean;
 }
 
 /** Per-day availability data for calendar rendering */
@@ -233,6 +244,7 @@ export interface DayAvailability {
   date: string;
   total: number;
   reserved: number;
+  bufferReserved: number;
   available: number;
   status: DayAvailabilityStatus;
   bookings: DayBookingInfo[];

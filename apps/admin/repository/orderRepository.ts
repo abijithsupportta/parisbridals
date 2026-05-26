@@ -18,6 +18,10 @@ import {
   ReturnOrderDTO
 } from '@/domain/types/order';
 
+/** Buffer days for cleaning/prep before and after each rental (in milliseconds) */
+const BUFFER_DAYS = 1;
+const BUFFER_MS = BUFFER_DAYS * 86400000;
+
 export class OrderRepository extends BaseRepository {
   private readonly tableName = 'orders';
   private readonly orderItemsTable = 'order_items';
@@ -31,8 +35,8 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .select(`
         *,
-        customer:customer_id(id, name, phone, email),
-        items:order_items(*, product:product_id(id, name, images)),
+        customer:customer_id(id, name, phone, alt_phone, email),
+        items:order_items(id, order_id, product_id, quantity, price_per_day, subtotal, created_at, product:product_id(id, name)),
         branch:branch_id(id, name)
       `)
       .order('created_at', { ascending: false });
@@ -106,7 +110,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .select(`
         *,
-        customer:customer_id(id, name, phone, email),
+        customer:customer_id(id, name, phone, alt_phone, email),
         items:order_items(*, product:product_id(id, name, images)),
         branch:branch_id(id, name)
       `)
@@ -151,19 +155,23 @@ export class OrderRepository extends BaseRepository {
 
     const totalQuantity = productResponse.data?.quantity || 0;
 
-    // Fetch all active order items for this product with their order date ranges
+    const reqStart = new Date(startDate).getTime();
+    const reqEnd = new Date(endDate).getTime();
+    const queryStartDate = new Date(reqStart - BUFFER_MS).toISOString();
+    const queryEndDate = new Date(reqEnd + BUFFER_MS).toISOString();
+
+    // Fetch overlapping active order items for this product
     const ordersResponse = await this.client
       .from('order_items')
       .select('quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status, customer_id, customer:customer_id(name))')
       .eq('product_id', productId)
-      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
+      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial'])
+      .lte('orders.start_date', queryEndDate)
+      .gte('orders.end_date', queryStartDate);
 
     if (ordersResponse.error) {
       return this.handleResponse<{ available: number; total: number; peakReserved: number; overlappingOrders: any[] }>(ordersResponse);
     }
-
-    const reqStart = new Date(startDate).getTime();
-    const reqEnd = new Date(endDate).getTime();
 
     // Collect overlapping bookings (filtering out the excluded order if editing)
     const overlappingBookings: { start: number; end: number; quantity: number; orderId: string; customerName: string; startDate: string; endDate: string; status: string }[] = [];
@@ -176,8 +184,11 @@ export class OrderRepository extends BaseRepository {
       const ordStart = new Date(order.start_date).getTime();
       const ordEnd = new Date(order.end_date).getTime();
 
-      // Overlap condition (inclusive end dates — jewellery rental model)
-      if (ordStart <= reqEnd && ordEnd >= reqStart) {
+      // Overlap condition with buffer days (±1 day for cleaning/prep)
+      // A booking's effective range is [start - BUFFER, end + BUFFER]
+      const effectiveStart = ordStart - BUFFER_MS;
+      const effectiveEnd = ordEnd + BUFFER_MS;
+      if (effectiveStart <= reqEnd && effectiveEnd >= reqStart) {
         const unreturned = item.quantity - (item.returned_quantity || 0);
         if (unreturned > 0) {
           const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
@@ -195,13 +206,14 @@ export class OrderRepository extends BaseRepository {
       }
     }
 
-    // ─── Sweep Line Algorithm ─────────────────────────────────────────
-    // Create events: +qty at start, -qty at (end + 1 day)
+    // ─── Sweep Line Algorithm (with buffer days) ─────────────────────
+    // Each booking blocks the product from (start - BUFFER) to (end + BUFFER).
+    // Events: +qty at (start - BUFFER), -qty at (end + BUFFER + 1 day)
     const events: { time: number; delta: number }[] = [];
     for (const booking of overlappingBookings) {
-      events.push({ time: booking.start, delta: +booking.quantity });
-      // End + 1 day: the item is released the day AFTER the end date
-      events.push({ time: booking.end + 86400000, delta: -booking.quantity });
+      events.push({ time: booking.start - BUFFER_MS, delta: +booking.quantity });
+      // Release: 1 day after the buffer-extended end date
+      events.push({ time: booking.end + BUFFER_MS + 86400000, delta: -booking.quantity });
     }
 
     // Sort: by time, then releases (-delta) before acquisitions (+delta)
@@ -210,19 +222,21 @@ export class OrderRepository extends BaseRepository {
     let currentUsage = 0;
     let peakUsage = 0;
     for (const event of events) {
-      // Only count events within the requested range
-      if (event.time > reqEnd + 86400000) break;
+      // Only count events within the requested range (including buffer)
+      if (event.time > reqEnd + BUFFER_MS + 86400000) break;
       currentUsage += event.delta;
-      if (event.time >= reqStart && event.time <= reqEnd) {
+      if (event.time >= reqStart - BUFFER_MS && event.time <= reqEnd + BUFFER_MS) {
         peakUsage = Math.max(peakUsage, currentUsage);
       }
     }
 
     // Also check usage at the very start of the requested range
-    // (events before reqStart contribute to the baseline)
+    // (bookings whose buffered range covers reqStart contribute to baseline)
     let baselineAtStart = 0;
     for (const booking of overlappingBookings) {
-      if (booking.start <= reqStart && booking.end >= reqStart) {
+      const bufferedStart = booking.start - BUFFER_MS;
+      const bufferedEnd = booking.end + BUFFER_MS;
+      if (bufferedStart <= reqStart && bufferedEnd >= reqStart) {
         baselineAtStart += booking.quantity;
       }
     }
@@ -247,6 +261,137 @@ export class OrderRepository extends BaseRepository {
       error: null,
       success: true,
     };
+  }
+
+  /**
+   * Check availability for MULTIPLE products in a single batch.
+   *
+   * Instead of N separate checkAvailability calls (2N DB queries),
+   * this method does it in just 2 DB queries total:
+   *   1. Fetch all product quantities in one .in() query
+   *   2. Fetch all overlapping bookings for all products in one .in() query
+   *
+   * Then runs the Sweep Line algorithm per-product in memory.
+   *
+   * @param items - Array of { product_id, quantity } to check
+   * @param startDate - Rental start date
+   * @param endDate - Rental end date
+   * @param branchId - Branch ID (unused currently but kept for future)
+   * @param excludeOrderId - Exclude this order (for edit scenarios)
+   */
+  async checkBatchAvailability(
+    items: { product_id: string; quantity: number }[],
+    startDate: string,
+    endDate: string,
+    branchId?: string,
+    excludeOrderId?: string
+  ): Promise<RepositoryResult<{ results: Map<string, { available: number; total: number; peakReserved: number }> }>> {
+    const productIds = items.map(i => i.product_id);
+
+    const reqStart = new Date(startDate).getTime();
+    const reqEnd = new Date(endDate).getTime();
+    const queryStartDate = new Date(reqStart - BUFFER_MS).toISOString();
+    const queryEndDate = new Date(reqEnd + BUFFER_MS).toISOString();
+
+    // 2 queries total (instead of 2N)
+    const [productsResponse, ordersResponse] = await Promise.all([
+      // Query 1: Get all product quantities in one batch
+      this.client
+        .from('products')
+        .select('id, quantity')
+        .in('id', productIds),
+
+      // Query 2: Get all overlapping bookings for all products in one batch
+      this.client
+        .from('order_items')
+        .select('product_id, quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status)')
+        .in('product_id', productIds)
+        .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial'])
+        .lte('orders.start_date', queryEndDate)
+        .gte('orders.end_date', queryStartDate),
+    ]);
+
+    if (productsResponse.error) {
+      return { data: null, error: productsResponse.error, success: false };
+    }
+    if (ordersResponse.error) {
+      return { data: null, error: ordersResponse.error, success: false };
+    }
+
+    // Build product quantity map
+    const productQuantities = new Map<string, number>();
+    for (const p of productsResponse.data || []) {
+      productQuantities.set(p.id, p.quantity || 0);
+    }
+
+    // Group bookings by product_id
+    const bookingsByProduct = new Map<string, { start: number; end: number; quantity: number }[]>();
+    for (const item of (ordersResponse.data || []) as any[]) {
+      const order = Array.isArray(item.orders) ? item.orders[0] : item.orders;
+      if (!order) continue;
+      if (excludeOrderId && order.id === excludeOrderId) continue;
+
+      const unreturned = item.quantity - (item.returned_quantity || 0);
+      if (unreturned <= 0) continue;
+
+      const ordStart = new Date(order.start_date).getTime();
+      const ordEnd = new Date(order.end_date).getTime();
+      const effectiveStart = ordStart - BUFFER_MS;
+      const effectiveEnd = ordEnd + BUFFER_MS;
+
+      if (effectiveStart <= reqEnd && effectiveEnd >= reqStart) {
+        if (!bookingsByProduct.has(item.product_id)) {
+          bookingsByProduct.set(item.product_id, []);
+        }
+        bookingsByProduct.get(item.product_id)!.push({
+          start: ordStart,
+          end: ordEnd,
+          quantity: unreturned,
+        });
+      }
+    }
+
+    // Run Sweep Line per product
+    const results = new Map<string, { available: number; total: number; peakReserved: number }>();
+    for (const productId of productIds) {
+      const totalQuantity = productQuantities.get(productId) || 0;
+      const bookings = bookingsByProduct.get(productId) || [];
+
+      // Sweep Line
+      const events: { time: number; delta: number }[] = [];
+      for (const booking of bookings) {
+        events.push({ time: booking.start - BUFFER_MS, delta: +booking.quantity });
+        events.push({ time: booking.end + BUFFER_MS + 86400000, delta: -booking.quantity });
+      }
+      events.sort((a, b) => a.time - b.time || a.delta - b.delta);
+
+      let currentUsage = 0;
+      let peakUsage = 0;
+      for (const event of events) {
+        if (event.time > reqEnd + BUFFER_MS + 86400000) break;
+        currentUsage += event.delta;
+        if (event.time >= reqStart - BUFFER_MS && event.time <= reqEnd + BUFFER_MS) {
+          peakUsage = Math.max(peakUsage, currentUsage);
+        }
+      }
+
+      // Baseline check
+      let baselineAtStart = 0;
+      for (const booking of bookings) {
+        if (booking.start - BUFFER_MS <= reqStart && booking.end + BUFFER_MS >= reqStart) {
+          baselineAtStart += booking.quantity;
+        }
+      }
+      peakUsage = Math.max(peakUsage, baselineAtStart);
+
+      results.set(productId, {
+        available: Math.max(0, totalQuantity - peakUsage),
+        total: totalQuantity,
+        peakReserved: peakUsage,
+      });
+    }
+
+    return { data: { results }, error: null, success: true };
   }
 
   /**
@@ -277,19 +422,26 @@ export class OrderRepository extends BaseRepository {
     const totalQuantity = productResponse.data?.quantity || 0;
     const productName = productResponse.data?.name || '';
 
-    // Fetch all active bookings that overlap with the view range
+    const viewStart = new Date(rangeStart);
+    const viewEnd = new Date(rangeEnd);
+
+    // Push date filtering to DB — only fetch bookings that overlap the view range
+    // Before: fetched ALL active bookings for this product, then filtered in JS
+    // After: DB returns only overlapping rows (massively reduces payload + RAM)
+    const queryStartDate = new Date(viewStart.getTime() - BUFFER_MS).toISOString();
+    const queryEndDate = new Date(viewEnd.getTime() + BUFFER_MS).toISOString();
+
     const ordersResponse = await this.client
       .from('order_items')
       .select('quantity, returned_quantity, order_id, orders!inner(id, start_date, end_date, status, customer_id, customer:customer_id(name))')
       .eq('product_id', productId)
-      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial']);
+      .in('orders.status', ['pending', 'confirmed', 'scheduled', 'ongoing', 'in_use', 'late_return', 'partial'])
+      .lte('orders.start_date', queryEndDate)
+      .gte('orders.end_date', queryStartDate);
 
     if (ordersResponse.error) {
       return this.handleResponse<any>(ordersResponse);
     }
-
-    const viewStart = new Date(rangeStart);
-    const viewEnd = new Date(rangeEnd);
 
     // Parse all bookings
     const bookings: { start: Date; end: Date; quantity: number; orderId: string; customerName: string; startDate: string; endDate: string; status: string }[] = [];
@@ -303,8 +455,10 @@ export class OrderRepository extends BaseRepository {
       const bookingStart = new Date(order.start_date);
       const bookingEnd = new Date(order.end_date);
 
-      // Only include if it overlaps with our view range
-      if (bookingStart <= viewEnd && bookingEnd >= viewStart) {
+      // Include if the booking's buffered range overlaps with our view range
+      const bufferedStart = new Date(bookingStart.getTime() - BUFFER_MS);
+      const bufferedEnd = new Date(bookingEnd.getTime() + BUFFER_MS);
+      if (bufferedStart <= viewEnd && bufferedEnd >= viewStart) {
         const customer = Array.isArray(order.customer) ? order.customer[0] : order.customer;
         bookings.push({
           start: bookingStart,
@@ -319,18 +473,34 @@ export class OrderRepository extends BaseRepository {
       }
     }
 
-    // Build per-day availability map
+    // Build per-day availability map (with buffer day detection)
     const days: any[] = [];
     const current = new Date(viewStart);
     while (current <= viewEnd) {
       const dateStr = current.toISOString().split('T')[0];
+      const currentTime = current.getTime();
       let reserved = 0;
+      let bufferReserved = 0;
       const dayBookings: any[] = [];
 
       for (const booking of bookings) {
-        // Check if this booking covers the current day (inclusive)
-        if (booking.start <= current && booking.end >= current) {
+        const bookingStartTime = booking.start.getTime();
+        const bookingEndTime = booking.end.getTime();
+        const bufferedStartTime = bookingStartTime - BUFFER_MS;
+        const bufferedEndTime = bookingEndTime + BUFFER_MS;
+
+        // Check if this booking (including buffer) covers the current day
+        if (bufferedStartTime <= currentTime && bufferedEndTime >= currentTime) {
           reserved += booking.quantity;
+
+          // Determine if this day is a buffer day or an actual rental day
+          const isActualRentalDay = bookingStartTime <= currentTime && bookingEndTime >= currentTime;
+          const isBuffer = !isActualRentalDay;
+
+          if (isBuffer) {
+            bufferReserved += booking.quantity;
+          }
+
           dayBookings.push({
             orderId: booking.orderId,
             customerName: booking.customerName,
@@ -338,16 +508,19 @@ export class OrderRepository extends BaseRepository {
             startDate: booking.startDate,
             endDate: booking.endDate,
             status: booking.status,
+            isBuffer,
           });
         }
       }
 
       const available = Math.max(0, totalQuantity - reserved);
-      let status: 'available' | 'partial' | 'unavailable' = 'available';
-      if (available === 0) status = 'unavailable';
+      let status: 'available' | 'partial' | 'unavailable' | 'buffer' = 'available';
+      if (available === 0 && bufferReserved === reserved) status = 'buffer';
+      else if (available === 0) status = 'unavailable';
+      else if (reserved > 0 && bufferReserved === reserved) status = 'buffer';
       else if (reserved > 0) status = 'partial';
 
-      days.push({ date: dateStr, total: totalQuantity, reserved, available, status, bookings: dayBookings });
+      days.push({ date: dateStr, total: totalQuantity, reserved, bufferReserved, available, status, bookings: dayBookings });
       current.setDate(current.getDate() + 1);
     }
 
@@ -366,7 +539,7 @@ export class OrderRepository extends BaseRepository {
       .from(this.tableName)
       .select(`
         *,
-        customer:customer_id(id, name, phone, email),
+        customer:customer_id(id, name, phone, alt_phone, email),
         items:order_items(*, product:product_id(id, name, images)),
         branch:branch_id(id, name)
       `)
@@ -412,7 +585,7 @@ export class OrderRepository extends BaseRepository {
 
     const todayStr = new Date().toISOString().split('T')[0];
     const startDateStr = startDate.toISOString().split('T')[0];
-    const initialStatus = startDateStr > todayStr ? 'scheduled' : 'ongoing';
+    const initialStatus = 'scheduled';
 
     // Start a transaction by creating the order first
     // DB columns: start_date, end_date, event_date (all DATE type)
@@ -432,12 +605,18 @@ export class OrderRepository extends BaseRepository {
         subtotal,
         gst_amount: gstAmount,
         security_deposit: (data as any).security_deposit || 0,
+        advance_amount: data.advance_amount || 0,
+        advance_collected: data.advance_collected || false,
+        advance_payment_method: data.advance_payment_method || null,
+        advance_collected_at: data.advance_collected ? new Date().toISOString() : null,
         total_amount: totalAmount,
         deposit_collected: (data as any).deposit_collected || false,
         deposit_payment_method: (data as any).deposit_payment_method || null,
         deposit_collected_at: (data as any).deposit_collected_at || null,
-        amount_paid: (data as any).amount_paid || 0,
-        payment_status: (data as any).payment_status || 'pending',
+        amount_paid: data.advance_collected && data.advance_amount ? data.advance_amount : 0,
+        payment_status: data.advance_collected && data.advance_amount
+          ? (data.advance_amount >= totalAmount ? 'paid' : 'partial')
+          : 'pending',
         notes: data.notes || null,
       })
       .select()
@@ -469,37 +648,38 @@ export class OrderRepository extends BaseRepository {
       return this.handleResponse<OrderWithRelations>(itemsResponse);
     }
 
-    // Deduct inventory only if starting immediately
-    if (initialStatus === 'ongoing') {
-      for (const item of data.items) {
-        const { data: inv } = await this.client
-          .from('product_inventory')
-          .select('available_quantity')
-          .eq('product_id', item.product_id)
-          .eq('branch_id', data.branch_id)
-          .single();
-          
-        if (inv) {
-          await this.client
-            .from('product_inventory')
-            .update({ available_quantity: Math.max(0, inv.available_quantity - item.quantity) })
-            .eq('product_id', item.product_id)
-            .eq('branch_id', data.branch_id);
-        }
-        
-        const { data: prod } = await this.client
-          .from('products')
-          .select('available_quantity')
-          .eq('id', item.product_id)
-          .single();
-          
-        if (prod) {
-          await this.client
-            .from('products')
-            .update({ available_quantity: Math.max(0, prod.available_quantity - item.quantity) })
-            .eq('id', item.product_id);
-        }
-      }
+    // NOTE: Inventory is NOT deducted at creation time.
+    // Stock deduction happens only when the user manually starts the rental
+    // (transitions to ongoing/in_use) via the order details page.
+
+    // Create advance payment record if advance was collected
+    if (data.advance_collected && data.advance_amount && data.advance_amount > 0) {
+      await this.client
+        .from('payments')
+        .insert({
+          order_id: order.id,
+          payment_type: 'advance',
+          amount: data.advance_amount,
+          payment_mode: data.advance_payment_method || 'cash',
+          notes: 'Advance payment collected at order creation',
+          payment_date: new Date().toISOString(),
+          ...this.getCreateAuditFields(),
+        });
+    }
+
+    // Create deposit payment record if deposit was collected
+    if ((data as any).deposit_collected && (data as any).security_deposit && (data as any).security_deposit > 0) {
+      await this.client
+        .from('payments')
+        .insert({
+          order_id: order.id,
+          payment_type: 'deposit',
+          amount: (data as any).security_deposit,
+          payment_mode: (data as any).deposit_payment_method || 'cash',
+          notes: 'Security deposit collected at order creation',
+          payment_date: new Date().toISOString(),
+          ...this.getCreateAuditFields(),
+        });
     }
 
     // Create initial status history
@@ -916,6 +1096,79 @@ export class OrderRepository extends BaseRepository {
     }
 
     return this.findById(orderId);
+  }
+
+  /**
+   * Add a status history entry for an order
+   */
+  async addStatusHistory(orderId: string, status: string, notes?: string): Promise<void> {
+    await this.client
+      .from(this.orderStatusHistoryTable)
+      .insert({
+        order_id: orderId,
+        status,
+        notes: notes || null,
+        changed_by: null,
+      });
+  }
+
+  /**
+   * Find all scheduled orders whose rental_start_date is before the given date.
+   * Used by auto-cancel to find orders that were never collected.
+   */
+  async findExpiredScheduledOrders(beforeDate: string): Promise<RepositoryResult<{ id: string; rental_start_date: string }[]>> {
+    const response = await this.client
+      .from(this.tableName)
+      .select('id, rental_start_date')
+      .eq('status', 'scheduled')
+      .lt('rental_start_date', beforeDate);
+
+    if (response.error) {
+      return { data: null, error: response.error, success: false };
+    }
+    return { data: response.data || [], error: null, success: true };
+  }
+
+  /**
+   * Restore reserved stock for all items in a cancelled order.
+   * Fetches the order's items and calls the DB function to release inventory.
+   */
+  async restoreOrderStock(orderId: string): Promise<void> {
+    const { data: orderItems } = await this.client
+      .from(this.orderItemsTable)
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    if (!orderItems) return;
+
+    for (const item of orderItems) {
+      // Try the dedicated RPC function first; fall back to manual update
+      const { error: rpcError } = await this.client.rpc('restore_cancelled_order_stock', {
+        p_product_id: item.product_id,
+        p_quantity: item.quantity,
+      });
+
+      if (rpcError) {
+        // Fallback: manually update if RPC doesn't exist
+        console.warn(`[OrderRepo] RPC fallback — manual stock restore for product ${item.product_id}`);
+        const { data: product } = await this.client
+          .from('products')
+          .select('reserved_quantity, available_quantity')
+          .eq('id', item.product_id)
+          .single();
+
+        if (product) {
+          await this.client
+            .from('products')
+            .update({
+              reserved_quantity: Math.max(0, (product.reserved_quantity || 0) - item.quantity),
+              available_quantity: (product.available_quantity || 0) + item.quantity,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', item.product_id);
+        }
+      }
+    }
   }
 }
 

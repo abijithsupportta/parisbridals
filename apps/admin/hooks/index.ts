@@ -17,6 +17,7 @@ export {
   useBulkProductOperation,
   useProductForm,
   useProductSelection,
+  useLookupProductByBarcode,
 } from './useProducts';
 
 // Category hooks
@@ -50,6 +51,7 @@ export {
 // Branch hooks
 export {
   useBranches,
+  useSimpleBranches,
   useBranch,
   useCreateBranch,
   useUpdateBranch,
@@ -64,6 +66,7 @@ export {
   useCreateStaff,
   useUpdateStaff,
   useDeleteStaff,
+  useToggleStaffStatus,
 } from './useStaff';
 
 // Permission hooks
@@ -101,6 +104,7 @@ export {
   useDeleteOrder,
   useProcessOrderReturn,
   useMarkDepositReturned,
+  orderKeys,
 } from './useOrders';
 
 // Settings hooks
@@ -134,4 +138,6 @@ export {
 // Calendar hooks
 export {
   useCalendarOrders,
+  useCalendarView,
+  useCalendarNavigation,
 } from './useCalendar';

@@ -37,50 +37,55 @@ export async function POST(request: NextRequest) {
       return apiBadRequest('start_date and end_date are required');
     }
 
-    const results = [];
-    let allAvailable = true;
-
+    // Validate all items upfront
     for (const item of items) {
       if (!item.product_id || !item.quantity) {
         return apiBadRequest('Each item must have product_id and quantity');
       }
+    }
 
-      const availResult = await orderService.checkAvailability(
-        item.product_id,
-        start_date,
-        end_date,
-        branch_id,
-        exclude_order_id
-      );
+    // Batch-check all items in a SINGLE DB round-trip (2 queries total)
+    // Before: N items × 2 queries each = 2N DB round-trips
+    // After:  1 batch = 2 DB queries regardless of item count
+    const batchResult = await orderService.checkBatchAvailability(
+      items.map((item: any) => ({ product_id: item.product_id, quantity: item.quantity })),
+      start_date,
+      end_date,
+      branch_id,
+      exclude_order_id
+    );
 
-      if (!availResult.success || !availResult.data) {
-        results.push({
+    if (!batchResult.success || !batchResult.data) {
+      return apiInternalError(batchResult.error?.message || 'Failed to check availability');
+    }
+
+    const results = items.map((item: any) => {
+      const result = batchResult.data!.results.get(item.product_id);
+      if (!result) {
+        return {
           product_id: item.product_id,
-          product_name: 'Unknown',
+          product_name: item.product_name || 'Unknown',
           requested: item.quantity,
           available: 0,
           isAvailable: false,
           peakReserved: 0,
           overlappingOrders: [],
-          error: availResult.error?.message || 'Failed to check availability',
-        });
-        allAvailable = false;
-        continue;
+          error: 'Product not found',
+        };
       }
 
-      const isAvailable = availResult.data.available >= item.quantity;
-      if (!isAvailable) allAvailable = false;
-
-      results.push({
+      return {
         product_id: item.product_id,
         product_name: item.product_name || 'Unknown',
         requested: item.quantity,
-        available: availResult.data.available,
-        isAvailable,
-        peakReserved: availResult.data.peakReserved,
-        overlappingOrders: availResult.data.overlappingOrders,
-      });
-    }
+        available: result.available,
+        isAvailable: result.available >= item.quantity,
+        peakReserved: result.peakReserved,
+        overlappingOrders: [],
+      };
+    });
+
+    const allAvailable = results.every((r: any) => r.isAvailable);
 
     return apiSuccess({ allAvailable, items: results });
   } catch (err) {

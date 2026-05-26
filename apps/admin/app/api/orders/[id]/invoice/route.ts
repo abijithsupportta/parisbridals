@@ -1,6 +1,9 @@
 /**
  * Invoice API Route
  * GET /api/orders/:id/invoice?type=deposit|final — generate and download invoice PDF
+ *
+ * Uses @react-pdf/renderer (via InvoiceService) to produce the PDF buffer
+ * and streams it back as a downloadable attachment.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,15 +29,17 @@ export async function GET(
       );
     }
 
-    const pdfBlob = await invoiceService.generateInvoice(id, invoiceType as 'deposit' | 'final');
+    // generateInvoice now returns a Buffer (from @react-pdf/renderer)
+    const pdfBuffer = await invoiceService.generateInvoice(id, invoiceType as 'deposit' | 'final');
 
     const invoiceNumber = `INV-${id.slice(0, 8).toUpperCase()}-${invoiceType.toUpperCase()}`;
     const filename = `${invoiceNumber}.pdf`;
 
-    return new NextResponse(pdfBlob, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': String(pdfBuffer.length),
       },
     });
   } catch (error: any) {

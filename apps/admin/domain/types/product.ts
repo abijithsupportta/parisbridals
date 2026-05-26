@@ -78,6 +78,7 @@ export interface CreateProductDTO {
   name: string;
   slug: string;
   sku?: string;
+  barcode?: string;
   category_id?: string;
   subcategory_id?: string;
   subvariant_id?: string;
@@ -103,6 +104,7 @@ export interface UpdateProductDTO {
   name?: string;
   slug?: string;
   sku?: string;
+  barcode?: string;
   category_id?: string | null;
   subcategory_id?: string | null;
   subvariant_id?: string | null;

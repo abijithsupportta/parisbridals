@@ -25,11 +25,26 @@ import { getAuthUser } from "@/lib/auth";
 import { CreateOrderSchema } from "@/domain";
 import { apiSuccess, apiRepositoryError, apiBadRequest, apiInternalError } from "@/lib/apiResponse";
 
+// Auto-cancel: runs at most once per 24 hours (not once per cold start).
+// On Railway (always-on), the server can stay up for weeks — a one-time flag
+// would never re-run. This time-based approach ensures daily execution.
+let _lastAutoCancelRun = 0;
+const AUTO_CANCEL_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 /** GET /api/orders — fetch all orders */
 export async function GET(request: NextRequest) {
   try {
     const guard = await apiGuard(request, 'orders');
     if (guard.error) return guard.error;
+
+    // Fire-and-forget: auto-cancel expired scheduled orders (once per 24h)
+    const now = Date.now();
+    if (now - _lastAutoCancelRun > AUTO_CANCEL_INTERVAL_MS) {
+      _lastAutoCancelRun = now;
+      orderService.autoCancelExpiredScheduledOrders().catch((err) =>
+        console.error('[orders/GET] Background auto-cancel failed:', err)
+      );
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1;
@@ -95,6 +110,11 @@ export async function POST(request: NextRequest) {
     if (!result.success) {
       return apiRepositoryError(result.error, 'Failed to create order');
     }
+
+    // NOTE: Advance and deposit payment records are already created by
+    // orderRepository.create(). Do NOT create them again here — doing so
+    // would double-count amount_paid and break the financial card.
+
     return apiSuccess(result.data, { status: 201, message: 'Order created successfully' });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

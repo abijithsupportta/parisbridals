@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'constants.dart';
+import 'providers/auth_provider.dart' as core_auth;
 import '../features/auth/providers/auth_provider.dart';
 import '../features/auth/views/login_view.dart';
-import '../features/products/views/products_view.dart';
 import '../features/dashboard/views/dashboard_view.dart';
 import '../features/orders/views/orders_view.dart';
 import '../features/calendar/views/calendar_view.dart';
-import '../features/categories/views/categories_view.dart';
+import '../features/products/views/products_view.dart';
+import '../features/branches/models/branch.dart';
+import '../features/branches/providers/branch_provider.dart';
 import 'responsive.dart';
 
 class MainLayout extends StatefulWidget {
@@ -20,16 +22,9 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
-  String _selectedBranch = 'Main Branch - Paris';
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  final List<String> _branches = [
-    'Main Branch - Paris',
-    'Downtown Boutique',
-    'Wedding Expo Popup',
-  ];
-
-  static const _primary = Color(0xFF434343);
+  static const _primary = AppColors.primary;
 
   @override
   Widget build(BuildContext context) {
@@ -38,9 +33,10 @@ class _MainLayoutState extends State<MainLayout> {
     return Consumer(
       builder: (context, ref, _) {
         final user = ref.watch(authUserProvider);
+        final branchesAsync = ref.watch(branchesProvider);
         return Scaffold(
           key: _scaffoldKey,
-          appBar: _buildAppBar(),
+          appBar: _buildAppBar(ref, user, branchesAsync),
           drawer: _buildDrawer(context, user, ref),
           body: _buildBody(),
           bottomNavigationBar: _buildBottomNav(),
@@ -50,7 +46,7 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   // ── App Bar ──
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(WidgetRef ref, AuthUser? user, AsyncValue<List<Branch>> branchesAsync) {
     if (_selectedIndex == 0) {
       return AppBar(
         backgroundColor: _primary,
@@ -75,7 +71,7 @@ class _MainLayoutState extends State<MainLayout> {
           style: TextStyle(fontSize: Responsive.sp(16), fontWeight: FontWeight.w800, letterSpacing: 1.5, color: Colors.white),
         ),
         actions: [
-          _buildBranchSwitcher(),
+          _buildBranchSwitcher(ref, user, branchesAsync),
           IconButton(
             icon: Icon(Icons.notifications_none_rounded, size: Responsive.icon(24), color: Colors.white),
             onPressed: () {},
@@ -85,7 +81,7 @@ class _MainLayoutState extends State<MainLayout> {
       );
     }
 
-    final titles = ['', 'Orders', 'Calendar', 'Products', 'Categories'];
+    final titles = ['', 'Orders', 'Calendar', 'Products'];
     return AppBar(
       backgroundColor: _primary,
       iconTheme: const IconThemeData(color: Colors.white),
@@ -106,7 +102,7 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       title: Text(titles[_selectedIndex], style: TextStyle(fontSize: Responsive.sp(18), fontWeight: FontWeight.w700, color: Colors.white)),
       actions: [
-        _buildBranchSwitcher(),
+        _buildBranchSwitcher(ref, user, branchesAsync),
         SizedBox(width: Responsive.w(8)),
       ],
     );
@@ -114,8 +110,6 @@ class _MainLayoutState extends State<MainLayout> {
 
   // ── Drawer / Sidebar ──
   Widget _buildDrawer(BuildContext context, AuthUser? user, WidgetRef ref) {
-    final isAdmin = user?.isAdmin ?? false;
-    final canManage = user?.canManage ?? false;
 
     return Drawer(
       width: Responsive.w(300),
@@ -168,7 +162,7 @@ class _MainLayoutState extends State<MainLayout> {
                       borderRadius: BorderRadius.circular(Responsive.r(20)),
                     ),
                     child: Text(
-                      (user?.role.name ?? 'staff').toUpperCase(),
+                      user?.roleLabel ?? 'STAFF',
                       style: TextStyle(fontSize: Responsive.sp(10), fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 1),
                     ),
                   ),
@@ -176,53 +170,8 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ),
 
-            // Menu items
-            Expanded(
-              child: ListView(
-                padding: Responsive.symmetric(vertical: 12),
-                children: [
-                  // Admin-only menu items
-                  if (isAdmin) ...[
-                    _buildDrawerSectionLabel('Management'),
-                    _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
-                    _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
-                    _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
-                    _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
-                    Padding(
-                      padding: Responsive.symmetric(horizontal: 24),
-                      child: Divider(height: Responsive.h(24), color: Colors.grey[200]),
-                    ),
-                    _buildDrawerSectionLabel('Settings'),
-                    _buildDrawerItem(Icons.storefront_rounded, 'Branches', null, onTap: () {
-                      Navigator.pop(context);
-                      // TODO: navigate to branches
-                    }),
-                    _buildDrawerItem(Icons.people_rounded, 'Staff', null, onTap: () {
-                      Navigator.pop(context);
-                      // TODO: navigate to staff
-                    }),
-                    _buildDrawerItem(Icons.settings_rounded, 'Settings', null, onTap: () {
-                      Navigator.pop(context);
-                      // TODO: navigate to settings
-                    }),
-                  ] else if (canManage) ...[
-                    // Manager sees nav items but no settings
-                    _buildDrawerSectionLabel('Navigation'),
-                    _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildDrawerItem(Icons.category_rounded, 'Categories', 4),
-                    _buildDrawerItem(Icons.inventory_2_rounded, 'Products', 3),
-                    _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
-                    _buildDrawerItem(Icons.calendar_month_rounded, 'Calendar', 2),
-                  ] else ...[
-                    // Staff sees minimal menu
-                    _buildDrawerSectionLabel('Navigation'),
-                    _buildDrawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
-                    _buildDrawerItem(Icons.receipt_long_rounded, 'Orders', 1),
-                  ],
-                ],
-              ),
-            ),
+            // Spacer — pushes logout to bottom
+            const Expanded(child: SizedBox()),
 
             // Logout at bottom
             Padding(
@@ -231,7 +180,7 @@ class _MainLayoutState extends State<MainLayout> {
                 width: double.infinity,
                 height: Responsive.h(52),
                 child: OutlinedButton.icon(
-                  onPressed: () => _confirmLogout(context),
+                  onPressed: () => _confirmLogout(context, ref),
                   icon: Icon(Icons.logout_rounded, size: Responsive.icon(20)),
                   label: Text('Log Out', style: TextStyle(fontSize: Responsive.sp(15), fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
@@ -248,64 +197,8 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  Widget _buildDrawerSectionLabel(String label) {
-    return Padding(
-      padding: Responsive.only(left: 24, top: 8, bottom: 8),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w700, color: Colors.grey[400], letterSpacing: 1.2),
-      ),
-    );
-  }
-
-  Widget _buildDrawerItem(IconData icon, String label, int? tabIndex, {VoidCallback? onTap}) {
-    final isSelected = tabIndex != null && _selectedIndex == tabIndex;
-
-    return Padding(
-      padding: Responsive.symmetric(horizontal: 12, vertical: 2),
-      child: Material(
-        color: isSelected ? _primary.withValues(alpha: 0.08) : Colors.transparent,
-        borderRadius: BorderRadius.circular(Responsive.r(12)),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(Responsive.r(12)),
-          onTap: () {
-            if (onTap != null) {
-              onTap();
-            } else if (tabIndex != null) {
-              setState(() => _selectedIndex = tabIndex);
-              Navigator.pop(context);
-            }
-          },
-          child: Padding(
-            padding: Responsive.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, size: Responsive.icon(22), color: isSelected ? _primary : Colors.grey[600]),
-                SizedBox(width: Responsive.w(16)),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: Responsive.sp(15),
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? _primary : Colors.grey[800],
-                  ),
-                ),
-                if (isSelected) ...[
-                  const Spacer(),
-                  Container(
-                    width: Responsive.w(6), height: Responsive.h(6),
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: _primary),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _confirmLogout(BuildContext context) {
+  
+  void _confirmLogout(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -343,13 +236,12 @@ class _MainLayoutState extends State<MainLayout> {
                   height: Responsive.h(46),
                   child: ElevatedButton(
                     onPressed: () async {
-                      // Clear session
-                      const storage = FlutterSecureStorage();
-                      await storage.delete(key: 'auth_token');
+                      await ref.read(core_auth.authProvider.notifier).logout();
+                      ref.read(selectedBranchIdProvider.notifier).select(null);
                       
-                      if (!mounted) return;
-                      Navigator.pop(ctx); // close dialog
-                      Navigator.pop(context); // close drawer
+                      if (!context.mounted || !ctx.mounted) return;
+                      Navigator.of(ctx).pop();
+                      Navigator.of(context).pop();
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => const LoginView()),
                         (route) => false,
@@ -371,66 +263,112 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   // ── Branch Switcher ──
-  Widget _buildBranchSwitcher() {
-    return PopupMenuButton<String>(
-      onSelected: (String result) => setState(() => _selectedBranch = result),
-      offset: Offset(0, Responsive.h(50)),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(14))),
-      itemBuilder: (BuildContext context) {
-        return _branches.map((String branch) {
-          final isSelected = _selectedBranch == branch;
-          return PopupMenuItem<String>(
-            value: branch,
-            height: Responsive.h(48),
+  Widget _buildBranchSwitcher(WidgetRef ref, AuthUser? user, AsyncValue<List<Branch>> branchesAsync) {
+    if (user?.canSwitchBranches != true) {
+      return const SizedBox.shrink();
+    }
+
+    final selectedBranchId = ref.watch(selectedBranchIdProvider);
+
+    return branchesAsync.when(
+      loading: () => Padding(
+        padding: Responsive.symmetric(horizontal: 12),
+        child: SizedBox(
+          width: Responsive.icon(18),
+          height: Responsive.icon(18),
+          child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        ),
+      ),
+      error: (error, stackTrace) => IconButton(
+        tooltip: 'Reload branches',
+        icon: Icon(Icons.storefront_rounded, size: Responsive.icon(20), color: Colors.white),
+        onPressed: () => ref.invalidate(branchesProvider),
+      ),
+      data: (branches) {
+        final activeBranches = branches.where((branch) => branch.isActive).toList();
+        
+        // Auto-select first branch if none selected
+        if (selectedBranchId == null && activeBranches.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            ref.read(selectedBranchIdProvider.notifier).select(activeBranches.first.id);
+          });
+        }
+        
+        Branch? selectedBranch;
+        for (final branch in activeBranches) {
+          if (branch.id == selectedBranchId) {
+            selectedBranch = branch;
+            break;
+          }
+        }
+
+        final label = selectedBranch?.name ?? (activeBranches.isNotEmpty ? activeBranches.first.name : 'No Branch');
+
+        return PopupMenuButton<String>(
+          onSelected: (String branchId) {
+            ref.read(selectedBranchIdProvider.notifier).select(branchId);
+          },
+          offset: Offset(0, Responsive.h(50)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Responsive.r(14))),
+          itemBuilder: (BuildContext context) {
+            return activeBranches.map((branch) => _buildBranchMenuItem(branch.id, branch.name, selectedBranchId == branch.id)).toList();
+          },
+          child: Container(
+            padding: Responsive.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(Responsive.r(20)),
+            ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                  size: Responsive.icon(18),
-                  color: isSelected ? _primary : Colors.grey,
-                ),
-                SizedBox(width: Responsive.w(12)),
-                Expanded(
+                Icon(Icons.storefront_rounded, size: Responsive.icon(14), color: Colors.white),
+                SizedBox(width: Responsive.w(6)),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: Responsive.w(92)),
                   child: Text(
-                    branch,
-                    style: TextStyle(
-                      fontSize: Responsive.sp(14),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      color: isSelected ? _primary : Colors.black87,
-                    ),
+                    label,
+                    style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: Colors.white),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                Icon(Icons.arrow_drop_down_rounded, size: Responsive.icon(18), color: Colors.white),
               ],
             ),
-          );
-        }).toList();
+          ),
+        );
       },
-      child: Container(
-        padding: Responsive.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(Responsive.r(20)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.storefront_rounded, size: Responsive.icon(14), color: Colors.white),
-            SizedBox(width: Responsive.w(6)),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: Responsive.w(80)),
-              child: Text(
-                _selectedBranch,
-                style: TextStyle(fontSize: Responsive.sp(11), fontWeight: FontWeight.w600, color: Colors.white),
-                overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  PopupMenuItem<String> _buildBranchMenuItem(String value, String label, bool isSelected) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: Responsive.h(48),
+      child: Row(
+        children: [
+          Icon(
+            isSelected ? Icons.check_circle : Icons.circle_outlined,
+            size: Responsive.icon(18),
+            color: isSelected ? _primary : Colors.grey,
+          ),
+          SizedBox(width: Responsive.w(12)),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: Responsive.sp(14),
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? _primary : Colors.black87,
               ),
             ),
-            Icon(Icons.arrow_drop_down_rounded, size: Responsive.icon(18), color: Colors.white),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
+  
   // ── Bottom Nav ──
   Widget _buildBottomNav() {
     return Container(
@@ -461,7 +399,6 @@ class _MainLayoutState extends State<MainLayout> {
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), activeIcon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month_outlined), activeIcon: Icon(Icons.calendar_month_rounded), label: 'Calendar'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), activeIcon: Icon(Icons.inventory_2_rounded), label: 'Products'),
-          BottomNavigationBarItem(icon: Icon(Icons.category_outlined), activeIcon: Icon(Icons.category_rounded), label: 'Categories'),
         ],
       ),
     );
@@ -474,7 +411,6 @@ class _MainLayoutState extends State<MainLayout> {
       case 1: return const OrdersView();
       case 2: return const CalendarView();
       case 3: return const ProductsView();
-      case 4: return const CategoriesView();
       default: return const DashboardView();
     }
   }

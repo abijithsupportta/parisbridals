@@ -27,6 +27,9 @@ export const CreateOrderSchema = z.object({
   deposit_payment_method: z.nativeEnum(PaymentMethod).optional(),
   amount_paid: z.number().nonnegative().optional(),
   payment_status: z.nativeEnum(PaymentStatus).optional(),
+  advance_amount: z.number().nonnegative().optional(),
+  advance_collected: z.boolean().optional(),
+  advance_payment_method: z.nativeEnum(PaymentMethod).optional(),
 }).refine((data) => {
   const start = new Date(data.rental_start_date);
   const end = new Date(data.rental_end_date);
@@ -53,6 +56,8 @@ export const UpdateOrderSchema = z.object({
   amount_paid: z.number().nonnegative().optional(),
   payment_status: z.nativeEnum(PaymentStatus).optional(),
   security_deposit: z.number().nonnegative().optional(),
+  advance_amount: z.number().nonnegative().optional(),
+  advance_collected: z.boolean().optional(),
   late_fee: z.number().nonnegative().optional(),
   discount: z.number().nonnegative().optional(),
   damage_charges_total: z.number().nonnegative().optional(),

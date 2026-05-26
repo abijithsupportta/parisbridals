@@ -207,3 +207,10 @@ export {
   PaymentType,
   PaymentMode,
 } from './payment';
+
+// Calendar types
+export type {
+  CalendarEvent,
+  DaySummary,
+  CalendarMonthStats,
+} from './calendarTypes';

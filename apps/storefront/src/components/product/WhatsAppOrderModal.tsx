@@ -25,10 +25,11 @@ export default function WhatsAppOrderModal({
 }: WhatsAppOrderModalProps) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [quantity, setQuantity] = useState(1);
-  const [errors, setErrors] = useState<{ name?: string; phone?: string; startDate?: string; endDate?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; address?: string; startDate?: string; endDate?: string }>({});
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -54,6 +55,9 @@ export default function WhatsAppOrderModal({
     if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
       newErrors.phone = "Enter a valid 10-digit Indian mobile number";
     }
+    if (!address.trim() || address.trim().length < 5) {
+      newErrors.address = "Please enter your delivery address";
+    }
     if (!startDate) {
       newErrors.startDate = "Select a start date";
     }
@@ -70,6 +74,7 @@ export default function WhatsAppOrderModal({
       quantity,
       customerName: name.trim(),
       customerPhone: cleanPhone,
+      customerAddress: address.trim(),
       startDate,
       endDate,
     });
@@ -194,6 +199,30 @@ export default function WhatsAppOrderModal({
             </div>
             {errors.phone && (
               <p className="text-xs text-red-500 mt-1.5 ml-4">{errors.phone}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-[10px] uppercase tracking-[0.2em] text-body font-semibold block mb-2">
+              Delivery Address *
+            </label>
+            <textarea
+              value={address}
+              onChange={(e) => {
+                setAddress(e.target.value);
+                if (errors.address) setErrors((p) => ({ ...p, address: undefined }));
+              }}
+              rows={2}
+              className={cn(
+                "w-full px-4 py-3 bg-white border rounded-2xl text-sm focus:outline-none transition-colors placeholder:text-caption resize-none",
+                errors.address
+                  ? "border-red-400 focus:border-red-500"
+                  : "border-[var(--border-silk)] focus:border-rosegold"
+              )}
+              placeholder="Full address with pincode"
+            />
+            {errors.address && (
+              <p className="text-xs text-red-500 mt-1.5 ml-4">{errors.address}</p>
             )}
           </div>
 

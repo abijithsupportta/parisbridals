@@ -22,6 +22,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Paris Bridals',
       debugShowCheckedModeBanner: false,
+      // DO NOT add restorationScopeId here.
+      // CategoryFormView takes non-serializable constructor args (Category object)
+      // that cannot be restored after process death, which corrupts the widget tree
+      // and causes assertion failures in framework.dart:2168.
       theme: AppTheme.lightTheme,
       home: const SplashView(),
     );

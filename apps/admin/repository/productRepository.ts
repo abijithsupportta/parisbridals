@@ -63,7 +63,8 @@ export class ProductRepository extends BaseRepository {
       select: `
         *,
         category:category_id(id, name, slug),
-        branch:branch_id(id, name)
+        branch:branch_id(id, name),
+        product_inventory(id, product_id, branch_id, quantity, available_quantity, low_stock_threshold, created_at, updated_at, branches:branch_id(id, name))
       `,
       filters,
       orderBy: { column: sort_by, ascending: sort_order === 'asc' },
@@ -73,7 +74,7 @@ export class ProductRepository extends BaseRepository {
 
     // Apply additional filters using proper Supabase syntax
     if (query) {
-      selectQuery = (selectQuery as any).or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%`);
+      selectQuery = (selectQuery as any).or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%,barcode.ilike.%${query}%`);
     }
     
     if (branch_id) {
@@ -101,7 +102,7 @@ export class ProductRepository extends BaseRepository {
     }
     
     if (query) {
-      countQuery = (countQuery as any).or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%`);
+      countQuery = (countQuery as any).or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%,barcode.ilike.%${query}%`);
     }
     if (branch_id) {
       countQuery = (countQuery as any).or(`branch_id.eq.${branch_id},branch_id.is.null`);
@@ -151,7 +152,8 @@ export class ProductRepository extends BaseRepository {
       .select(`
         *,
         category:category_id(id, name, slug),
-        branch:branch_id(id, name)
+        branch:branch_id(id, name),
+        product_inventory(id, product_id, branch_id, quantity, available_quantity, low_stock_threshold, created_at, updated_at, branches:branch_id(id, name))
       `)
       .eq('id', id)
       .single();
@@ -192,11 +194,64 @@ export class ProductRepository extends BaseRepository {
     const response = await this.client
       .from(this.tableName)
       .select('*')
-      .or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%,description.ilike.%${query}%`)
+      .or(`name.ilike.%${query}%,slug.ilike.%${query}%,sku.ilike.%${query}%,description.ilike.%${query}%,barcode.ilike.%${query}%`)
       .limit(limit)
       .order('created_at', { ascending: false });
 
     return this.handleResponse<Product[]>(response);
+  }
+
+  /**
+   * Find product by barcode (case-insensitive)
+   * Used for barcode scanner lookup in order forms.
+   */
+  async findByBarcode(barcode: string): Promise<RepositoryResult<ProductWithRelations>> {
+    const response = await this.client
+      .from(this.tableName)
+      .select('*')
+      .ilike('barcode', barcode)
+      .eq('is_active', true)
+      .limit(1);
+
+    if (response.error) {
+      return this.handleResponse<ProductWithRelations>(response as any);
+    }
+
+    const product = response.data?.[0] || null;
+    if (!product) {
+      return {
+        data: null,
+        error: { message: 'No product found with this barcode', code: 'NOT_FOUND' } as any,
+        success: false,
+      };
+    }
+
+    return { data: product as ProductWithRelations, error: null, success: true };
+  }
+
+  /**
+   * Check if a barcode is unique (case-insensitive).
+   * @param barcode - The barcode to check
+   * @param excludeProductId - Optional product ID to exclude (for edit mode)
+   * @returns true if barcode is available, false if already taken
+   */
+  async isBarcodeUnique(barcode: string, excludeProductId?: string): Promise<{ unique: boolean; existingProductName?: string }> {
+    let query = this.client
+      .from(this.tableName)
+      .select('id, name')
+      .ilike('barcode', barcode);
+
+    if (excludeProductId) {
+      query = query.neq('id', excludeProductId);
+    }
+
+    const { data, error } = await query.limit(1);
+
+    if (error || !data || data.length === 0) {
+      return { unique: true };
+    }
+
+    return { unique: false, existingProductName: data[0].name };
   }
 
   /**

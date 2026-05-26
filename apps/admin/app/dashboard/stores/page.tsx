@@ -1,13 +1,33 @@
+"use client";
+
+import { useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, MoreHorizontal, Trash2, Edit } from "lucide-react";
+import { Plus, Trash2, Edit, MapPin, Phone, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { branchService } from "@/services";
+import { useBranches, useDeleteBranch } from "@/hooks";
 import { type Branch } from "@/domain";
 
-export default async function StoresPage() {
-  const branchesResult = await branchService.getBranches();
-  const branches = branchesResult.success ? branchesResult.data || [] : [];
+export default function StoresPage() {
+  const { branches, isLoading } = useBranches();
+  const { mutate: deleteBranch, isPending: isDeleting } = useDeleteBranch();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = useCallback(async (branch: Branch) => {
+    if (!confirm(`Are you sure you want to delete "${branch.name}"? This action cannot be undone.`)) return;
+    setDeletingId(branch.id);
+    deleteBranch(branch.id, {
+      onSettled: () => setDeletingId(null),
+    } as any);
+  }, [deleteBranch]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -28,7 +48,7 @@ export default async function StoresPage() {
       {branches.length === 0 ? (
         <Card className="border-0 shadow-lg">
           <CardContent className="p-12 text-center">
-            <p className="text-slate-500">No stores found. Click "Add Store" to create your first store.</p>
+            <p className="text-slate-500">No stores found. Click &quot;Add Store&quot; to create your first store.</p>
           </CardContent>
         </Card>
       ) : (
@@ -42,21 +62,45 @@ export default async function StoresPage() {
                   </span>
                 </div>
                 <div className="flex gap-1">
-                  <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                    <Edit className="w-4 h-4 text-slate-400" />
-                  </button>
-                  <button className="p-2 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 className="w-4 h-4 text-red-400" />
+                  <Link href={`/dashboard/branches/${branch.id}`}>
+                    <button className="p-2 hover:bg-slate-100 rounded-lg transition-colors" title="Edit store">
+                      <Edit className="w-4 h-4 text-slate-400" />
+                    </button>
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(branch)}
+                    disabled={isDeleting && deletingId === branch.id}
+                    className="p-2 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    title="Delete store"
+                  >
+                    {isDeleting && deletingId === branch.id ? (
+                      <Loader2 className="w-4 h-4 text-red-400 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    )}
                   </button>
                 </div>
               </CardHeader>
               <CardContent>
                 <CardTitle className="text-lg mb-2 text-slate-900">{branch.name}</CardTitle>
-                <p className="text-sm text-slate-500 mb-4">{branch.address || 'No address provided'}</p>
+                {branch.address && (
+                  <div className="flex items-start gap-2 text-sm text-slate-500 mb-3">
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{branch.address}</span>
+                  </div>
+                )}
+                {!branch.address && (
+                  <p className="text-sm text-slate-500 mb-3">No address provided</p>
+                )}
                 <div className="flex items-center gap-4 text-sm text-slate-600">
-                  {branch.phone && <span className="font-medium">{branch.phone}</span>}
+                  {branch.phone && (
+                    <div className="flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5" />
+                      <span className="font-medium">{branch.phone}</span>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-3">
+                <div className="mt-3 flex items-center gap-2">
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     branch.is_active 
                       ? 'bg-green-100 text-green-800' 
@@ -64,6 +108,11 @@ export default async function StoresPage() {
                   }`}>
                     {branch.is_active ? 'Active' : 'Inactive'}
                   </span>
+                  {branch.is_main && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Main Branch
+                    </span>
+                  )}
                 </div>
               </CardContent>
             </Card>

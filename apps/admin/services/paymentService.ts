@@ -90,8 +90,107 @@ export class PaymentService {
       };
     }
 
+    // Fetch order ONCE and reuse for all validations below
+    // Before: 3 separate findById() calls = 3 DB round-trips
+    // After:  1 findById() call = 1 DB round-trip
+    const { orderRepository } = await import('@/repository');
+    const orderResult = await orderRepository.findById(data.order_id);
+    if (!orderResult.success || !orderResult.data) {
+      return {
+        data: null,
+        error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' } as any,
+        success: false,
+      };
+    }
+    const order = orderResult.data;
+
+    // Block non-refund payments for CANCELLED orders only.
+    // Completed orders can still have an outstanding balance (e.g., ₹500
+    // advance on a ₹750 order — items returned but ₹250 still owed).
+    // Both REFUND (rental refund) and DEPOSIT_REFUND are always allowed.
+    const isRefundType = data.payment_type === PaymentType.REFUND || data.payment_type === PaymentType.DEPOSIT_REFUND;
+    if (!isRefundType && order.status === 'cancelled') {
+      return {
+        data: null,
+        error: { message: `Cannot collect payment for a cancelled order`, code: 'ORDER_FINALIZED' } as any,
+        success: false,
+      };
+    }
+
+    // For refund payments, validate amount does not exceed what's refundable
+    if (data.payment_type === PaymentType.REFUND) {
+      // Total refundable = rental payments + unreturned deposit
+      const refundableDeposit = (order.deposit_collected && !order.deposit_returned && (order.security_deposit || 0) > 0)
+        ? order.security_deposit
+        : 0;
+      const totalRefundable = (order.amount_paid || 0) + refundableDeposit;
+      if (data.amount > totalRefundable) {
+        return {
+          data: null,
+          error: { message: `Refund amount (${data.amount}) exceeds total refundable (${totalRefundable})`, code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+    }
+
+    // For deposit refunds, validate that the deposit hasn't already been returned
+    if (data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      if (order.deposit_returned) {
+        return {
+          data: null,
+          error: { message: 'Security deposit has already been refunded', code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+      if (data.amount > (order.security_deposit || 0)) {
+        return {
+          data: null,
+          error: { message: `Deposit refund amount (${data.amount}) exceeds security deposit (${order.security_deposit})`, code: 'VALIDATION_ERROR' } as any,
+          success: false,
+        };
+      }
+    }
+
     paymentRepository.setUserContext(this.currentUserId, this.currentBranchId);
-    return await paymentRepository.create(data);
+    const result = await paymentRepository.create(data);
+
+    // After successfully creating a refund, atomically update the order's state
+    if (result.success && result.data && data.payment_type === PaymentType.REFUND) {
+      // Rental refund: amount_paid is already updated by paymentRepository.create().
+      // No extra work needed here — the repository handles it correctly.
+    }
+
+    // After a deposit payment, mark the order's deposit as collected
+    if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT) {
+      await orderRepository.update(data.order_id, {
+        deposit_collected: true,
+        deposit_collected_at: new Date().toISOString(),
+        deposit_payment_method: data.payment_mode,
+      } as any);
+    }
+
+    // After a deposit_refund, mark the order's deposit as returned
+    if (result.success && result.data && data.payment_type === PaymentType.DEPOSIT_REFUND) {
+      await orderRepository.update(data.order_id, {
+        deposit_returned: true,
+        deposit_returned_at: new Date().toISOString(),
+      } as any);
+    }
+
+    // After any non-refund, non-adjustment payment, check auto-complete
+    // Fire-and-forget: don't block the payment response for a background check
+    if (result.success && data.payment_type !== PaymentType.REFUND && data.payment_type !== PaymentType.ADJUSTMENT) {
+      try {
+        const { orderService } = await import('./orderService');
+        orderService.checkAndAutoComplete(data.order_id).catch(() => {
+          // Auto-complete is best-effort, don't fail the payment
+        });
+      } catch {
+        // Auto-complete is best-effort, don't fail the payment
+      }
+    }
+
+    return result;
   }
 
   /**

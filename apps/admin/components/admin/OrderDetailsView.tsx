@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { useQueryClient } from '@tanstack/react-query';
 import {
-  Package, CheckCircle2, AlertTriangle,
-  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2, Edit3, ReceiptText
+  Package, CheckCircle2, AlertTriangle, Loader2,
+  ArrowLeft, XCircle, Phone, Banknote, CreditCard, Smartphone, Building2, Edit3, ReceiptText, ScanBarcode
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -13,15 +14,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Modal from "@/components/admin/Modal";
-import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments } from "@/hooks";
+import { useOrder, useOrderStatusHistory, useProcessOrderReturn, useUpdateOrder, useCreatePayment, useOrderPayments, useLookupProductByBarcode, orderKeys } from "@/hooks";
 import { useAppStore } from "@/stores";
 import { formatCurrency } from "@/lib/shared-utils";
-import { OrderStatus, ConditionRating, PaymentStatus } from "@/domain/types/order";
+import { OrderStatus, ConditionRating } from "@/domain/types/order";
 import { PaymentType, PaymentMode } from "@/domain/types/payment";
 import { startOfDay } from "date-fns";
+import dynamic from 'next/dynamic';
+
+const BarcodeScanner = dynamic(() => import('./BarcodeScanner'), { ssr: false });
 
 export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { data: orderResponse, isLoading } = useOrder(orderId);
   // We keep history for potential future use but hide it from the 2-second UX glance
   const { data: historyResponse } = useOrderStatusHistory(orderId);
@@ -29,6 +34,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const { updateOrder, isLoading: isUpdating } = useUpdateOrder();
   const { createPayment, isPending: isCreatingPayment } = useCreatePayment();
   const { showSuccess, showError } = useAppStore();
+  const { lookupByBarcode } = useLookupProductByBarcode();
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
@@ -41,8 +47,10 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   });
   const [refundForm, setRefundForm] = useState({
     paymentMode: PaymentMode.CASH,
-    notes: ""
+    notes: "",
+    amount: "0",
   });
+  const [isCancellationRefund, setIsCancellationRefund] = useState(false);
 
   const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
   const [adjustmentForm, setAdjustmentForm] = useState({
@@ -52,6 +60,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   });
   const [isEditingDeposit, setIsEditingDeposit] = useState(false);
   const [editDepositValue, setEditDepositValue] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState('');  
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  // Start Rental stock check
+  const [isCheckingStock, setIsCheckingStock] = useState(false);
+  const [isStockErrorModalOpen, setIsStockErrorModalOpen] = useState(false);
+  const [stockCheckResults, setStockCheckResults] = useState<{ product_name: string; requested: number; available: number; isAvailable: boolean }[]>([]);
 
   // Local state for the return checklist
   const [returnItems, setReturnItems] = useState<Record<string, {
@@ -68,6 +85,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
   const payments = paymentsResponse || [];
   
   const isReturnable = order?.status === OrderStatus.IN_USE || order?.status === OrderStatus.ONGOING || order?.status === OrderStatus.LATE_RETURN || order?.status === OrderStatus.PARTIAL;
+  const isFinalized = order?.status === OrderStatus.COMPLETED || order?.status === OrderStatus.CANCELLED;
 
   useEffect(() => {
     if (order && Object.keys(returnItems).length === 0 && isReturnable) {
@@ -79,7 +97,16 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     }
   }, [order, isReturnable]);
 
-  const amount_due = order ? Math.max(0, order.total_amount - (order.amount_paid || 0)) : 0;
+  // Compute collected amount from actual payment records (source of truth).
+  // order.amount_paid can be stale if the backend update failed silently.
+  // IMPORTANT: Exclude 'deposit' and 'deposit_refund' payments — they are
+  // a separate financial track and must not affect rental due calculations.
+  const computed_amount_paid = payments.reduce((sum: number, p: any) => {
+    if (p.payment_type === PaymentType.DEPOSIT || p.payment_type === PaymentType.DEPOSIT_REFUND) return sum;
+    return p.payment_type === PaymentType.REFUND ? sum - p.amount : sum + p.amount;
+  }, 0);
+  const amount_paid_display = Math.max(0, computed_amount_paid);
+  const amount_due = order ? Math.max(0, order.total_amount - amount_paid_display) : 0;
   const calculatedDamage = Object.values(returnItems).reduce((sum, item) => sum + (item.damage_fee || 0), 0);
   const totalDeductions = calculatedDamage + lateFee - discount;
 
@@ -97,15 +124,100 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     setReturnItems(updated);
   };
 
-  const handleStartOrder = () => {
-    if (!order) return;
-    updateOrder({
-      id: order.id,
-      data: {
-        status: OrderStatus.ONGOING,
-        start_date: new Date().toISOString().split('T')[0]
+  // Barcode scan handler for return
+  const handleBarcodeScan = async (barcode: string) => {
+    if (!barcode.trim() || !order || !isReturnable) return;
+    try {
+      const product = await lookupByBarcode(barcode.trim());
+      if (!product) return;
+
+      // Find matching item in the order
+      const matchingItem = order.items.find(item => {
+        const itemProduct = (item as any).product;
+        return itemProduct?.id === product.id || item.product_id === product.id;
+      });
+
+      if (!matchingItem) {
+        showError('Barcode Scan', 'This item is not in this order');
+        return;
       }
-    });
+
+      // Highlight the item with a green flash
+      setHighlightedItemId(matchingItem.id);
+      setTimeout(() => setHighlightedItemId(null), 2000);
+
+      // Auto-mark as excellent
+      setReturnItems(prev => ({
+        ...prev,
+        [matchingItem.id]: { ...prev[matchingItem.id], status: 'excellent', damage_fee: 0, notes: '' }
+      }));
+      showSuccess('Item Scanned', `${product.name} marked as Good condition`);
+      setBarcodeInput('');
+    } catch {
+      // Error already shown by the hook
+    }
+  };
+
+  // Handle barcode text input (supports USB scanner which fires Enter after scan)
+  const handleBarcodeInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && barcodeInput.trim()) {
+      e.preventDefault();
+      handleBarcodeScan(barcodeInput);
+    }
+  };
+
+  const handleStartOrder = async () => {
+    if (!order) return;
+    setIsCheckingStock(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const items = order.items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        product_name: (item as any).product?.name || `Product #${item.product_id?.slice(0, 6)}`,
+      }));
+
+      const res = await fetch('/api/orders/check-availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items,
+          start_date: today,
+          end_date: order.end_date,
+          exclude_order_id: order.id,
+        }),
+      });
+      const result = await res.json();
+
+      if (!result.success || !result.data?.allAvailable) {
+        // Stock insufficient — block
+        setStockCheckResults(result.data?.items || []);
+        setIsStockErrorModalOpen(true);
+        setIsCheckingStock(false);
+        return;
+      }
+
+      // All stock available — proceed
+      // Optimistic update: show "Ongoing" instantly before API responds
+      queryClient.setQueryData(orderKeys.detail(order.id), (old: any) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: { ...old.data, status: OrderStatus.ONGOING, start_date: today },
+        };
+      });
+      updateOrder({
+        id: order.id,
+        data: {
+          status: OrderStatus.ONGOING,
+          start_date: today,
+        }
+      });
+    } catch (err) {
+      showError('Stock Check Failed', 'Could not verify stock availability. Please try again.');
+    } finally {
+      setIsCheckingStock(false);
+    }
   };
 
   const handleItemUpdate = (itemId: string, field: string, value: any) => {
@@ -140,15 +252,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
         },
         {
           onSuccess: () => {
-            const newAmountPaid = (order.amount_paid || 0) + amountVal;
-            const newStatus = newAmountPaid >= order.total_amount ? PaymentStatus.PAID : PaymentStatus.PARTIAL;
-            updateOrder({
-              id: order.id,
-              data: {
-                amount_paid: newAmountPaid,
-                payment_status: newStatus,
-              },
-            });
+            // Backend paymentService.createPayment now handles deposit_collected
+            // atomically for DEPOSIT type — no second API call needed.
             setIsPaymentModalOpen(false);
             setPaymentForm({ amount: "0", paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
             showSuccess("Payment Recorded", "Payment was successfully processed.");
@@ -167,22 +272,17 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       createPayment(
         {
           order_id: order.id,
-          payment_type: PaymentType.REFUND,
+          payment_type: PaymentType.DEPOSIT_REFUND,
           amount: order.security_deposit,
           payment_mode: refundForm.paymentMode,
           notes: refundForm.notes || "Security Deposit Refund",
         },
         {
           onSuccess: () => {
-            updateOrder({
-              id: order.id,
-              data: {
-                deposit_returned: true,
-                deposit_returned_at: new Date().toISOString(),
-              },
-            });
+            // Backend already atomically updates deposit_returned via paymentService
             setIsRefundModalOpen(false);
-            setRefundForm({ paymentMode: PaymentMode.CASH, notes: "" });
+            setIsCancellationRefund(false);
+            setRefundForm({ paymentMode: PaymentMode.CASH, notes: "", amount: "0" });
             showSuccess("Deposit Refunded", "The security deposit was successfully refunded.");
           },
         }
@@ -231,7 +331,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
 
   const getStatusDisplay = (status: string) => {
     switch (status) {
-      case OrderStatus.SCHEDULED: return { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Scheduled' };
+      case OrderStatus.CONFIRMED: case OrderStatus.SCHEDULED: return { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Scheduled' };
       case OrderStatus.ONGOING: case OrderStatus.IN_USE: return { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Ongoing' };
       case OrderStatus.LATE_RETURN: return { color: 'bg-red-100 text-red-800 border-red-300 shadow-[0_0_10px_rgba(239,68,68,0.3)]', label: 'Late' };
       case OrderStatus.PARTIAL: return { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Partial' };
@@ -248,62 +348,70 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
       
       {/* 1. Hero Banner (The 2-Second Glance) */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-5">
+        {/* Top Row: Order ID + Status */}
         <div className="flex items-center gap-5">
-          <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard/orders")} className="h-12 w-12 rounded-full bg-slate-50 hover:bg-slate-100">
+          <Button variant="ghost" size="icon" onClick={() => router.push("/dashboard/orders")} className="h-12 w-12 rounded-full bg-slate-50 hover:bg-slate-100 shrink-0">
             <ArrowLeft className="w-5 h-5 text-slate-700" />
           </Button>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-1">
               #{order.id.slice(0, 6).toUpperCase()}
             </h1>
-            <p className="text-slate-500 font-bold uppercase tracking-wide text-sm">{order.customer?.name}</p>
+            <p className="text-slate-500 font-bold uppercase tracking-wide text-sm truncate">{order.customer?.name}</p>
           </div>
-          <div className={`px-4 py-1.5 ml-2 rounded-full border-2 font-black uppercase tracking-wider text-sm ${statusDisplay.color}`}>
+          <div className={`px-4 py-1.5 rounded-full border-2 font-black uppercase tracking-wider text-sm whitespace-nowrap shrink-0 ${statusDisplay.color}`}>
             {statusDisplay.label}
           </div>
         </div>
 
-        <div className="flex items-center gap-4 w-full lg:w-auto">
-          {/* Payment Pill */}
-          {amount_due > 0 ? (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-6 py-3 rounded-xl text-xl font-black flex-1 lg:flex-none text-center">
-              DUE: {formatCurrency(amount_due)}
-            </div>
-          ) : (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-6 py-3 rounded-xl text-sm font-black flex-1 lg:flex-none text-center">
-              PAID
-            </div>
+        {/* Bottom Row: Actions */}
+        <div className="flex items-center gap-3 flex-wrap pl-[68px]">
+          {/* Payment Pill — only for active orders */}
+          {!isFinalized && (
+            amount_due > 0 ? (
+              <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-2 rounded-xl text-base font-black text-center whitespace-nowrap">
+                DUE: {formatCurrency(amount_due)}
+              </div>
+            ) : (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-sm font-black text-center">
+                PAID
+              </div>
+            )
           )}
 
-          {/* Primary Action Button */}
-          {order.status === OrderStatus.SCHEDULED && (() => {
+          {/* Primary Action Button — Start Rental for confirmed + scheduled */}
+          {(order.status === OrderStatus.CONFIRMED || order.status === OrderStatus.SCHEDULED) && (() => {
             const today = startOfDay(new Date());
             const rentalStart = startOfDay(new Date(order.start_date));
-            const canStart = today >= rentalStart;
+            const isEarlyStart = today < rentalStart;
             return (
-              <div className="flex items-center gap-3 flex-1 lg:flex-none">
-                <Button onClick={handleStartOrder} disabled={isUpdating || !canStart} className="h-14 px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none disabled:opacity-50 disabled:cursor-not-allowed">
-                  Start Rental
+              <>
+                <Button onClick={handleStartOrder} disabled={isUpdating || isCheckingStock} className="h-11 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl disabled:opacity-50 disabled:cursor-not-allowed">
+                  {isCheckingStock ? (
+                    <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Checking...</>
+                  ) : (
+                    'Start Rental'
+                  )}
                 </Button>
                 <Button
                   onClick={() => setIsCancelModalOpen(true)}
                   disabled={isUpdating}
                   variant="outline"
-                  className="h-14 px-6 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-bold text-lg rounded-xl"
+                  className="h-11 px-4 border-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 font-bold text-sm rounded-xl"
                 >
-                  <XCircle className="w-5 h-5 mr-2" /> Cancel
+                  <XCircle className="w-4 h-4 mr-1.5" /> Cancel
                 </Button>
-                {!canStart && (
-                  <p className="text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg">
-                    Available on {format(rentalStart, "dd MMM, yyyy")}
+                {isEarlyStart && (
+                  <p className="text-xs text-amber-600 font-semibold bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                    Original pickup: {format(rentalStart, "dd MMM, yyyy")}
                   </p>
                 )}
-              </div>
+              </>
             );
           })()}
-          {order.status !== OrderStatus.SCHEDULED && amount_due > 0 && (
-            <Button onClick={() => setIsPaymentModalOpen(true)} className="h-14 px-8 bg-red-600 hover:bg-red-700 text-white font-bold text-lg rounded-xl flex-1 lg:flex-none">
+          {order.status !== OrderStatus.SCHEDULED && !isFinalized && amount_due > 0 && (
+            <Button onClick={() => setIsPaymentModalOpen(true)} className="h-11 px-6 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-xl">
               Collect Payment
             </Button>
           )}
@@ -362,11 +470,11 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-wider rounded-md border ${
-                          payment.payment_type === PaymentType.REFUND ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                          payment.payment_type === PaymentType.REFUND || payment.payment_type === PaymentType.DEPOSIT_REFUND ? 'bg-orange-50 text-orange-700 border-orange-200' :
                           payment.payment_type === PaymentType.DEPOSIT ? 'bg-blue-50 text-blue-700 border-blue-200' :
                           'bg-emerald-50 text-emerald-700 border-emerald-200'
                         }`}>
-                          {payment.payment_type}
+                          {payment.payment_type === PaymentType.DEPOSIT_REFUND ? 'deposit refund' : payment.payment_type}
                         </span>
                         <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md uppercase border border-slate-200">
                           {payment.payment_mode}
@@ -375,8 +483,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                       {payment.notes && <div className="text-xs text-slate-500 mt-1.5 truncate max-w-[200px]" title={payment.notes}>{payment.notes}</div>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className={`text-base font-black ${payment.payment_type === PaymentType.REFUND ? 'text-orange-600' : 'text-emerald-600'}`}>
-                        {payment.payment_type === PaymentType.REFUND ? '-' : '+'}{formatCurrency(payment.amount)}
+                      <span className={`text-base font-black ${payment.payment_type === PaymentType.REFUND || payment.payment_type === PaymentType.DEPOSIT_REFUND ? 'text-orange-600' : 'text-emerald-600'}`}>
+                        {payment.payment_type === PaymentType.REFUND || payment.payment_type === PaymentType.DEPOSIT_REFUND ? '-' : '+'}{formatCurrency(payment.amount)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -393,17 +501,20 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
       {/* 3. Split View */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
-        {/* Left Column: Physical Items */}
+        {/* Left Column: Order Items */}
         <div className="xl:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="bg-slate-50 px-6 py-5 border-b border-slate-200 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wide">Physical Items</h2>
+              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wide">Order Items</h2>
               {isReturnable && (
-                <Button onClick={handleMarkAllExcellent} variant="outline" className="font-bold border-slate-300 text-slate-700">
-                  <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> Mark All Good
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleMarkAllExcellent} variant="outline" className="font-bold border-slate-300 text-slate-700">
+                    <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> Mark All Good
+                  </Button>
+                </div>
               )}
             </div>
+
             
             <div className="divide-y divide-slate-100">
               {order.items.map((item) => {
@@ -415,7 +526,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 const imgUrl = getImageUrl(product);
 
                 return (
-                  <div key={item.id} className={`p-6 transition-colors ${isExcellent ? 'bg-emerald-50/50' : isDamaged ? 'bg-orange-50/50' : isMissing ? 'bg-red-50/50' : ''}`}>
+                  <div key={item.id} className={`p-6 transition-all duration-300 ${highlightedItemId === item.id ? 'bg-emerald-100/80 ring-2 ring-emerald-400' : isExcellent ? 'bg-emerald-50/50' : isDamaged ? 'bg-orange-50/50' : isMissing ? 'bg-red-50/50' : ''}`}>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-6">
                       <div className="w-20 h-20 rounded-xl bg-slate-100 flex-shrink-0 border-2 border-slate-200 overflow-hidden shadow-sm">
                         {imgUrl ? (
@@ -525,6 +636,15 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             >
                <Phone className="w-5 h-5" /> {order.customer?.phone}
             </a>
+            {order.customer?.alt_phone && (
+              <a 
+                 href={`tel:${order.customer.alt_phone}`} 
+                 className="mt-3 flex items-center justify-center gap-3 w-full bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 py-3 rounded-xl font-bold text-sm transition-colors"
+              >
+                 <Phone className="w-4 h-4" /> {order.customer.alt_phone}
+                 <span className="text-xs text-slate-400 font-medium">(Alt)</span>
+              </a>
+            )}
           </div>
 
           {/* Receipt Card */}
@@ -533,9 +653,9 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                 <ReceiptText className="w-4 h-4" /> Financial Receipt
               </h2>
-              <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={() => setIsAdjustmentModalOpen(true)}>
+              {!isFinalized && <Button variant="ghost" size="sm" className="text-xs text-primary" onClick={() => setIsAdjustmentModalOpen(true)}>
                 <Edit3 className="w-3 h-3 mr-1" /> Adjust
-              </Button>
+              </Button>}
             </div>
             
             <div className="space-y-3">
@@ -568,6 +688,8 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                     }}>✓</Button>
                     <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-500" onClick={() => setIsEditingDeposit(false)}>✕</Button>
                   </div>
+                ) : isFinalized ? (
+                  <span>{formatCurrency(order.security_deposit)}</span>
                 ) : (
                   <button className="flex items-center gap-1 hover:text-primary" onClick={() => { setEditDepositValue(String(order.security_deposit)); setIsEditingDeposit(true); }}>
                     {formatCurrency(order.security_deposit)} <Edit3 className="w-3 h-3 text-slate-400" />
@@ -603,44 +725,106 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
               </div>
               <div className="flex justify-between text-slate-600 font-bold text-sm">
                 <span>Total Paid</span>
-                <span>{formatCurrency(order.amount_paid || 0)}</span>
+                <span>{formatCurrency(amount_paid_display)}</span>
               </div>
               <div className="flex justify-between items-center pt-2">
-                <span className="text-lg font-black text-slate-900">Remaining Due</span>
-                <span className={`text-2xl font-black ${amount_due > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                  {formatCurrency(amount_due)}
-                </span>
+                {order.status === OrderStatus.CANCELLED ? (
+                  <>
+                    <span className="text-lg font-black text-slate-400">Order Cancelled</span>
+                    {(() => {
+                      const refundableRental = order.amount_paid || 0;
+                      const refundableDeposit = (order.deposit_collected && !order.deposit_returned && order.security_deposit > 0) ? order.security_deposit : 0;
+                      const totalRefundable = refundableRental + refundableDeposit;
+                      return totalRefundable > 0 ? (
+                        <span className="text-sm font-bold text-amber-600">Refundable: {formatCurrency(totalRefundable)}</span>
+                      ) : null;
+                    })()}
+                  </>
+                ) : order.status === OrderStatus.COMPLETED ? (
+                  <>
+                    <span className="text-lg font-black text-emerald-700">Settled</span>
+                    <span className="text-2xl font-black text-emerald-600">{formatCurrency(0)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-lg font-black text-slate-900">Remaining Due</span>
+                    <span className={`text-2xl font-black ${amount_due > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                      {formatCurrency(amount_due)}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
-            {amount_due > 0 && (
+            {/* Record Payment — only for active orders */}
+            {!isFinalized && amount_due > 0 && (
               <Button 
                 onClick={() => {
                   setPaymentForm({ amount: amount_due.toString(), paymentMode: PaymentMode.CASH, paymentType: PaymentType.FINAL, notes: "" });
                   setIsPaymentModalOpen(true);
                 }} 
-                className="w-full mt-8 h-14 bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg rounded-xl shadow-md"
+                className="w-full mt-6 h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold text-base rounded-xl shadow-md"
               >
                 Record Payment
               </Button>
             )}
 
-            {(order.status === OrderStatus.RETURNED || order.status === OrderStatus.PARTIAL || order.status === OrderStatus.FLAGGED || order.status === OrderStatus.COMPLETED) && !order.deposit_returned && order.security_deposit > 0 && (
-              <Button 
-                onClick={() => {
-                  setRefundForm({ paymentMode: PaymentMode.CASH, notes: "Security Deposit Refund" });
-                  setIsRefundModalOpen(true);
-                }} 
-                className="w-full mt-4 h-14 bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 font-bold text-lg rounded-xl shadow-sm transition-colors"
-              >
-                Refund Security Deposit
-              </Button>
+            {/* Deposit refund — for returned/partial/flagged/completed (NOT cancelled) */}
+            {order.status !== OrderStatus.CANCELLED && (
+              <>
+                {(order.status === OrderStatus.RETURNED || order.status === OrderStatus.PARTIAL || order.status === OrderStatus.FLAGGED || order.status === OrderStatus.COMPLETED) && !order.deposit_returned && order.security_deposit > 0 && (
+                  <Button 
+                    onClick={() => {
+                      setRefundForm({ paymentMode: PaymentMode.CASH, notes: "Security Deposit Refund", amount: "0" });
+                      setIsRefundModalOpen(true);
+                    }} 
+                    className="w-full mt-3 h-12 bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 font-bold text-sm rounded-xl shadow-sm transition-colors truncate"
+                  >
+                    Refund Security Deposit ({formatCurrency(order.security_deposit)})
+                  </Button>
+                )}
+                {order.deposit_returned && (
+                  <div className="w-full mt-3 h-10 flex items-center justify-center bg-slate-50 border border-slate-200 text-slate-500 font-semibold text-xs rounded-xl">
+                    Security Deposit Refunded
+                  </div>
+                )}
+              </>
             )}
-            
-            {order.deposit_returned && (
-               <div className="w-full mt-4 h-14 flex items-center justify-center bg-slate-50 border border-slate-200 text-slate-500 font-bold text-sm rounded-xl">
-                 Security Deposit Refunded
-               </div>
+
+            {/* Cancellation Refund — for cancelled orders */}
+            {order.status === OrderStatus.CANCELLED && (
+              <div className="space-y-3 mt-4">
+                {/* Rental payment refund */}
+                {(order.amount_paid || 0) > 0 && (
+                  <Button 
+                    onClick={() => {
+                      setIsCancellationRefund(true);
+                      setRefundForm({ paymentMode: PaymentMode.CASH, notes: "Cancellation Refund", amount: String(order.amount_paid || 0) });
+                      setIsRefundModalOpen(true);
+                    }} 
+                    className="w-full h-12 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 font-bold text-sm rounded-xl shadow-sm transition-colors truncate"
+                  >
+                    Refund Payment ({formatCurrency(order.amount_paid)})
+                  </Button>
+                )}
+                {/* Deposit refund for cancelled orders */}
+                {order.deposit_collected && !order.deposit_returned && order.security_deposit > 0 && (
+                  <Button 
+                    onClick={() => {
+                      setRefundForm({ paymentMode: PaymentMode.CASH, notes: "Security Deposit Refund (Cancelled Order)", amount: "0" });
+                      setIsRefundModalOpen(true);
+                    }} 
+                    className="w-full h-12 bg-orange-100 hover:bg-orange-200 text-orange-800 border border-orange-300 font-bold text-sm rounded-xl shadow-sm transition-colors truncate"
+                  >
+                    Refund Security Deposit ({formatCurrency(order.security_deposit)})
+                  </Button>
+                )}
+                {order.deposit_returned && (
+                  <div className="w-full h-10 flex items-center justify-center bg-slate-50 border border-slate-200 text-slate-500 font-semibold text-xs rounded-xl">
+                    Security Deposit Refunded
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -749,19 +933,42 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
           </div>
         </Modal>
 
-        {/* Refund Deposit Modal */}
+        {/* Refund Modal (Deposit or Cancellation) */}
         <Modal
           open={isRefundModalOpen}
-          onClose={() => setIsRefundModalOpen(false)}
-          title="Refund Security Deposit"
+          onClose={() => { setIsRefundModalOpen(false); setIsCancellationRefund(false); }}
+          title={isCancellationRefund ? "Refund Payment" : "Refund Security Deposit"}
         >
           <div className="p-6 space-y-6">
-            <div className="bg-orange-50 p-5 rounded-2xl border border-orange-200 flex justify-between items-center shadow-sm">
-              <div>
-                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Refund Amount</p>
-                <p className="text-2xl font-black text-orange-900">{formatCurrency(order?.security_deposit || 0)}</p>
+            {/* Amount Display / Edit */}
+            {isCancellationRefund ? (
+              <div className="space-y-3">
+                <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Refund Amount (₹)</Label>
+                <Input
+                  type="number"
+                  value={refundForm.amount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const maxRefund = order?.amount_paid || 0;
+                    if (parseFloat(val) > maxRefund) {
+                      setRefundForm({ ...refundForm, amount: maxRefund.toString() });
+                    } else {
+                      setRefundForm({ ...refundForm, amount: val });
+                    }
+                  }}
+                  className="w-full h-14 text-2xl font-black rounded-xl border-slate-300 bg-slate-50 focus:bg-white shadow-inner px-4"
+                  placeholder="0"
+                />
+                <p className="text-xs text-slate-500">Maximum refundable: {formatCurrency(order?.amount_paid || 0)}</p>
               </div>
-            </div>
+            ) : (
+              <div className="bg-orange-50 p-5 rounded-2xl border border-orange-200 flex justify-between items-center shadow-sm">
+                <div>
+                  <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Refund Amount</p>
+                  <p className="text-2xl font-black text-orange-900">{formatCurrency(order?.security_deposit || 0)}</p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <Label className="font-bold text-slate-700 uppercase tracking-wider text-xs">Refund Method</Label>
@@ -804,8 +1011,42 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
             </div>
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-              <Button variant="outline" onClick={() => setIsRefundModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
-              <Button onClick={handleRefundDeposit} disabled={isCreatingPayment || isUpdating} className="h-12 px-8 rounded-xl font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md">
+              <Button variant="outline" onClick={() => { setIsRefundModalOpen(false); setIsCancellationRefund(false); }} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</Button>
+              <Button 
+                onClick={() => {
+                  if (isCancellationRefund) {
+                    // Cancellation refund — server handles order update atomically
+                    const refundAmount = parseFloat(refundForm.amount) || 0;
+                    if (!order || refundAmount <= 0) {
+                      showError("Validation Error", "Amount must be greater than 0");
+                      return;
+                    }
+                    if (refundAmount > (order.amount_paid || 0)) {
+                      showError("Validation Error", `Refund cannot exceed paid amount (${formatCurrency(order.amount_paid)})`);
+                      return;
+                    }
+                    createPayment({
+                      order_id: order.id,
+                      payment_type: PaymentType.REFUND,
+                      amount: refundAmount,
+                      payment_mode: refundForm.paymentMode,
+                      notes: refundForm.notes || "Cancellation Refund",
+                    }, {
+                      onSuccess: () => {
+                        setIsRefundModalOpen(false);
+                        setIsCancellationRefund(false);
+                        setRefundForm({ paymentMode: PaymentMode.CASH, notes: "", amount: "0" });
+                        showSuccess("Refund Processed", `${formatCurrency(refundAmount)} has been refunded.`);
+                      },
+                    });
+                  } else {
+                    // Deposit refund
+                    handleRefundDeposit();
+                  }
+                }} 
+                disabled={isCreatingPayment || isUpdating} 
+                className="h-12 px-8 rounded-xl font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-md"
+              >
                 {isCreatingPayment || isUpdating ? "Processing..." : "Confirm Refund"}
               </Button>
             </div>
@@ -851,7 +1092,7 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 const newLateFee = adjustmentForm.type === 'late_fee' ? (order.late_fee || 0) + val : (order.late_fee || 0);
                 const newDiscount = adjustmentForm.type === 'discount' ? (order.discount || 0) + val : (order.discount || 0);
                 const newDamage = adjustmentForm.type === 'damage_fee' ? (order.damage_charges_total || 0) + val : (order.damage_charges_total || 0);
-                const newAmountPaid = order.amount_paid || 0;
+                const newAmountPaid = amount_paid_display;
                 const newPaymentStatus = newAmountPaid >= newTotal ? 'paid' : newAmountPaid > 0 ? 'partial' : 'pending';
 
                 // Record as adjustment payment
@@ -913,6 +1154,75 @@ export default function OrderDetailsView({ orderId }: { orderId: string }) {
                 className="h-12 px-8 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-md"
               >
                 {isUpdating ? "Cancelling..." : "Cancel Order"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+
+        {/* Stock Insufficient Modal */}
+        <Modal
+          open={isStockErrorModalOpen}
+          onClose={() => setIsStockErrorModalOpen(false)}
+          title="Cannot Start Rental"
+          maxWidth="max-w-lg"
+        >
+          <div className="p-6">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900 mb-1">Insufficient Stock</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Some items don't have enough stock for today. Please edit the order to adjust quantities before starting the rental.
+                </p>
+              </div>
+            </div>
+
+            {/* Per-item breakdown */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-5">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Item</th>
+                    <th className="text-center px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Ordered</th>
+                    <th className="text-center px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Available</th>
+                    <th className="text-center px-4 py-2.5 text-xs font-bold text-slate-500 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {stockCheckResults.map((item, idx) => (
+                    <tr key={idx} className={!item.isAvailable ? 'bg-red-50/50' : ''}>
+                      <td className="px-4 py-3 font-medium text-slate-900">{item.product_name}</td>
+                      <td className="px-4 py-3 text-center text-slate-600">{item.requested}</td>
+                      <td className="px-4 py-3 text-center font-bold text-slate-900">{item.available}</td>
+                      <td className="px-4 py-3 text-center">
+                        {item.isAvailable ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold text-xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> OK
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-red-600 font-semibold text-xs">
+                            <XCircle className="w-3.5 h-3.5" /> Short
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setIsStockErrorModalOpen(false)} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">Close</Button>
+              <Button
+                onClick={() => {
+                  setIsStockErrorModalOpen(false);
+                  router.push(`/dashboard/orders/${order.id}/edit`);
+                }}
+                className="h-12 px-8 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 shadow-md"
+              >
+                <Edit3 className="w-4 h-4 mr-2" /> Edit Order
               </Button>
             </div>
           </div>

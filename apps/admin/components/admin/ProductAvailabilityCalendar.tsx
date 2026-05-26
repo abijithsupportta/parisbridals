@@ -80,6 +80,8 @@ export default function ProductAvailabilityCalendar({ productId }: Props) {
         return "bg-red-50 text-red-800 border-red-200 hover:bg-red-100";
       case "partial":
         return "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100";
+      case "buffer":
+        return "bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100";
       case "available":
         return "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100";
       default:
@@ -92,6 +94,7 @@ export default function ProductAvailabilityCalendar({ productId }: Props) {
     switch (dayData.status) {
       case "unavailable": return "bg-red-500";
       case "partial": return "bg-amber-500";
+      case "buffer": return "bg-blue-500";
       default: return "bg-emerald-500";
     }
   };
@@ -186,6 +189,10 @@ export default function ProductAvailabilityCalendar({ productId }: Props) {
               <span className="w-2 h-2 rounded-full bg-red-500" />
               <span className="text-[10px] text-slate-500">Full</span>
             </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <span className="text-[10px] text-slate-500">Buffer</span>
+            </div>
           </div>
 
           {/* Selected day detail */}
@@ -221,10 +228,13 @@ export default function ProductAvailabilityCalendar({ productId }: Props) {
                 <div className="space-y-1.5 pt-1">
                   <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Bookings</p>
                   {selectedDay.bookings.map((b, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1.5 border border-slate-100">
+                    <div key={idx} className={`flex items-center justify-between text-xs rounded px-2 py-1.5 border ${b.isBuffer ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-100'}`}>
                       <div>
                         <span className="font-medium text-slate-900">{b.customerName}</span>
                         <span className="text-slate-400 ml-1">×{b.quantity}</span>
+                        {b.isBuffer && (
+                          <span className="ml-1.5 text-[9px] font-bold text-blue-600 bg-blue-100 px-1 py-0.5 rounded">BUFFER</span>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-400">
                         {format(new Date(b.startDate + "T00:00:00"), "MMM d")} – {format(new Date(b.endDate + "T00:00:00"), "MMM d")}

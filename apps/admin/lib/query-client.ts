@@ -155,6 +155,29 @@ export const queryUtils = {
   },
   
   /**
+   * Invalidate all order-related queries (lists only — avoid detail purge)
+   */
+  invalidateOrders: () => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.orders,
+    });
+  },
+
+  /**
+   * Invalidate a specific order and related list queries
+   */
+  invalidateOrder: (id: string) => {
+    return Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.order(id),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.orders,
+      }),
+    ]);
+  },
+
+  /**
    * Invalidate all payment-related queries
    */
   invalidatePayments: () => {

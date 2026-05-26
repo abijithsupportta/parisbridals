@@ -3,16 +3,14 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
 import { Store } from "@/lib/supabase/queries";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 
 interface MobileCTABarProps {
   store: Store | null;
 }
 
 export default function MobileCTABar({ store }: MobileCTABarProps) {
-  const phone = store?.phone;
-  const whatsappUrl = phone
-    ? `https://wa.me/${phone.replace(/\D/g, "")}?text=Hi%2C%20I%27m%20interested%20in%20renting%20jewellery%20from%20Paris%20Bridals.`
-    : null;
+  const whatsappUrl = buildWhatsAppUrl("Hi, I'm interested in renting jewellery from Paris Bridals.");
 
   return (
     <div className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-[var(--border-silk)] safe-area-bottom shadow-[0_-4px_24px_rgba(183,110,121,0.08)]">

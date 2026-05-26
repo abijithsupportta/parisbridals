@@ -234,6 +234,11 @@ export default function CustomersPage() {
                           <Phone className="w-3.5 h-3.5 text-slate-400" />
                           {customer.phone}
                         </div>
+                        {customer.alt_phone && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5 ml-5">
+                            {customer.alt_phone}
+                          </div>
+                        )}
                       </td>
 
                       {/* Email */}
@@ -331,6 +336,9 @@ export default function CustomersPage() {
                       <div>
                         <p className="font-semibold text-slate-900">{customer.name}</p>
                         <p className="text-xs text-slate-500">{customer.phone}</p>
+                        {customer.alt_phone && (
+                          <p className="text-xs text-slate-400">{customer.alt_phone}</p>
+                        )}
                       </div>
                     </Link>
                     <div className="flex items-center gap-1">
